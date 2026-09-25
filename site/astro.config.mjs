@@ -14,6 +14,34 @@ export default defineConfig({
 			logo: { src: './src/assets/logo.svg' },
 			favicon: '/favicon.svg',
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/sdsvn/co-review' }],
+			// Light only, with the landing page's header links (see src/components).
+			components: {
+				ThemeProvider: './src/components/ThemeProvider.astro',
+				ThemeSelect: './src/components/ThemeSelect.astro',
+				SocialIcons: './src/components/SocialIcons.astro'
+			},
+			// Code blocks as on the landing page: dark ink, rounded, Geist Mono.
+			expressiveCode: {
+				themes: ['github-dark-default'],
+				// One theme for the light-only site: don't tie it to Starlight's dark-mode switch or UI colors.
+				useStarlightDarkModeSwitch: false,
+				useStarlightUiThemeColors: false,
+				styleOverrides: {
+					borderRadius: '10px',
+					borderColor: '#1e1b4b',
+					codeBackground: '#1e1b4b',
+					codeFontFamily: "'Geist Mono Variable', ui-monospace, monospace",
+					codeFontSize: '13.5px',
+					uiFontFamily: "'Geist Variable', system-ui, sans-serif",
+					frames: {
+						editorTabBarBackground: '#15123d',
+						editorActiveTabBackground: '#1e1b4b',
+						terminalTitlebarBackground: '#15123d',
+						terminalBackground: '#1e1b4b',
+						frameBoxShadowCssValue: 'none'
+					}
+				}
+			},
 			customCss: [
 				'@fontsource-variable/geist',
 				'@fontsource-variable/geist-mono',

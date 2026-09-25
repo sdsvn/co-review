@@ -1,39 +1,76 @@
-/* Starlight in the Co-Review palette: indigo for actions, mint for the agent, cool paper, ink. */
-:root {
+/* The docs in the landing page's look: light, Geist, ink text, indigo accent, mint for the agent. */
+:root,
+:root[data-theme='light'] {
 	--sl-font: 'Geist Variable', system-ui, sans-serif;
 	--sl-font-mono: 'Geist Mono Variable', ui-monospace, monospace;
-	--sl-color-accent-low: #1f1d4d;
-	--sl-color-accent: #818cf8;
-	--sl-color-accent-high: #e0e7ff;
-	--sl-color-white: #f4f4ff;
-	--sl-color-gray-1: #e2e3f3;
-	--sl-color-gray-2: #b9bbd9;
-	--sl-color-gray-3: #8a8cb8;
-	--sl-color-gray-4: #555785;
-	--sl-color-gray-5: #34345f;
-	--sl-color-gray-6: #22214a;
-	--sl-color-black: #151433;
-}
-:root[data-theme='light'] {
-	--sl-color-accent-low: #e0e7ff;
+
+	--sl-color-accent-low: #eef2ff;
 	--sl-color-accent: #4f46e5;
-	--sl-color-accent-high: #312e81;
+	--sl-color-accent-high: #3730a3;
 	--sl-color-white: #1e1b4b;
-	--sl-color-gray-1: #2c2a5a;
-	--sl-color-gray-2: #45437a;
-	--sl-color-gray-3: #6b6a99;
-	--sl-color-gray-4: #9a99bf;
-	--sl-color-gray-5: #cfd0e6;
-	--sl-color-gray-6: #eaeaf5;
-	--sl-color-gray-7: #f3f3fa;
-	--sl-color-black: #f7f7fc;
+	--sl-color-gray-1: #1e1b4b;
+	--sl-color-gray-2: #4b4a63;
+	--sl-color-gray-3: #6b6a80;
+	--sl-color-gray-4: #a5a4b8;
+	--sl-color-gray-5: #e6e6ef;
+	--sl-color-gray-6: #f3f3f8;
+	--sl-color-gray-7: #fafafc;
+	--sl-color-black: #fbfbfd;
+	--sl-color-bg: #fbfbfd;
+	--sl-color-bg-nav: rgba(251, 251, 253, 0.88);
+	--sl-color-bg-sidebar: #fbfbfd;
+	--sl-color-hairline: #e6e6ef;
+	--sl-color-hairline-light: #e6e6ef;
+	--sl-color-hairline-shade: #e6e6ef;
+	--sl-color-text: #4b4a63;
+	--sl-color-text-accent: #4f46e5;
+	--sl-color-bg-inline-code: #eef2ff;
+	--sl-color-green: #047857;
+	--sl-color-green-low: #ecfdf5;
+	--sl-color-green-high: #064e3b;
+	--sl-color-blue: #4f46e5;
+	--sl-color-blue-low: #eef2ff;
+	--sl-color-blue-high: #312e81;
+	color-scheme: light;
 }
-h1, h2, h3, .site-title {
-	letter-spacing: -0.025em;
+body { -webkit-font-smoothing: antialiased; }
+
+/* Header: the landing page's blurred bar */
+header.header { background: var(--sl-color-bg-nav); backdrop-filter: blur(10px); border-bottom: 1px solid #e6e6ef; }
+.site-title { color: #1e1b4b; font-size: 16px; font-weight: 600; letter-spacing: 0; gap: 10px; }
+.site-title img { height: 26px; width: 26px; border-radius: 7px; }
+.social-icons::after { display: none; }
+
+/* Type */
+.sl-markdown-content h1, .sl-markdown-content h2, .sl-markdown-content h3, h1#_top {
+	color: #1e1b4b;
 	font-weight: 600;
+	letter-spacing: -0.03em;
 }
-.site-title { font-weight: 700; }
-.site-title img { height: 1.75rem; width: auto; }
+h1#_top { font-size: clamp(2rem, 4vw, 2.6rem); line-height: 1.1; }
+.sl-markdown-content h2 { letter-spacing: -0.025em; }
+.sl-markdown-content { line-height: 1.65; }
+.sl-markdown-content a { text-underline-offset: 0.18em; }
+
+/* Inline code like the landing page: ink on indigo tint */
+.sl-markdown-content :not(pre) > code {
+	color: #1e1b4b;
+	background: #eef2ff;
+	border: 0;
+	border-radius: 4px;
+	padding: 0.1em 0.35em;
+}
+
+/* Tables and asides with the landing page's hairlines and cards */
+.sl-markdown-content table { border-collapse: collapse; }
+.sl-markdown-content :is(th, td) { border-color: #e6e6ef; }
+.sl-markdown-content th { background: #fafafc; color: #1e1b4b; }
+.starlight-aside { border-radius: 10px; border-inline-start-width: 3px; }
+
+/* Sidebar: current page as an indigo-tint pill */
+.sidebar-content a[aria-current='page'] { background: #eef2ff; color: #3730a3; font-weight: 600; border-radius: 8px; }
+.sidebar-content a { border-radius: 8px; }
+.sidebar-content .group-label .large { color: #1e1b4b; font-weight: 600; }
 
 /* Code as typed: no ligatures or contextual alternates. */
 code, pre, .expressive-code, .expressive-code * { font-variant-ligatures: none; font-feature-settings: 'liga' 0, 'calt' 0; }

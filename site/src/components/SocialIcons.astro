@@ -1,0 +1,18 @@
+---
+// The landing page's header links, in the docs header.
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<nav class="site-links" aria-label="Site">
+	<a href={`${base}/#setup`}>Set up</a>
+	<a href="https://github.com/sdsvn/co-review">GitHub</a>
+	<a class="install" href={`${base}/#install`}>Install</a>
+</nav>
+
+<style>
+	.site-links { display: flex; align-items: center; gap: 22px; font-size: 14px; }
+	.site-links a { color: #4b4a63; text-decoration: none; white-space: nowrap; }
+	.site-links a:hover { color: #3730a3; text-decoration: underline; }
+	.site-links .install { background: #1e1b4b; color: #fff; padding: 8px 14px; border-radius: 8px; font-weight: 500; }
+	.site-links .install:hover { color: #fff; text-decoration: none; background: #312e81; }
+</style>
