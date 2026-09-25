@@ -17,7 +17,7 @@ const ask = '"Review this change with me in Co-Review."';
 const mcpNote = (name: string) => `Add the co-review mcp server to ${name}'s MCP config. Adding the skills is optional.`;
 const agents: { name: string; installNote?: string; install?: string; use: { cmd: string; desc: string }[]; guide: string }[] = [
 	{ name: 'Claude Code', installNote: 'In Claude Code:', install: '/plugin marketplace add sdsvn/co-review\n/plugin install co-review@co-review', use: [
-		{ cmd: '/co-review:review', desc: 'When a change is ready: it opens the review and stays in it until you submit.' },
+		{ cmd: '/co-review:review', desc: 'When a change is ready: it opens the review and stays in it until you submit. Add “the whole repository” to review all of it.' },
 		{ cmd: '/co-review:design <task>', desc: 'To design first: it writes a design doc, you review it, it builds what you approved.' }], guide: docs('start/claude-code') },
 	{ name: 'Pi', installNote: 'Pi has a native package. See the setup guide.', use: [
 		{ cmd: '/co-review', desc: 'Opens a review; your questions arrive in the session as you ask them.' },
@@ -43,7 +43,7 @@ const kinds = [
 	['Patches', 'Pull-request pages with line comments and suggested edits.']
 ];
 const plugin = [
-	{ term: '/co-review:review', code: true, body: 'When a change is ready: Claude opens it for review and stays in it until you submit.' },
+	{ term: '/co-review:review', code: true, body: 'When a change is ready, or for the whole repository: Claude opens it for review and stays in it until you submit.' },
 	{ term: '/co-review:design', code: true, body: 'Before there is code: Claude writes a design doc, you review it, it builds what you approved.' },
 	{ term: 'Live comments', body: 'With channels on, your question reaches the running session the moment you ask it.' },
 	{ term: 'co-reviewer subagent', body: 'Keeps answering your review in the background while the main conversation works.' },
@@ -81,7 +81,7 @@ const plugin = [
 				<div class="pitch">
 					<div class="pill"><span class="dot"></span>Code review for coding agents</div>
 					<h1>Review what <span class="word" id="agent-word">{words[0]}</span> built. Ask it why.</h1>
-					<p class="lede">Co-Review opens your agent's work as a review. You comment on code, designs and diagrams like a pull request, and the agent answers in the thread, from the context of what it just did.</p>
+					<p class="lede">Co-Review opens your agent's work as a review: a change, a design doc or the entire repository. You comment on code, designs and diagrams like a pull request, and the agent answers in the thread, from the context of what it just did.</p>
 					<div class="install-block">
 						<div class="cmdbar">
 							<span class="prompt">$</span>

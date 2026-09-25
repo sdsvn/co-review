@@ -6,7 +6,8 @@ sidebar:
 ---
 
 Co-Review is a review tool with IDE features, not an IDE. When Claude Code finishes a change, it opens the change in
-Co-Review, and you review it the way you would a pull request: comment on lines, functions, designs and diagrams, and
+Co-Review, and you review it the way you would a pull request. It isn't limited to diffs: you can review the entire
+repository, a folder, a branch against its base, or a single commit. You comment on lines, functions, designs and diagrams, and
 ask about anything you're reading. The agent that did the work answers in the same thread, with links into the code,
 and waits for your verdict before it changes anything.
 

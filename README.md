@@ -22,6 +22,9 @@ change in Co-Review, and you review it the way you would a pull request: comment
 diagrams, and ask about anything you're reading. The agent that did the work answers in the same thread, with links
 into the code, and waits for your verdict before it changes anything.
 
+It isn't limited to a diff: review the **entire repository**, a folder, a branch against its base or a single commit,
+including code no change touched.
+
 It is built on [Eclipse Theia](https://theia-ide.org) as a platform, so code navigation, search, Git and language
 servers are the real thing. Everything unrelated to reviewing is removed.
 

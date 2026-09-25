@@ -1,6 +1,6 @@
 ---
-description: Open this change in Co-Review and stay as my co-reviewer until I submit
-argument-hint: "[what to focus on]"
+description: Open this change (or the whole repository) in Co-Review and stay as my co-reviewer until I submit
+argument-hint: "[focus, e.g. the whole repository]"
 ---
 Open a Co-Review review of this repository and be my co-reviewer, following the `co-review` skill:
 
