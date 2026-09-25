@@ -23,3 +23,4 @@ pnpm-debug.log*
 # Generated from ../docs and ../llms.txt by scripts/sync-docs.mjs
 src/content/docs/docs/guides/
 src/content/docs/docs/reference/
+public/install.sh

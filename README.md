@@ -106,27 +106,22 @@ there is code, and the agent that did the work answers where you asked.
 
 ## Install
 
-### macOS: app and command line
+### macOS and Linux
 
 ```bash
-make install        # dependencies and bundled VS Code extensions (first time)
-make install-app    # Co-Review.app into /Applications, plus the `co-review` command
+curl -fsSL https://sdsvn.github.io/co-review/install.sh | bash
 ```
 
-Or install from the disk image built by `make package` (`applications/electron/dist/Co-Review-<version>-arm64.dmg`).
-Drag the app to Applications, then add the command:
-
-```bash
-/Applications/Co-Review.app/Contents/Resources/app/bin/install-cli.sh
-```
-
-> [!NOTE]
-> Local builds are unsigned: the first time, open the app with right-click → **Open**.
+Installs the latest release: the desktop app (macOS on Apple silicon, Linux x64 and arm64) and the `co-review` command.
+Run it again to update; `CO_REVIEW_VERSION=v0.2.0` pins a release. On Windows, use the installer from the
+[latest release](https://github.com/sdsvn/co-review/releases/latest).
 
 ```bash
 co-review ~/src/my-service     # open a repository
 co-review mcp                  # MCP server for agent harnesses; starts the app if needed
 ```
+
+The command runs on the app's own runtime, so Node.js isn't needed.
 
 ### From source (any OS)
 
@@ -292,9 +287,12 @@ against a local server (`make start`, then `co-review mcp` or `http://127.0.0.1:
 ## Packaging
 
 ```bash
-make package        # dmg/zip (macOS), AppImage/deb (Linux), nsis (Windows) in applications/electron/dist
+make package        # dmg/zip (macOS), tar.gz/AppImage/deb (Linux), nsis (Windows) in applications/electron/dist
 make install-app    # macOS: package and install locally
 ```
+
+Releases are built by `.github/workflows/release.yml` on macOS (arm64), Linux (x64, arm64) and Windows (x64). Pushing
+a `v*` tag publishes them as a GitHub release, which `install.sh` downloads.
 
 Signing, notarizing and the packaged layout are covered in [docs/running-and-packaging.md](docs/running-and-packaging.md).
 

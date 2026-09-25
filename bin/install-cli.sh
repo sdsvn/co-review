@@ -2,6 +2,7 @@
 # Installs the `co-review` command, and `co-review-server` (review server mode, see bin/review-server.mjs).
 #
 #   From the desktop app:  "/Applications/Co-Review.app/Contents/Resources/app/bin/install-cli.sh"
+#   From the Linux app:    <install dir>/resources/app/bin/install-cli.sh
 #   From a checkout:       make install-cli
 #
 # The command runs on the desktop app's own runtime when installed from the app (no Node.js needed),
@@ -15,6 +16,10 @@ case "$here" in
     app=${here%/Contents/Resources/app/bin}
     name=$(basename "$app" .app)
     runner="ELECTRON_RUN_AS_NODE=1 exec \"$app/Contents/MacOS/$name\""
+    ;;
+*/resources/app/bin)
+    app=${here%/resources/app/bin}
+    runner="ELECTRON_RUN_AS_NODE=1 exec \"$app/co-review\""
     ;;
 *)
     command -v node >/dev/null || { echo "co-review: node is required for a checkout install" >&2; exit 1; }

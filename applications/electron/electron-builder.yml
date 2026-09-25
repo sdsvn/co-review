@@ -25,14 +25,22 @@ files:
     to: .claude-plugin
   - from: ../../integrations/pi
     to: integrations/pi
+  # The app icon, for the Linux desktop entry written by install.sh.
+  - from: resources
+    to: icons
+    filter: [icon.png]
 extraMetadata:
   main: scripts/electron-main.js
+# Stable names (no version), so install.sh can fetch releases/latest/download/Co-Review-<os>-<arch>.<ext>.
+artifactName: ${productName}-${os}-${arch}.${ext}
 mac:
   category: public.app-category.developer-tools
   identity: null # unsigned local build; set CSC_* env vars to sign
   target: [dmg, zip]
 linux:
   category: Development
-  target: [AppImage, deb]
+  executableName: co-review
+  # tar.gz is what install.sh installs (the CLI runs on its Electron); AppImage and deb for manual installs.
+  target: [tar.gz, AppImage, deb]
 win:
   target: [nsis]

@@ -5,31 +5,41 @@ sidebar:
   order: 2
 ---
 
-## macOS: app and command line
+## macOS and Linux
 
 ```bash
-git clone https://github.com/sdsvn/co-review && cd co-review
-make install        # dependencies and bundled VS Code extensions (first time)
-make install-app    # Co-Review.app into /Applications, plus the `co-review` command
+curl -fsSL https://sdsvn.github.io/co-review/install.sh | bash
 ```
 
-Or build a disk image with `make package` and drag **Co-Review** to Applications. Then install the command from
-inside the app (**Review: Install the co-review Command**), or with:
+This installs the latest release: the desktop app (macOS on Apple silicon: `/Applications`, or `~/Applications`;
+Linux x64 and arm64: `~/.local/share/co-review`, with a desktop entry) and the `co-review` and `co-review-server`
+commands (`/usr/local/bin` when writable, else `~/.local/bin`). Run it again to update. The script is
+[install.sh](https://github.com/sdsvn/co-review/blob/main/install.sh); read it before piping it to a shell if you
+prefer.
 
-```bash
-/Applications/Co-Review.app/Contents/Resources/app/bin/install-cli.sh
-```
-
-:::note
-Local builds are unsigned: the first time, open the app with right-click → **Open**.
-:::
+| Variable | Does |
+|---|---|
+| `CO_REVIEW_VERSION=v0.2.0` | Installs that release instead of the latest |
+| `CO_REVIEW_APPS_DIR` | Where the macOS app goes |
+| `CO_REVIEW_INSTALL_DIR` | Where the Linux app goes |
+| `PREFIX` | Where the commands go (`$PREFIX/bin`) |
 
 ```bash
 co-review ~/src/my-service     # open a repository
 co-review mcp                  # MCP server for agent harnesses; starts the app if needed
 ```
 
-The command runs on the app's own runtime, so Node.js isn't needed.
+The commands run on the app's own runtime, so Node.js isn't needed.
+
+:::note
+Releases aren't notarized. The script signs the macOS app ad hoc so it opens without a warning; if you download
+the `.dmg` yourself instead, open the app with right-click → **Open** the first time.
+:::
+
+## Windows
+
+Download `Co-Review-win-x64.exe` from the [latest release](https://github.com/sdsvn/co-review/releases/latest). Then
+set up your agent with **Review: Add Co-Review to an Agent Harness (MCP)…** inside the app.
 
 ## From source (any OS)
 

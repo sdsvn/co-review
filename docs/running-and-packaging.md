@@ -46,6 +46,20 @@ The package contains the built frontend and backend (`lib/`, `src-gen/`), the pr
 `scripts/electron-main.js`). Excluded built-ins (debugger, notebooks, Emmet, extra themes, …)
 are listed under `theiaPluginsExcludeIds` in the root `package.json`.
 
+### Releases
+
+`.github/workflows/release.yml` builds the app on macOS (arm64), Linux (x64, arm64) and Windows (x64) and, for a `v*`
+tag, publishes a GitHub release. Asset names carry no version (`Co-Review-mac-arm64.zip`,
+`Co-Review-linux-x64.tar.gz`, `Co-Review-win-x64.exe`, …), so `install.sh` downloads
+`releases/latest/download/<name>`:
+
+```bash
+curl -fsSL https://sdsvn.github.io/co-review/install.sh | bash
+```
+
+To release, tag and push; the workflow takes the version from the tag: `git tag v0.2.0 && git push origin v0.2.0`.
+Run the workflow by hand (**Actions → Release → Run workflow**) to get the builds as artifacts without releasing.
+
 ### Installing on macOS
 
 ```bash

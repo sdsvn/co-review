@@ -1,7 +1,7 @@
 // Generates the site's guide and reference pages from the repository's docs (docs/*.md, llms.txt), so the
 // Markdown in the repo stays the single source. Runs before `astro dev` / `astro build`. The site's own
 // /llms.txt, /llms-full.txt and /llms-small.txt are generated from all pages by starlight-llms-txt.
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -65,4 +65,6 @@ for (const [source, page] of Object.entries(pages)) {
 	mkdirSync(dirname(file), { recursive: true });
 	writeFileSync(file, front + markdown);
 }
+// The installer, served at /co-review/install.sh for `curl -fsSL … | bash`.
+copyFileSync(join(repo, 'install.sh'), join(site, 'public', 'install.sh'));
 console.log(`synced ${Object.keys(pages).length} pages from docs/ and llms.txt`);

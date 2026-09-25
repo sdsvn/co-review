@@ -10,6 +10,7 @@ const github = 'https://github.com/sdsvn/co-review';
 
 /** How each harness installs Co-Review and starts a review. `install` is what the hero's copy box shows. */
 type Harness = { id: string; name: string; where: string; install: string[]; file?: boolean; skills?: boolean; use: { cmd?: string; say?: string; what: string }[]; guide: string };
+const installLine = `curl -fsSL https://sdsvn.github.io${base}/install.sh | bash`;
 const say = 'Review this change with me in Co-Review.';
 const skills = 'npx skills add sdsvn/co-review';
 const harnesses: Harness[] = [
@@ -85,21 +86,19 @@ const plugin = [
 						Co-Review opens your agent's work as a review: code, designs, diagrams. You comment the way you would on a
 						pull request, and the agent answers in the thread, from the context of what it just did.
 					</p>
-					{harnesses.map((h, i) =>
-						<div class="install" data-harness={h.id} data-copy={h.install.join('\n')} hidden={i !== 0}>
-							<p class="where">{h.where}</p>
-							<pre class={h.file ? 'file' : undefined}><code>{h.install.map(line => <span class="cmd">{line}</span>)}</code></pre>
-							<button type="button" class="copy">Copy</button>
-						</div>)}
+					<div class="install" data-copy={installLine}>
+						<pre><code><span class="cmd">{installLine}</span></code></pre>
+						<button type="button" class="copy">Copy</button>
+					</div>
 					<p class="after">
-						Needs the Co-Review app and its <a href={docs('start/install')}>co-review command</a>.
-						<a class="docs-link" href="#setup">Set up another agent</a>
+						Installs the app and the <code>co-review</code> command on macOS and Linux.
+						<a class="docs-link" href="#setup">Then set up your agent</a>
 					</p>
 				</div>
 
 				<figure class="demo" aria-label="A review thread in Co-Review">
 					<div class="window">
-						<div class="bar"><span class="file">internal/orders/service.go</span><span class="agent-on"><span class="agent-name">Claude Code</span> is listening</span></div>
+						<div class="bar"><span class="file">internal/orders/service.go</span><span class="agent-on">Claude Code is listening</span></div>
 						<ol class="code" start="28">
 							<li><span class="k">if</span> err := tx.<span class="f">ReserveInventory</span>(ctx, o.Items); err != <span class="k">nil</span> {'{'}</li>
 							<li>    <span class="k">return</span> fmt.<span class="f">Errorf</span>(<span class="s">"reserve: %w"</span>, err)</li>
@@ -113,7 +112,7 @@ const plugin = [
 									<p><code>repo.Save</code> doesn't take <code>tx</code>. If the charge below fails, does the deferred rollback undo the saved order?</p>
 								</div>
 								<div class="msg agent">
-									<span class="who agent-name">Claude Code</span>
+									<span class="who">Claude Code</span>
 									<p class="answer">No. <code>repo.Save</code> writes through the repository's own connection, so the order is committed as soon as it returns. The deferred <code>tx.Rollback()</code> at <a class="ref">service.go:26</a> only undoes the reservation. Pass the transaction in: <code>s.repo.WithTx(tx).Save(ctx, o)</code>.</p>
 								</div>
 							</div>
@@ -215,9 +214,17 @@ const plugin = [
 			<section class="get" aria-labelledby="get-title">
 				<div class="get-inner">
 				<h2 id="get-title">Install the app</h2>
-				<p>A desktop app for macOS, or a browser app from source on any OS. The review stays on your machine, outside the repository.</p>
-				<pre><code><span class="cmd">git clone {github} &amp;&amp; cd co-review</span><span class="cmd">make install &amp;&amp; make install-app</span></code></pre>
-				<a href={docs('start/install')}>Install guide</a>
+				<p>
+					One command installs the desktop app and the <code>co-review</code> command on macOS (Apple silicon) and Linux. Run it
+					again to update. Reviews stay on your machine, outside the repository.
+				</p>
+				<div class="install" data-copy={installLine}>
+					<pre><code><span class="cmd">{installLine}</span></code></pre>
+					<button type="button" class="copy">Copy</button>
+				</div>
+				<p class="after">
+					Windows: the installer from the <a href={`${github}/releases/latest`}>latest release</a>. Or <a href={docs('start/install')}>build from source</a>.
+				</p>
 				</div>
 			</section>
 		</main>
@@ -245,20 +252,27 @@ const plugin = [
 			// The harness: the headline, the hero's install box, the demo's agent and the setup tabs follow one choice.
 			// Until someone picks one, the headline cycles through them (not with reduced motion).
 			const ids = [...document.querySelectorAll<HTMLElement>('.harness [data-harness]')].map(e => e.dataset.harness!);
-			const names = Object.fromEntries([...document.querySelectorAll<HTMLElement>('.harness [data-harness]')].map(e => [e.dataset.harness, e.textContent]));
 			let current = ids[0];
 			let chosen = false;
 			const select = (id: string, focus = false) => {
 				current = id;
-				document.querySelectorAll<HTMLElement>('.harness [data-harness]').forEach(e => e.classList.toggle('on', e.dataset.harness === id));
-				document.querySelectorAll<HTMLElement>('.install[data-harness], .panel[data-harness]').forEach(e => (e.hidden = e.dataset.harness !== id));
+				const slot = document.querySelector<HTMLElement>('.harness')!;
+				slot.querySelectorAll<HTMLElement>('[data-harness]').forEach(e => {
+					const on = e.dataset.harness === id;
+					if (e.classList.contains('on') && !on) {
+						e.classList.add('out');
+						setTimeout(() => e.classList.remove('out'), 400);
+					}
+					e.classList.toggle('on', on);
+					if (on) slot.style.width = `${e.offsetWidth}px`;
+				});
+				document.querySelectorAll<HTMLElement>('.panel[data-harness]').forEach(e => (e.hidden = e.dataset.harness !== id));
 				document.querySelectorAll<HTMLButtonElement>('[role="tab"]').forEach(t => {
 					const on = t.dataset.harness === id;
 					t.setAttribute('aria-selected', String(on));
 					t.tabIndex = on ? 0 : -1;
 					if (on && focus) t.focus();
 				});
-				document.querySelectorAll('.agent-name').forEach(e => (e.textContent = names[id] ?? ''));
 			};
 			const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
 			tabs.forEach(tab => {
@@ -272,18 +286,15 @@ const plugin = [
 					}
 				});
 			});
+			// Fonts change the names' widths: size the slot once they're in.
+			document.fonts.ready.then(() => select(current));
 			if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-				const hero = document.querySelector('.hero')!;
-				let paused = false;
-				hero.addEventListener('mouseenter', () => (paused = true));
-				hero.addEventListener('mouseleave', () => (paused = false));
-				hero.addEventListener('focusin', () => (paused = true));
 				setTimeout(() => {
 					const cycle = setInterval(() => {
 						if (chosen) return clearInterval(cycle);
-						if (!paused) select(ids[(ids.indexOf(current) + 1) % ids.length]);
-					}, 2600);
-				}, 6000);
+						select(ids[(ids.indexOf(current) + 1) % ids.length]);
+					}, 1400);
+				}, 1600);
 			}
 
 			// The one orchestrated moment: the line is marked, the thread opens, the answer streams in.
@@ -371,9 +382,8 @@ const plugin = [
 		max-width: 12ch;
 	}
 	.lede { font-size: 1.2rem; color: var(--ink-2); max-width: 46ch; margin: 1.4rem 0 1.8rem; }
-	.install { position: relative; max-width: 34rem; }
-	.install pre { padding-right: 5.2rem; }
-	.install .copy { top: calc(1.4rem + 0.45rem + 0.6rem); }
+	.install { display: flex; gap: 0.5rem; align-items: stretch; max-width: 40rem; }
+	.install pre { flex: 1; min-width: 0; font-size: 0.82rem; }
 	pre {
 		margin: 0;
 		padding: 1rem 1.1rem;
@@ -386,7 +396,7 @@ const plugin = [
 	.cmd { display: block; white-space: pre; }
 	.cmd::before { content: '> '; color: var(--indigo-soft); user-select: none; }
 	.copy {
-		position: absolute; top: 0.6rem; right: 0.6rem;
+		flex: none;
 		font: 600 0.85rem/1 var(--text);
 		padding: 0.5rem 0.8rem;
 		border: 0; border-radius: 7px;
@@ -398,11 +408,12 @@ const plugin = [
 
 	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 	/* The harness name: every name in one grid cell, so the headline keeps the width of the longest. */
-	.harness { display: inline-grid; vertical-align: bottom; }
+	.harness { display: inline-grid; vertical-align: bottom; justify-items: start; transition: width 0.32s cubic-bezier(0.3, 0.7, 0.2, 1); }
 	/* Marked like the commented line in the review below: a highlighter stroke under the lower half. */
 	.harness > span { background: linear-gradient(transparent 58%, var(--highlight) 58%, var(--highlight) 92%, transparent 92%); padding: 0 0.06em; }
-	.harness > span { grid-area: 1 / 1; opacity: 0; transform: translateY(0.18em); transition: opacity 0.35s ease, transform 0.35s ease; white-space: nowrap; }
+	.harness > span { grid-area: 1 / 1; opacity: 0; transform: translateY(0.45em); white-space: nowrap; transition: opacity 0.26s ease, transform 0.32s cubic-bezier(0.3, 0.7, 0.2, 1); }
 	.harness > span.on { opacity: 1; transform: none; }
+	.harness > span.out { opacity: 0; transform: translateY(-0.45em); }
 	.where { margin: 0 0 0.45rem; font-size: 0.9rem; color: var(--ink-2); }
 
 	/* Set up your agent */
@@ -429,7 +440,7 @@ const plugin = [
 	.uses dd { margin: 0.2rem 0 0; color: var(--ink-2); }
 
 	/* The review window. */
-	.pitch, .demo, .install, .beyond > *, .claude > * { min-width: 0; }
+	.pitch, .demo, .install, .beyond > *, .claude > *, .panel > * { min-width: 0; }
 	.demo { margin: 0; }
 	.window {
 		background: var(--ink);

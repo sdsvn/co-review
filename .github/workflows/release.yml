@@ -1,0 +1,85 @@
+# Builds the Co-Review desktop app for macOS, Linux and Windows. A `v*` tag publishes the builds as a GitHub
+# release, which install.sh downloads (releases/latest/download/Co-Review-<os>-<arch>.<ext>). Run it by hand to
+# get the builds as workflow artifacts without releasing.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: mac-arm64, os: macos-latest, args: --mac --arm64 }
+          - { name: linux-x64, os: ubuntu-latest, args: --linux --x64 }
+          - { name: linux-arm64, os: ubuntu-24.04-arm, args: --linux --arm64 }
+          - { name: win-x64, os: windows-latest, args: --win --x64 }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: System libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev libx11-dev libxkbfile-dev rpm
+      - name: Install
+        run: npm ci
+      - name: VS Code extensions
+        run: npm run download:plugins
+      - name: Build
+        run: |
+          npm run -w @co-review/review build
+          cd applications/electron
+          ../../node_modules/.bin/theia rebuild:electron --cacheRoot ../..
+          ../../node_modules/.bin/theia build --mode production
+      - name: Package
+        env:
+          # Unsigned builds; install.sh signs the macOS app ad hoc on install.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [[ "$GITHUB_REF_TYPE" == tag ]] || version="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+          rm -rf applications/electron/plugins && cp -R plugins applications/electron/plugins
+          cd applications/electron
+          ../../node_modules/.bin/electron-builder --config electron-builder.yml ${{ matrix.args }} \
+            --publish never -c.extraMetadata.version="$version"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: co-review-${{ matrix.name }}
+          path: |
+            applications/electron/dist/Co-Review-*.zip
+            applications/electron/dist/Co-Review-*.dmg
+            applications/electron/dist/Co-Review-*.tar.gz
+            applications/electron/dist/Co-Review-*.AppImage
+            applications/electron/dist/Co-Review-*.deb
+            applications/electron/dist/Co-Review-*.exe
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la dist
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Co-Review ${GITHUB_REF_NAME#v}" --generate-notes
