@@ -31,6 +31,7 @@ files:
     filter: [icon.png]
 extraMetadata:
   main: scripts/electron-main.js
+  homepage: https://sdsvn.github.io/co-review/
 # Stable names (no version), so install.sh can fetch releases/latest/download/Co-Review-<os>-<arch>.<ext>.
 artifactName: ${productName}-${os}-${arch}.${ext}
 mac:
@@ -40,6 +41,7 @@ mac:
 linux:
   category: Development
   executableName: co-review
+  maintainer: Co-Review contributors <https://github.com/sdsvn/co-review>
   # tar.gz is what install.sh installs (the CLI runs on its Electron); AppImage and deb for manual installs.
   target: [tar.gz, AppImage, deb]
 win:
