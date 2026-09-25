@@ -1,0 +1,51 @@
+{
+  "name": "@co-review/review",
+  "version": "0.1.0",
+  "description": "Persistent repository review model, threads and comments for Co-Review",
+  "keywords": [
+    "theia-extension"
+  ],
+  "license": "EPL-2.0",
+  "files": [
+    "lib",
+    "src"
+  ],
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^1.5.0",
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "@theia/core": "1.75.0",
+    "@theia/debug": "1.75.0",
+    "@theia/editor": "1.75.0",
+    "@theia/filesystem": "1.75.0",
+    "@theia/monaco": "1.75.0",
+    "@theia/monaco-editor-core": "1.108.201",
+    "@theia/navigator": "1.75.0",
+    "@theia/task": "1.75.0",
+    "@theia/test": "1.75.0",
+    "@theia/workspace": "1.75.0",
+    "@vscode/tree-sitter-wasm": "^0.3.1",
+    "mermaid": "^11.17.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.3.0",
+    "rimraf": "^5.0.0",
+    "typescript": "~5.4.5"
+  },
+  "scripts": {
+    "prepare": "npm run clean && npm run build",
+    "clean": "rimraf lib",
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/review-frontend-module",
+      "backend": "lib/node/review-backend-module"
+    },
+    {
+      "backendElectron": "lib/electron-node/review-electron-backend-module"
+    }
+  ]
+}

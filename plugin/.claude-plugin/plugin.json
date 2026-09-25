@@ -1,0 +1,10 @@
+{
+  "name": "co-review",
+  "version": "0.1.0",
+  "description": "Review with a human in Co-Review: the co-review and co-review-design skills, and the Co-Review MCP server (open_review, await_comment, reply, …).",
+  "author": { "name": "Co-Review contributors" },
+  "keywords": ["review", "code-review", "design-review", "mcp"],
+  "mcpServers": {
+    "co-review": { "command": "co-review", "args": ["mcp"] }
+  }
+}

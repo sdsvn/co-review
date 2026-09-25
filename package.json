@@ -1,0 +1,61 @@
+{
+  "private": true,
+  "name": "co-review",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "make browser",
+    "download:plugins": "theia download:plugins --rate-limit=15 --parallel=false --ignore-errors",
+    "start": "make start",
+    "package": "make package"
+  },
+  "devDependencies": {
+    "@theia/cli": "1.75.0"
+  },
+  "theiaPluginsDir": "plugins",
+  "theiaPlugins": {
+    "eclipse-theia.builtin-extension-pack": "https://open-vsx.org/api/eclipse-theia/builtin-extension-pack/1.104.0/file/eclipse-theia.builtin-extension-pack-1.104.0.vsix",
+    "golang.Go": "https://open-vsx.org/api/golang/Go/0.56.1/file/golang.Go-0.56.1.vsix"
+  },
+  "theiaPluginsExcludeIds": [
+    "ms-vscode.js-debug",
+    "ms-vscode.js-debug-companion",
+    "vscode.builtin-notebook-renderers",
+    "vscode.configuration-editing",
+    "vscode.css-language-features",
+    "vscode.debug-auto-launch",
+    "vscode.debug-server-ready",
+    "vscode.emmet",
+    "vscode.extension-editing",
+    "vscode.github",
+    "vscode.github-authentication",
+    "vscode.grunt",
+    "vscode.gulp",
+    "vscode.html-language-features",
+    "vscode.ipynb",
+    "vscode.jake",
+    "vscode.markdown-math",
+    "vscode.microsoft-authentication",
+    "vscode.npm",
+    "vscode.simple-browser",
+    "vscode.terminal-suggest",
+    "vscode.theme-abyss",
+    "vscode.theme-kimbie-dark",
+    "vscode.theme-monokai",
+    "vscode.theme-monokai-dimmed",
+    "vscode.theme-quietlight",
+    "vscode.theme-red",
+    "vscode.theme-solarized-dark",
+    "vscode.theme-solarized-light",
+    "vscode.theme-tomorrow-night-blue",
+    "vscode.tunnel-forwarding"
+  ],
+  "workspaces": [
+    "extensions/*",
+    "applications/*"
+  ],
+  "bin": {
+    "co-review": "bin/co-review.mjs"
+  }
+}

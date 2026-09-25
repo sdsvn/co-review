@@ -1,0 +1,16 @@
+{
+  "name": "co-review",
+  "owner": {
+    "name": "Co-Review contributors"
+  },
+  "plugins": [
+    {
+      "name": "co-review",
+      "source": "./plugin",
+      "description": "Skills and MCP server for reviewing an agent's work with a human in Co-Review."
+    }
+  ],
+  "metadata": {
+    "description": "Co-Review: review code and designs with an AI agent as your co-reviewer."
+  }
+}

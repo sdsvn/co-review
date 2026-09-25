@@ -1,0 +1,49 @@
+{
+  "private": true,
+  "name": "@co-review/browser-app",
+  "version": "0.1.0",
+  "dependencies": {
+    "@co-review/review": "0.1.0",
+    "@theia/core": "1.75.0",
+    "@theia/editor": "1.75.0",
+    "@theia/file-search": "1.75.0",
+    "@theia/filesystem": "1.75.0",
+    "@theia/markers": "1.75.0",
+    "@theia/messages": "1.75.0",
+    "@theia/monaco": "1.75.0",
+    "@theia/navigator": "1.75.0",
+    "@theia/outline-view": "1.75.0",
+    "@theia/plugin-ext": "1.75.0",
+    "@theia/plugin-ext-vscode": "1.75.0",
+    "@theia/preferences": "1.75.0",
+    "@theia/process": "1.75.0",
+    "@theia/scm": "1.75.0",
+    "@theia/search-in-workspace": "1.75.0",
+    "@theia/terminal": "1.75.0",
+    "@theia/workspace": "1.75.0"
+  },
+  "devDependencies": {
+    "@theia/cli": "1.75.0"
+  },
+  "scripts": {
+    "bundle": "theia build --mode development",
+    "rebuild": "theia rebuild:browser --cacheRoot ../..",
+    "start": "theia start --plugins=local-dir:../../plugins",
+    "watch": "theia build --watch --mode development"
+  },
+  "theia": {
+    "target": "browser",
+    "frontend": {
+      "config": {
+        "applicationName": "Co-Review",
+        "preferences": {
+          "files.enableTrash": false
+        },
+        "defaultTheme": {
+          "light": "co-review-light",
+          "dark": "co-review-dark"
+        }
+      }
+    }
+  }
+}

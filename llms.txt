@@ -1,0 +1,106 @@
+# Co-Review
+
+> Co-Review is an open-source repository review application built on Eclipse Theia. A human reviews a whole repository (not just a diff) with IDE navigation, leaves threads on files, symbols, lines and ranges, and agents take part in the review as co-reviewers. This file is the integration contract for agents and tools.
+
+Two integration paths:
+
+- **MCP** — an agent running in its own harness (Claude Code, Codex, Cursor, …) opens a review and acts as co-reviewer through MCP tools. Use this when you (the agent) did the work being reviewed.
+- **ACP** — the reviewer launches an ACP agent from Co-Review; Co-Review is the ACP client and sends each question as a prompt. Use this to make an agent available on demand.
+
+## MCP (agent in a harness)
+
+Setup for each harness, and the `co-review` / `co-review-design` skills: `docs/agent-setup.md`.
+
+Endpoint: `co-review mcp` (stdio; `node <co-review>/bin/co-review.mjs mcp [repo]`, repo defaults to the working directory; starts Co-Review if it is not running), or Streamable HTTP at `http://127.0.0.1:<port>/mcp?root=<abs repo path>` (local connections only; the running instance is recorded in `~/.co-review/server.json`).
+
+Workflow: call `open_review`, give the reviewer the returned `url`, optionally `add_findings`, then loop `await_comment` → investigate → `reply`. Keep looping until the reviewer says the review is done. Reference code as `relative/path.ext:line` or `path:start-end`; the UI turns these into links.
+
+Tools (all ids are strings; lines are 1-based). Thread ids are accepted as short ids (`t<N>`) or full ids.
+
+- `open_review({ root?, dir?, markdown?, patch?, patchName?, storePath?, openspec?, title?, open? })` → `{ reviewId, title, openThreads, url?, hasDoc?, patches? }`. Either a repository (`root`, default: the one Co-Review was started for) or a **review directory** (`dir`) / inline `markdown` and `patch` (written to a directory under `~/.co-review/inline`). Makes you the review's agent. `title` forces a new review. `storePath` is where the review state file `review.json` is written (default `<dir>/review.json`). `openspec` is an OpenSpec change directory rendered as cards (`<dir>/openspec` is detected). `open` (default true) opens the browser; the desktop app shows the review itself and returns a `note` instead of `url`.
+- `await_review({ timeoutSec? = 300 })` → blocks until the reviewer clicks **Submit review**: `{ status: "submitted", decision: "approve" | "request-changes" | "comment", summary, round, doc: { slug, version }, comments[], acceptedSuggestions: [{ threadId, path, startLine, before, after }], openCount, proposedCount }`, or `{ status: "pending" }` on timeout. `comments[]` are the open threads (accepted findings included, unaccepted proposals excluded): `{ id: "t2", target: "doc" | "patch:<slug>" | "code", kind: <anchor type>, where, line, side, severity, labels, status, body (latest message), source, origin, intent }`.
+- `await_comment({ reviewId?, timeoutSec? = 240 })` → `{ status: "comment", comments[] (open threads with lastRole, needsReply), openCount, needsReply, threads: Thread[] }` or `{ status: "pending" }` on timeout (call again). `threads` are the ones waiting for you: the reviewer's latest message is a question (`intent: "question"`), in a thread you took part in, or — in a review directory — any reviewer comment. Each is delivered once per MCP session; delivered threads show "agent working" until you reply.
+- `reply({ threadId, body, resolve? })` → `{ ok }`. Markdown. `resolve: true` resolves the thread.
+- `add_findings({ findings })` → `{ created, ids }`. Two shapes: `{ path, line, endLine?, body, severity? }` opens a thread on repository code (stored semantically: symbol + Tree-sitter anchor); anchored findings `{ id, target: "doc" | "patch:<slug>", anchor, severity, labels, body, verdict?, proposal?: { before, after, path?, startLine? } }` become **proposed** threads the reviewer accepts or dismisses (only accepted ones come back in `await_review`). A `proposal` is a suggested edit; when the reviewer accepts it on a patch it appears in `acceptedSuggestions` — apply it as a new commit on the branch, do not rewrite the reviewed patch. Accepted document edits are written into the document by Co-Review (`doc.version` increments).
+- `ask_reviewer({ question, options: string[1..6], threadId?, timeoutSec? = 900 })` → `{ status: "answered", choice }` or `{ status: "pending" }`. Shows the options as buttons; blocks until the reviewer picks one.
+- `get_review({ reviewId?, root? })` → the `await_review` batch (without blocking) plus `threads: Thread[]`.
+
+`Thread`:
+
+```json
+{
+  "threadId": "…", "number": 5, "status": "open | resolved", "intent": "comment | question", "severity": "high",
+  "location": { "kind": "repository | directory | file | symbol | line | range", "path": "internal/orders/service.go", "startLine": 17, "endLine": 17, "symbol": "OrderService.CreateOrder" },
+  "code": "\ts.repo.Save(ctx, o)",
+  "messages": [{ "author": "Jane", "role": "human | agent", "body": "…" }]
+}
+```
+
+## Design documents
+
+Full specification: `docs/design-docs.md`.
+
+Declare the structure with frontmatter; Co-Review then renders the design tree and checks the document against the contract, returning departures in `format.warnings` from `open_review` and in `doc.format` from `await_review` / `get_review` (also shown as a banner to the reviewer). Undeclared documents are rendered leniently (`*.pseudocode.md` or a `## Design` section → tree; otherwise plain Markdown); nothing is ever dropped — sections outside the contract render as Markdown.
+
+~~~markdown
+---
+co-review: design
+title: Retry outbound webhooks      # optional; else the `# ` heading
+---
+# Retry outbound webhooks
+
+## Context
+Why, constraints, links. Markdown and Mermaid.
+
+## Design
+- L1 step: what happens, in business language — reasoning after an em dash
+  - L2: how — `⚠` risk
+    - L3: edge case / error path — `?` open question
+- Another L1 step — `✎` new `DeliveryLog` table
+
+## Diagrams
+```mermaid
+%% id: flow
+flowchart LR
+  a[Request] --> b{Allowed?}
+```
+
+## Open Questions
+- Question — `?` who decides
+~~~
+
+Rules: sections in this order (Context, Design, Diagrams, Open Questions; only Design is required). `## Design` is ONE nested `- ` list, 2 spaces per level (not `*`, `+` or `1.`). One idea per step. Comments anchor to a step's text (backticks/asterisks stripped, whitespace collapsed, first 80 chars): keep wording stable across revisions and add or move steps instead of rewording. Give Mermaid blocks `%% id:` and nodes explicit ids.
+
+## Review directories
+
+A review directory holds what an agent wants reviewed; open it with `open_review({ dir })`:
+
+- The document, first match: `index.markdown`, `index.md`, `INDEX.md`, `README.md`, `readme.md`, then any `*.pseudocode.md`. GitHub-flavoured Markdown; ```` ```mermaid ```` fences render as diagrams (`%% id: <name>` as the first line gives a stable block id; give nodes explicit ids). A `## Design` section (or a `*.pseudocode.md` name) renders the L1/L2/L3 design tree: one nested `- ` list, `` `?` `` `` `⚠` `` `` `✎` `` badges, reasoning after ` — ` muted. `[text](limiter.patch)` links open the patch page.
+- `*.patch` / `*.diff`: one review page each (`git diff`, `--cached`, `format-patch`). `PR.md` / `<patch>.md`: `key: value` lines (`title`, `pr`, `branch`, `base`, `commits`), a blank line, then Markdown.
+- `openspec/` (optional): an OpenSpec change (`proposal.md`, `design.md`, `tasks.md`, `specs/<cap>/spec.md`), shown as cards under the document.
+- `<patch>.comments.json` (array) or `.comments.jsonl`: pre-seeded findings `{ id, severity, labels, anchor, body, verdict?, proposal? }`, ingested as proposed threads, idempotent by `id`, picked up live when the file changes.
+- Anchors: document `document`, `text` (`exact`, `prefix`, `suffix`, offset hints), `mermaid-block` / `mermaid-node` / `mermaid-edge` (`blockId`, `nodeId`, `edgeId`), `tree-node` (`nodeId` = step text without backticks/asterisks, whitespace-collapsed, max 80 chars); patch `patch`, `code-file` (`path`), `code-line` (`path`, `line`, `side`), `code-range` (`path`, `startLine`, `endLine`, `side`).
+- The state is written to `review.json` (or `storePath`): `{ doc, threads: [{ id: "t<N>", target, anchor, status, severity, labels, origin, intent, sourceId, proposal?, messages: [{ author, role, time, body }] }], seq, review: { decision, summary, submittedAt, count } }`; `review.count` increments on each Submit.
+
+Server mode: `co-review-server [-dir <dir> | <dir>] [-md <file>] [-patch <file>] [-addr host:port] [-store <file>] [-openspec <dir>]` opens the review in Co-Review, prints `review server on http://HOST:PORT …`, serves `/api/context`, `POST /api/threads/<id>/messages` and `POST /api/findings` there (`/` redirects to Co-Review), and Co-Review writes `-store`. `co-review-server mcp` = `co-review mcp`.
+
+## ACP (agent launched by Co-Review)
+
+Co-Review spawns the configured command in the repository root and speaks ACP over stdio (`@agentclientprotocol/sdk`). Any ACP agent works; presets: `npx -y @agentclientprotocol/claude-agent-acp`, `gemini --experimental-acp`, `opencode acp`, `goose acp`.
+
+- Client capabilities: `fs.readTextFile`, `fs.writeTextFile` (restricted to the repository). No terminal capability.
+- One ACP session per review thread (`session/new` with `cwd` = repository root, no MCP servers). The first prompt contains: the review and thread context, the commented code, a `resource_link` to the file, and the conversation so far. Later prompts contain only the reviewer's new message(s).
+- `session/update`: `agent_message_chunk` (text) streams into the thread as markdown; `tool_call` / `tool_call_update` become concise activity lines (title + status).
+- `session/request_permission`: the options are shown as buttons in the thread; the turn waits for the reviewer. `session/cancel` is sent when the reviewer presses Stop.
+- Answer concisely, reference code as `path:line`, and do not modify files unless asked.
+
+## Review data
+
+Reviews are JSON files outside the repository: `~/.co-review/workspaces/<sha256(root uri)[0:16]>/reviews/<reviewId>.json` (`CO_REVIEW_HOME` overrides `~/.co-review`); `workspace.json` in the same folder records the repository path. Treat them as read-only and write through MCP (the running app caches and broadcasts state). Shape: `Review { id, title, workspaceRoot, scope, participants, threads: ReviewThread[], activity, agent? }`, `ReviewThread { id, number, location: { kind, uri, range (0-based), symbol, anchor }, messages, status, intent, severity?, agentState? }`. Types: `extensions/review/src/common/review-model.ts`.
+
+## Docs
+
+- [README](README.md): overview and quick start
+- [docs/agents.md](docs/agents.md): ACP vs MCP, setup for harnesses
+- [docs/running-and-packaging.md](docs/running-and-packaging.md): build, run, package
+- [docs/architecture.md](docs/architecture.md): how the extension is put together

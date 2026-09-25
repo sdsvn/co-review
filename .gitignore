@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Compiled extension (TypeScript → lib/)
+/extensions/*/lib/
+*.tsbuildinfo
+
+# Theia applications: only the hand-written files are sources. Everything else is generated
+# by `theia build` (lib/, src-gen/, esbuild configs) or produced by packaging (plugins/, dist/).
+/applications/*/*
+!/applications/*/package.json
+!/applications/*/scripts/
+!/applications/*/resources/
+!/applications/electron/electron-builder.yml
+
+# Native modules cached by `theia rebuild:*`
+/.browser_modules/
+
+# VS Code extensions downloaded by `make plugins`
+/plugins/
+
+# Logs, OS and editor files
+*.log
+.DS_Store
+.idea/
+
+# Local Claude Code config (machine-specific paths)
+/.claude/launch.json
+/.claude/settings.local.json

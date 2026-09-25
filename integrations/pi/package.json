@@ -1,0 +1,11 @@
+{
+  "name": "co-review-pi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Co-Review for Pi: open a repository review and stay as co-reviewer",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./co-review.ts"],
+    "subagents": { "agents": ["./agents"] }
+  }
+}

@@ -1,0 +1,33 @@
+# Packages the Co-Review desktop app. Run through `make package` (builds and copies plugins first).
+appId: dev.co-review.app
+productName: Co-Review
+copyright: Co-Review contributors
+electronDist: ../../node_modules/electron/dist
+asar: false # Theia loads plugins and native modules from disk
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - package.json
+  - scripts
+  - lib
+  - src-gen
+  - plugins
+  - "!**/*.map"
+  # The `co-review` CLI (and its installer), run on the app's Electron with ELECTRON_RUN_AS_NODE.
+  - from: ../../bin
+    to: bin
+  # Agent skills, installed from the app (Review: Install Agent Skills…).
+  - from: ../../plugin/skills
+    to: skills
+extraMetadata:
+  main: scripts/electron-main.js
+mac:
+  category: public.app-category.developer-tools
+  identity: null # unsigned local build; set CSC_* env vars to sign
+  target: [dmg, zip]
+linux:
+  category: Development
+  target: [AppImage, deb]
+win:
+  target: [nsis]
