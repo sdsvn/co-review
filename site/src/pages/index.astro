@@ -7,13 +7,40 @@ import logo from '../assets/logo.svg?url';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const docs = (path: string) => `${base}/docs/${path}/`;
 const github = 'https://github.com/sdsvn/co-review';
-const install = ['/plugin marketplace add sdsvn/co-review', '/plugin install co-review@co-review'];
+
+/** How each harness installs Co-Review and starts a review. `install` is what the hero's copy box shows. */
+type Harness = { id: string; name: string; where: string; install: string[]; file?: boolean; skills?: boolean; use: { cmd?: string; say?: string; what: string }[]; guide: string };
+const say = 'Review this change with me in Co-Review.';
+const skills = 'npx skills add sdsvn/co-review';
+const harnesses: Harness[] = [
+	{ id: 'claude', name: 'Claude Code', where: 'In Claude Code', install: ['/plugin marketplace add sdsvn/co-review', '/plugin install co-review@co-review'],
+		use: [{ cmd: '/co-review:review', what: 'when a change is ready: it opens the review and stays in it until you submit' }, { cmd: '/co-review:design <task>', what: 'to design first: it writes a design doc, you review it, it builds what you approved' }],
+		guide: docs('start/claude-code') },
+	{ id: 'pi', name: 'Pi', where: 'In a terminal', install: ['pi install /path/to/co-review/integrations/pi'],
+		use: [{ cmd: '/co-review', what: 'opens a review; your questions arrive in the session as you ask them' }, { cmd: '/co-review-design <task>', what: 'to design first' }],
+		guide: `${docs('guides/connect-your-agent')}#pi` },
+	{ id: 'codex', name: 'Codex', where: 'In ~/.codex/config.toml', file: true, install: ['[mcp_servers.co-review]', 'command = "co-review"', 'args = ["mcp"]', 'tool_timeout_sec = 600'], skills: true,
+		use: [{ say, what: 'Codex opens the review, answers your comments, and waits for your verdict' }],
+		guide: `${docs('guides/connect-your-agent')}#codex` },
+	{ id: 'cursor', name: 'Cursor', where: 'In ~/.cursor/mcp.json', file: true, install: ['{ "mcpServers": { "co-review": { "command": "co-review", "args": ["mcp"] } } }'], skills: true,
+		use: [{ say, what: 'in Agent mode; Cursor opens the review and answers in the threads' }],
+		guide: `${docs('guides/connect-your-agent')}#cursor` },
+	{ id: 'copilot', name: 'Copilot', where: 'In .vscode/mcp.json', file: true, install: ['{ "servers": { "co-review": { "type": "stdio", "command": "co-review", "args": ["mcp"] } } }'], skills: true,
+		use: [{ say, what: 'in VS Code agent mode' }],
+		guide: `${docs('guides/connect-your-agent')}#vs-code-copilot-agent-mode` },
+	{ id: 'gemini', name: 'Gemini CLI', where: 'In ~/.gemini/settings.json', file: true, install: ['{ "mcpServers": { "co-review": { "command": "co-review", "args": ["mcp"], "timeout": 600000 } } }'], skills: true,
+		use: [{ say, what: 'Gemini opens the review and answers your comments' }],
+		guide: `${docs('guides/connect-your-agent')}#gemini-cli` },
+	{ id: 'opencode', name: 'OpenCode', where: 'In opencode.json', file: true, install: ['{ "mcp": { "co-review": { "type": "local", "command": ["co-review", "mcp"] } } }'], skills: true,
+		use: [{ say, what: 'OpenCode opens the review and answers your comments' }],
+		guide: `${docs('guides/connect-your-agent')}#opencode` }
+];
 
 const steps = [
-	{ title: 'Claude Code opens its change', body: 'It hands you the diff, the design doc, or the whole repository, and flags what deserves a closer look as proposed findings.' },
+	{ title: 'Your agent opens its change', body: 'It hands you the diff, the design doc, or the whole repository, and flags what deserves a closer look as proposed findings.' },
 	{ title: 'You comment where you read', body: 'On a line, a function, a design step or a diagram node. Select a few lines and ask; the question lands in a thread under the code.' },
 	{ title: 'It answers in the thread', body: 'From its own context: it knows what it built and why. Answers link straight to the code they talk about.' },
-	{ title: 'You decide', body: 'Approve, request changes or comment. Claude gets every open thread in one batch and comes back for the next round.' }
+	{ title: 'You decide', body: 'Approve, request changes or comment. The agent gets every open thread in one batch and comes back for the next round.' }
 ];
 
 const plugin = [
@@ -30,19 +57,19 @@ const plugin = [
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Co-Review: review what Claude Code built</title>
-		<meta name="description" content="Co-Review opens Claude Code's work as a review. Comment on code, designs and diagrams; the agent answers in the thread and waits for your verdict." />
+		<title>Co-Review: review what your coding agent built</title>
+		<meta name="description" content="Co-Review opens your coding agent's work as a review: Claude Code, Pi, Codex, Cursor and more. Comment on code, designs and diagrams; the agent answers in the thread and waits for your verdict." />
 		<link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
 		<link rel="canonical" href={new URL(`${base}/`, Astro.site)} />
-		<meta property="og:title" content="Co-Review: review what Claude Code built" />
-		<meta property="og:description" content="Comment on code, designs and diagrams. Claude Code answers in the thread and waits for your verdict." />
+		<meta property="og:title" content="Co-Review: review what your coding agent built" />
+		<meta property="og:description" content="Comment on code, designs and diagrams. Your agent answers in the thread and waits for your verdict." />
 	</head>
 	<body>
 		<header class="top">
 			<a class="brand" href={`${base}/`}><img src={logo} alt="" width="28" height="28" />Co-Review</a>
 			<nav aria-label="Main">
 				<a href={docs('start/overview')}>Docs</a>
-				<a href={docs('start/claude-code')}>Claude Code</a>
+				<a href="#setup">Set up</a>
 				<a href={github}>GitHub</a>
 			</nav>
 		</header>
@@ -50,24 +77,29 @@ const plugin = [
 		<main>
 			<section class="hero">
 				<div class="pitch">
-					<h1>Review what Claude Code built. Ask it why.</h1>
+					<h1>
+						Review what <span class="sr-only">your coding agent</span><span class="harness" aria-hidden="true">{harnesses.map((h, i) =>
+							<span data-harness={h.id} class={i === 0 ? 'on' : undefined}>{h.name}</span>)}</span> built. Ask it why.
+					</h1>
 					<p class="lede">
-						Co-Review opens the agent's work as a review: code, designs, diagrams. You comment the way you would on a
-						pull request, and Claude Code answers in the thread, from the context of what it just did.
+						Co-Review opens your agent's work as a review: code, designs, diagrams. You comment the way you would on a
+						pull request, and the agent answers in the thread, from the context of what it just did.
 					</p>
-					<div class="install" data-copy={install.join('\n')}>
-						<pre><code>{install.map(line => <span class="cmd">{line}</span>)}</code></pre>
-						<button type="button" class="copy">Copy</button>
-					</div>
+					{harnesses.map((h, i) =>
+						<div class="install" data-harness={h.id} data-copy={h.install.join('\n')} hidden={i !== 0}>
+							<p class="where">{h.where}</p>
+							<pre class={h.file ? 'file' : undefined}><code>{h.install.map(line => <span class="cmd">{line}</span>)}</code></pre>
+							<button type="button" class="copy">Copy</button>
+						</div>)}
 					<p class="after">
-						Paste into Claude Code. Needs the Co-Review app and its <a href={docs('start/install')}>co-review command</a>.
-						<a class="docs-link" href={docs('start/overview')}>Read the docs</a>
+						Needs the Co-Review app and its <a href={docs('start/install')}>co-review command</a>.
+						<a class="docs-link" href="#setup">Set up another agent</a>
 					</p>
 				</div>
 
 				<figure class="demo" aria-label="A review thread in Co-Review">
 					<div class="window">
-						<div class="bar"><span class="file">internal/orders/service.go</span><span class="agent-on">Claude Code is listening</span></div>
+						<div class="bar"><span class="file">internal/orders/service.go</span><span class="agent-on"><span class="agent-name">Claude Code</span> is listening</span></div>
 						<ol class="code" start="28">
 							<li><span class="k">if</span> err := tx.<span class="f">ReserveInventory</span>(ctx, o.Items); err != <span class="k">nil</span> {'{'}</li>
 							<li>    <span class="k">return</span> fmt.<span class="f">Errorf</span>(<span class="s">"reserve: %w"</span>, err)</li>
@@ -81,7 +113,7 @@ const plugin = [
 									<p><code>repo.Save</code> doesn't take <code>tx</code>. If the charge below fails, does the deferred rollback undo the saved order?</p>
 								</div>
 								<div class="msg agent">
-									<span class="who">Claude Code</span>
+									<span class="who agent-name">Claude Code</span>
 									<p class="answer">No. <code>repo.Save</code> writes through the repository's own connection, so the order is committed as soon as it returns. The deferred <code>tx.Rollback()</code> at <a class="ref">service.go:26</a> only undoes the reservation. Pass the transaction in: <code>s.repo.WithTx(tx).Save(ctx, o)</code>.</p>
 								</div>
 							</div>
@@ -92,6 +124,38 @@ const plugin = [
 						</ol>
 					</div>
 				</figure>
+			</section>
+
+			<section class="setup" id="setup" aria-labelledby="setup-title">
+				<h2 id="setup-title">Set up your agent</h2>
+				<p class="setup-lede">
+					Every agent reviews through the same MCP server, <code>co-review mcp</code>. Claude Code and Pi get native packages; the
+					others add the server to their config and, optionally, the skills.
+				</p>
+				<div class="tabs" role="tablist" aria-label="Agent">
+					{harnesses.map((h, i) =>
+						<button type="button" role="tab" id={`tab-${h.id}`} aria-controls={`panel-${h.id}`} aria-selected={i === 0 ? 'true' : 'false'}
+							tabindex={i === 0 ? 0 : -1} data-harness={h.id}>{h.name}</button>)}
+				</div>
+				{harnesses.map((h, i) =>
+					<div class="panel" role="tabpanel" id={`panel-${h.id}`} aria-labelledby={`tab-${h.id}`} data-harness={h.id} hidden={i !== 0}>
+						<div>
+							<h3>Install</h3>
+							<p class="where">{h.where}</p>
+							<pre class={h.file ? 'file' : undefined}><code>{h.install.map(line => <span class="cmd">{line}</span>)}</code></pre>
+							{h.skills && <>
+								<p class="where">Then add the skills, so plain requests start the workflow</p>
+								<pre><code><span class="cmd">{skills}</span></code></pre>
+							</>}
+						</div>
+						<div>
+							<h3>Use</h3>
+							<dl class="uses">
+								{h.use.map(u => <div><dt>{u.cmd ? <code>{u.cmd}</code> : <q>{u.say}</q>}</dt><dd>{u.what}</dd></div>)}
+							</dl>
+							<a href={h.guide}>{h.name} setup guide</a>
+						</div>
+					</div>)}
 			</section>
 
 			<section class="steps" aria-labelledby="steps-title">
@@ -178,6 +242,50 @@ const plugin = [
 				});
 			});
 
+			// The harness: the headline, the hero's install box, the demo's agent and the setup tabs follow one choice.
+			// Until someone picks one, the headline cycles through them (not with reduced motion).
+			const ids = [...document.querySelectorAll<HTMLElement>('.harness [data-harness]')].map(e => e.dataset.harness!);
+			const names = Object.fromEntries([...document.querySelectorAll<HTMLElement>('.harness [data-harness]')].map(e => [e.dataset.harness, e.textContent]));
+			let current = ids[0];
+			let chosen = false;
+			const select = (id: string, focus = false) => {
+				current = id;
+				document.querySelectorAll<HTMLElement>('.harness [data-harness]').forEach(e => e.classList.toggle('on', e.dataset.harness === id));
+				document.querySelectorAll<HTMLElement>('.install[data-harness], .panel[data-harness]').forEach(e => (e.hidden = e.dataset.harness !== id));
+				document.querySelectorAll<HTMLButtonElement>('[role="tab"]').forEach(t => {
+					const on = t.dataset.harness === id;
+					t.setAttribute('aria-selected', String(on));
+					t.tabIndex = on ? 0 : -1;
+					if (on && focus) t.focus();
+				});
+				document.querySelectorAll('.agent-name').forEach(e => (e.textContent = names[id] ?? ''));
+			};
+			const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+			tabs.forEach(tab => {
+				tab.addEventListener('click', () => { chosen = true; select(tab.dataset.harness!); });
+				tab.addEventListener('keydown', e => {
+					const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+					if (step) {
+						e.preventDefault();
+						chosen = true;
+						select(ids[(ids.indexOf(current) + step + ids.length) % ids.length], true);
+					}
+				});
+			});
+			if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+				const hero = document.querySelector('.hero')!;
+				let paused = false;
+				hero.addEventListener('mouseenter', () => (paused = true));
+				hero.addEventListener('mouseleave', () => (paused = false));
+				hero.addEventListener('focusin', () => (paused = true));
+				setTimeout(() => {
+					const cycle = setInterval(() => {
+						if (chosen) return clearInterval(cycle);
+						if (!paused) select(ids[(ids.indexOf(current) + 1) % ids.length]);
+					}, 2600);
+				}, 6000);
+			}
+
 			// The one orchestrated moment: the line is marked, the thread opens, the answer streams in.
 			const demo = document.querySelector<HTMLElement>('.demo');
 			const answer = demo?.querySelector<HTMLElement>('.answer');
@@ -235,7 +343,6 @@ const plugin = [
 	a:hover { color: var(--ink); }
 	:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; border-radius: 4px; }
 	h1, h2, h3 { font-family: var(--display); color: var(--ink); margin: 0; }
-	code, pre, .window { font-variant-ligatures: none; }
 	code { font-family: var(--mono); font-size: 0.88em; }
 
 	.top, main > section, footer { width: min(1180px, 100% - 3rem); margin-inline: auto; }
@@ -266,6 +373,7 @@ const plugin = [
 	.lede { font-size: 1.2rem; color: var(--ink-2); max-width: 46ch; margin: 1.4rem 0 1.8rem; }
 	.install { position: relative; max-width: 34rem; }
 	.install pre { padding-right: 5.2rem; }
+	.install .copy { top: calc(1.4rem + 0.45rem + 0.6rem); }
 	pre {
 		margin: 0;
 		padding: 1rem 1.1rem;
@@ -287,6 +395,38 @@ const plugin = [
 	.copy:hover { background: var(--ink); }
 	.after { font-size: 0.95rem; color: var(--ink-2); margin: 0.9rem 0 0; max-width: 34rem; }
 	.docs-link { display: inline-block; margin-left: 0.6rem; font-weight: 600; }
+
+	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+	/* The harness name: every name in one grid cell, so the headline keeps the width of the longest. */
+	.harness { display: inline-grid; vertical-align: bottom; }
+	/* Marked like the commented line in the review below: a highlighter stroke under the lower half. */
+	.harness > span { background: linear-gradient(transparent 58%, var(--highlight) 58%, var(--highlight) 92%, transparent 92%); padding: 0 0.06em; }
+	.harness > span { grid-area: 1 / 1; opacity: 0; transform: translateY(0.18em); transition: opacity 0.35s ease, transform 0.35s ease; white-space: nowrap; }
+	.harness > span.on { opacity: 1; transform: none; }
+	.where { margin: 0 0 0.45rem; font-size: 0.9rem; color: var(--ink-2); }
+
+	/* Set up your agent */
+	.setup { padding: clamp(3rem, 6vw, 5rem) 0; border-top: 1px solid var(--rule); }
+	.setup-lede { color: var(--ink-2); max-width: 60ch; margin: 1rem 0 1.8rem; }
+	.tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.6rem; }
+	.tabs button {
+		font: 600 0.95rem/1 var(--text); color: var(--ink-2);
+		padding: 0.6rem 0.95rem; border-radius: 999px;
+		border: 1px solid var(--rule); background: #fff; cursor: pointer;
+	}
+	.tabs button:hover { border-color: var(--indigo-soft); color: var(--ink); }
+	.tabs button[aria-selected='true'] { background: var(--ink); border-color: var(--ink); color: #fff; }
+	.panel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(1.5rem, 4vw, 3.5rem); }
+	.panel[hidden] { display: none; }
+	.panel h3 { font-size: 1.15rem; font-weight: 680; margin-bottom: 0.8rem; }
+	.panel pre { margin-bottom: 1.1rem; }
+	pre.file .cmd::before { content: none; }
+	.uses { margin: 0 0 1.2rem; }
+	.uses div { padding: 0.75rem 0; border-bottom: 1px solid var(--rule); }
+	.uses div:first-child { border-top: 1px solid var(--rule); }
+	.uses dt code { color: var(--mint); font-weight: 600; }
+	.uses dt q { font-weight: 600; }
+	.uses dd { margin: 0.2rem 0 0; color: var(--ink-2); }
 
 	/* The review window. */
 	.pitch, .demo, .install, .beyond > *, .claude > * { min-width: 0; }
@@ -383,7 +523,7 @@ const plugin = [
 	footer { display: flex; justify-content: space-between; align-items: center; padding: 2rem 0 3rem; border-top: 1px solid var(--rule); font-size: 0.95rem; }
 
 	@media (max-width: 900px) {
-		.hero, .beyond, .claude { grid-template-columns: 1fr; }
+		.hero, .beyond, .claude, .panel { grid-template-columns: 1fr; }
 		.steps ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.steps li::after { display: none; }
 	}
@@ -402,4 +542,6 @@ const plugin = [
 		.mark { background-size: 100% 100%; }
 		.thread { grid-template-rows: 1fr; }
 	}
+	/* Last, so no `font` shorthand above resets it: code as typed (JetBrains Mono would turn != into ≠). */
+	code, pre, .window, .window * { font-variant-ligatures: none; font-feature-settings: 'liga' 0, 'calt' 0; }
 </style>

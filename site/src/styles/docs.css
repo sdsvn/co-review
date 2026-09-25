@@ -34,3 +34,6 @@ h1, h2, h3, .site-title {
 }
 .site-title { font-weight: 700; }
 .site-title img { height: 1.75rem; width: auto; }
+
+/* Code as typed: no ligatures or contextual alternates. */
+code, pre, .expressive-code, .expressive-code * { font-variant-ligatures: none; font-feature-settings: 'liga' 0, 'calt' 0; }
