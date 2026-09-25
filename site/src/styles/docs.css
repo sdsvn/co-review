@@ -1,7 +1,7 @@
 /* Starlight in the Co-Review palette: indigo for actions, mint for the agent, cool paper, ink. */
 :root {
-	--sl-font: 'Hanken Grotesk Variable', system-ui, sans-serif;
-	--sl-font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+	--sl-font: 'Geist Variable', system-ui, sans-serif;
+	--sl-font-mono: 'Geist Mono Variable', ui-monospace, monospace;
 	--sl-color-accent-low: #1f1d4d;
 	--sl-color-accent: #818cf8;
 	--sl-color-accent-high: #e0e7ff;
@@ -29,8 +29,8 @@
 	--sl-color-black: #f7f7fc;
 }
 h1, h2, h3, .site-title {
-	font-family: 'Bricolage Grotesque Variable', var(--sl-font);
-	letter-spacing: -0.015em;
+	letter-spacing: -0.025em;
+	font-weight: 600;
 }
 .site-title { font-weight: 700; }
 .site-title img { height: 1.75rem; width: auto; }

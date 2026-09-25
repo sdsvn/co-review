@@ -15,9 +15,8 @@ export default defineConfig({
 			favicon: '/favicon.svg',
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/sdsvn/co-review' }],
 			customCss: [
-				'@fontsource-variable/bricolage-grotesque',
-				'@fontsource-variable/hanken-grotesk',
-				'@fontsource-variable/jetbrains-mono',
+				'@fontsource-variable/geist',
+				'@fontsource-variable/geist-mono',
 				'./src/styles/docs.css'
 			],
 			// llms.txt, llms-full.txt and llms-small.txt for agents, generated from these docs.
