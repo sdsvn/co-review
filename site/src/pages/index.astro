@@ -1,0 +1,405 @@
+---
+import '@fontsource-variable/bricolage-grotesque';
+import '@fontsource-variable/hanken-grotesk';
+import '@fontsource-variable/jetbrains-mono';
+import logo from '../assets/logo.svg?url';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const docs = (path: string) => `${base}/docs/${path}/`;
+const github = 'https://github.com/sdsvn/co-review';
+const install = ['/plugin marketplace add sdsvn/co-review', '/plugin install co-review@co-review'];
+
+const steps = [
+	{ title: 'Claude Code opens its change', body: 'It hands you the diff, the design doc, or the whole repository, and flags what deserves a closer look as proposed findings.' },
+	{ title: 'You comment where you read', body: 'On a line, a function, a design step or a diagram node. Select a few lines and ask; the question lands in a thread under the code.' },
+	{ title: 'It answers in the thread', body: 'From its own context: it knows what it built and why. Answers link straight to the code they talk about.' },
+	{ title: 'You decide', body: 'Approve, request changes or comment. Claude gets every open thread in one batch and comes back for the next round.' }
+];
+
+const plugin = [
+	{ term: '/co-review:review', code: true, body: 'When a change is ready: Claude opens it for review and stays in it until you submit.' },
+	{ term: '/co-review:design', code: true, body: 'Before there is code: Claude writes a design doc, you review it, it builds what you approved.' },
+	{ term: 'Live comments', body: 'With channels on, your question reaches the running session the moment you ask it.' },
+	{ term: 'co-reviewer', body: 'A background subagent that keeps answering your review while the main conversation works.' },
+	{ term: 'Session hook', body: 'Open Claude Code in a repository with waiting questions, and it already knows about them.' }
+];
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Co-Review: review what Claude Code built</title>
+		<meta name="description" content="Co-Review opens Claude Code's work as a review. Comment on code, designs and diagrams; the agent answers in the thread and waits for your verdict." />
+		<link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
+		<link rel="canonical" href={new URL(`${base}/`, Astro.site)} />
+		<meta property="og:title" content="Co-Review: review what Claude Code built" />
+		<meta property="og:description" content="Comment on code, designs and diagrams. Claude Code answers in the thread and waits for your verdict." />
+	</head>
+	<body>
+		<header class="top">
+			<a class="brand" href={`${base}/`}><img src={logo} alt="" width="28" height="28" />Co-Review</a>
+			<nav aria-label="Main">
+				<a href={docs('start/overview')}>Docs</a>
+				<a href={docs('start/claude-code')}>Claude Code</a>
+				<a href={github}>GitHub</a>
+			</nav>
+		</header>
+
+		<main>
+			<section class="hero">
+				<div class="pitch">
+					<h1>Review what Claude Code built. Ask it why.</h1>
+					<p class="lede">
+						Co-Review opens the agent's work as a review: code, designs, diagrams. You comment the way you would on a
+						pull request, and Claude Code answers in the thread, from the context of what it just did.
+					</p>
+					<div class="install" data-copy={install.join('\n')}>
+						<pre><code>{install.map(line => <span class="cmd">{line}</span>)}</code></pre>
+						<button type="button" class="copy">Copy</button>
+					</div>
+					<p class="after">
+						Paste into Claude Code. Needs the Co-Review app and its <a href={docs('start/install')}>co-review command</a>.
+						<a class="docs-link" href={docs('start/overview')}>Read the docs</a>
+					</p>
+				</div>
+
+				<figure class="demo" aria-label="A review thread in Co-Review">
+					<div class="window">
+						<div class="bar"><span class="file">internal/orders/service.go</span><span class="agent-on">Claude Code is listening</span></div>
+						<ol class="code" start="28">
+							<li><span class="k">if</span> err := tx.<span class="f">ReserveInventory</span>(ctx, o.Items); err != <span class="k">nil</span> {'{'}</li>
+							<li>    <span class="k">return</span> fmt.<span class="f">Errorf</span>(<span class="s">"reserve: %w"</span>, err)</li>
+							<li>{'}'}</li>
+							<li class="marked"><span class="mark"><span class="k">if</span> err := s.repo.<span class="f">Save</span>(ctx, o); err != <span class="k">nil</span> {'{'}</span></li>
+						</ol>
+						<div class="thread">
+							<div class="thread-inner">
+								<div class="msg you">
+									<span class="who">You</span>
+									<p><code>repo.Save</code> doesn't take <code>tx</code>. If the charge below fails, does the deferred rollback undo the saved order?</p>
+								</div>
+								<div class="msg agent">
+									<span class="who">Claude Code</span>
+									<p class="answer">No. <code>repo.Save</code> writes through the repository's own connection, so the order is committed as soon as it returns. The deferred <code>tx.Rollback()</code> at <a class="ref">service.go:26</a> only undoes the reservation. Pass the transaction in: <code>s.repo.WithTx(tx).Save(ctx, o)</code>.</p>
+								</div>
+							</div>
+						</div>
+						<ol class="code" start="32">
+							<li>    <span class="k">return</span> fmt.<span class="f">Errorf</span>(<span class="s">"save: %w"</span>, err)</li>
+							<li>{'}'}</li>
+						</ol>
+					</div>
+				</figure>
+			</section>
+
+			<section class="steps" aria-labelledby="steps-title">
+				<h2 id="steps-title">How a review goes</h2>
+				<ol>
+					{steps.map(step => <li><h3>{step.title}</h3><p>{step.body}</p></li>)}
+				</ol>
+			</section>
+
+			<section class="beyond" aria-labelledby="beyond-title">
+				<div class="beyond-copy">
+					<h2 id="beyond-title">Review the design before the code exists</h2>
+					<p>
+						Claude writes the plan as a design tree: what happens, then how, then the edge cases. You comment on the step
+						that worries you, it answers or revises, and it only builds what you approved.
+					</p>
+					<dl class="kinds">
+						<div><dt>Code</dt><dd>Lines, ranges, functions, files, or the whole repository. Comments follow the code through edits.</dd></div>
+						<div><dt>Designs</dt><dd>Markdown with a foldable step tree and a checked format.</dd></div>
+						<div><dt>Diagrams</dt><dd>Mermaid, down to a single node or edge.</dd></div>
+						<div><dt>Patches</dt><dd>Pull-request pages with line comments and suggested edits.</dd></div>
+					</dl>
+					<a href={docs('guides/design-docs')}>How design documents work</a>
+				</div>
+				<div class="tree" aria-label="A design document under review">
+					<p class="tree-title">Design <span class="levels"><span>L1</span><span class="on">L2</span><span>L3</span></span></p>
+					<ul>
+						<li><strong>Save the order and a charge request together</strong> <em>one transaction, no network calls inside it</em>
+							<ul><li>insert a <code>charge_requested</code> row keyed by order id <span class="badge new" title="new artifact">✎</span> <em>new payment_outbox table</em></li></ul>
+						</li>
+						<li><strong>Charge from a background worker</strong> <em>at-least-once, safe to retry</em>
+							<ul>
+								<li>call the provider with the order id as idempotency key</li>
+								<li class="commented">mark the row sent, or retry with backoff <span class="badge risk" title="risk">⚠</span> <em>a charge can succeed while the mark fails</em>
+									<div class="note"><span class="who">You</span> If we crash before marking the row, does the worker charge twice?</div>
+								</li>
+							</ul>
+						</li>
+					</ul>
+				</div>
+			</section>
+
+			<section class="claude" aria-labelledby="claude-title">
+				<div>
+					<h2 id="claude-title">Made for Claude Code</h2>
+					<p>One plugin gives Claude Code the review tools, the workflows and the slash commands to use them.</p>
+					<p class="others">
+						Works with Pi, Codex, Cursor, VS Code, Zed, Gemini CLI and any other MCP agent too.
+						<a href={docs('guides/connect-your-agent')}>Connect your agent</a>
+					</p>
+				</div>
+				<dl class="plugin">
+					{plugin.map(item => <div><dt>{item.code ? <code>{item.term}</code> : item.term}</dt><dd>{item.body}</dd></div>)}
+				</dl>
+			</section>
+
+			<section class="get" aria-labelledby="get-title">
+				<div class="get-inner">
+				<h2 id="get-title">Install the app</h2>
+				<p>A desktop app for macOS, or a browser app from source on any OS. The review stays on your machine, outside the repository.</p>
+				<pre><code><span class="cmd">git clone {github} &amp;&amp; cd co-review</span><span class="cmd">make install &amp;&amp; make install-app</span></code></pre>
+				<a href={docs('start/install')}>Install guide</a>
+				</div>
+			</section>
+		</main>
+
+		<footer>
+			<span class="brand small"><img src={logo} alt="" width="20" height="20" />Co-Review</span>
+			<nav aria-label="Footer">
+				<a href={docs('start/overview')}>Docs</a>
+				<a href={github}>GitHub</a>
+				<a href={`${base}/llms.txt`}>llms.txt for agents</a>
+			</nav>
+		</footer>
+
+		<script>
+			// Copy the install commands.
+			document.querySelectorAll<HTMLElement>('[data-copy]').forEach(box => {
+				const button = box.querySelector<HTMLButtonElement>('.copy')!;
+				button.addEventListener('click', async () => {
+					await navigator.clipboard.writeText(box.dataset.copy ?? '');
+					button.textContent = 'Copied';
+					setTimeout(() => (button.textContent = 'Copy'), 1600);
+				});
+			});
+
+			// The one orchestrated moment: the line is marked, the thread opens, the answer streams in.
+			const demo = document.querySelector<HTMLElement>('.demo');
+			const answer = demo?.querySelector<HTMLElement>('.answer');
+			if (demo && answer && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+				const words = [...answer.childNodes].flatMap(node =>
+					node.nodeType === Node.TEXT_NODE
+						? (node.textContent ?? '').split(/(\s+)/).filter(Boolean).map(t => document.createTextNode(t))
+						: [node]);
+				answer.replaceChildren();
+				demo.classList.add('playing');
+				setTimeout(() => {
+					let i = 0;
+					const tick = () => {
+						if (i < words.length) {
+							answer.append(words[i++]);
+							setTimeout(tick, 28);
+						} else {
+							demo.classList.add('done');
+						}
+					};
+					tick();
+				}, 1700);
+			} else {
+				demo?.classList.add('playing', 'done');
+			}
+		</script>
+	</body>
+</html>
+
+<style>
+	:root {
+		--ink: #1e1b4b;
+		--ink-2: #45437a;
+		--paper: #f7f7fc;
+		--rule: #dcdcec;
+		--indigo: #4f46e5;
+		--indigo-soft: #a5b4fc;
+		--mint: #059669;
+		--mint-bright: #34d399;
+		--highlight: #ffe58a;
+		--display: 'Bricolage Grotesque Variable', system-ui, sans-serif;
+		--text: 'Hanken Grotesk Variable', system-ui, sans-serif;
+		--mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+		color-scheme: light;
+	}
+	* { box-sizing: border-box; }
+	html { background: var(--paper); }
+	body {
+		margin: 0;
+		color: var(--ink);
+		font: 400 1.0625rem/1.6 var(--text);
+		-webkit-font-smoothing: antialiased;
+	}
+	a { color: var(--indigo); text-underline-offset: 0.18em; }
+	a:hover { color: var(--ink); }
+	:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; border-radius: 4px; }
+	h1, h2, h3 { font-family: var(--display); color: var(--ink); margin: 0; }
+	code, pre, .window { font-variant-ligatures: none; }
+	code { font-family: var(--mono); font-size: 0.88em; }
+
+	.top, main > section, footer { width: min(1180px, 100% - 3rem); margin-inline: auto; }
+
+	.top { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 0; }
+	.brand { display: inline-flex; align-items: center; gap: 0.6rem; font: 700 1.2rem/1 var(--display); color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
+	.brand.small { font-size: 1rem; }
+	.top nav, footer nav { display: flex; gap: 1.5rem; }
+	.top nav a, footer nav a { color: var(--ink-2); text-decoration: none; font-weight: 500; }
+	.top nav a:hover, footer nav a:hover { color: var(--indigo); }
+
+	/* Hero: the pitch, and the product's defining moment beside it. */
+	.hero {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+		gap: clamp(2rem, 5vw, 4.5rem);
+		align-items: center;
+		padding: clamp(2.5rem, 7vw, 6rem) 0 clamp(3rem, 7vw, 5.5rem);
+	}
+	h1 {
+		font-size: clamp(2.6rem, 5.4vw, 4.4rem);
+		font-weight: 750;
+		font-stretch: 88%;
+		line-height: 1.02;
+		letter-spacing: -0.035em;
+		max-width: 12ch;
+	}
+	.lede { font-size: 1.2rem; color: var(--ink-2); max-width: 46ch; margin: 1.4rem 0 1.8rem; }
+	.install { position: relative; max-width: 34rem; }
+	.install pre { padding-right: 5.2rem; }
+	pre {
+		margin: 0;
+		padding: 1rem 1.1rem;
+		background: #fff;
+		border: 1px solid var(--rule);
+		border-radius: 10px;
+		overflow-x: auto;
+		font: 400 0.9rem/1.7 var(--mono);
+	}
+	.cmd { display: block; white-space: pre; }
+	.cmd::before { content: '> '; color: var(--indigo-soft); user-select: none; }
+	.copy {
+		position: absolute; top: 0.6rem; right: 0.6rem;
+		font: 600 0.85rem/1 var(--text);
+		padding: 0.5rem 0.8rem;
+		border: 0; border-radius: 7px;
+		background: var(--indigo); color: #fff; cursor: pointer;
+	}
+	.copy:hover { background: var(--ink); }
+	.after { font-size: 0.95rem; color: var(--ink-2); margin: 0.9rem 0 0; max-width: 34rem; }
+	.docs-link { display: inline-block; margin-left: 0.6rem; font-weight: 600; }
+
+	/* The review window. */
+	.pitch, .demo, .install, .beyond > *, .claude > * { min-width: 0; }
+	.demo { margin: 0; }
+	.window {
+		background: var(--ink);
+		color: #e6e7fb;
+		border-radius: 14px;
+		box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 30px 60px -30px rgba(30, 27, 75, 0.55);
+		overflow: hidden;
+		font: 400 0.86rem/1.75 var(--mono);
+	}
+	.bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.3rem 1rem; padding: 0.7rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); font-family: var(--text); font-size: 0.82rem; color: #b9bbe0; }
+	.agent-on { color: var(--mint-bright); }
+	.agent-on::before { content: ''; display: inline-block; width: 0.45rem; height: 0.45rem; margin-right: 0.45rem; border-radius: 50%; background: var(--mint-bright); vertical-align: 0.05rem; }
+	.code { margin: 0; padding: 0.5rem 0; list-style: none; overflow-x: auto; }
+	.code li { counter-increment: line; padding: 0 1rem 0 0; white-space: pre; width: max-content; min-width: 100%; }
+	.code li::before { content: counter(line); display: inline-block; width: 3.2rem; padding-right: 1.1rem; text-align: right; color: #6a6aa0; }
+	.code:first-of-type { counter-reset: line 27; }
+	.code:last-of-type { counter-reset: line 31; }
+	.k { color: #c4b5fd; }
+	.f { color: #7dd3fc; }
+	.s { color: #6ee7b7; }
+	.mark { background: linear-gradient(var(--highlight), var(--highlight)) no-repeat 0 0 / 0% 100%; color: var(--ink); border-radius: 3px; padding: 0.05rem 0.2rem; margin-left: -0.2rem; }
+	.mark .k, .mark .f { color: var(--ink); font-weight: 600; }
+	.playing .mark { animation: mark 0.7s 0.3s cubic-bezier(0.3, 0.7, 0.2, 1) forwards; }
+	@keyframes mark { to { background-size: 100% 100%; } }
+
+	.thread { display: grid; grid-template-rows: 0fr; }
+	.playing .thread { animation: open 0.6s 1s cubic-bezier(0.3, 0.7, 0.2, 1) forwards; }
+	@keyframes open { to { grid-template-rows: 1fr; } }
+	.thread-inner { overflow: hidden; }
+	.msg { margin: 0.2rem 1rem 0.7rem 4.3rem; padding: 0.7rem 0.9rem; border-radius: 10px; background: #2a2766; font: 400 0.95rem/1.55 var(--text); color: #eceefe; }
+	.msg:first-child { margin-top: 0.7rem; }
+	.msg p { margin: 0.2rem 0 0; }
+	.msg code { color: #fde68a; }
+	.who { font-weight: 700; font-size: 0.82rem; }
+	.you .who { color: var(--indigo-soft); }
+	.agent { border-left: 3px solid var(--mint-bright); }
+	.agent .who { color: var(--mint-bright); }
+	.ref { color: var(--indigo-soft); text-decoration: underline; text-underline-offset: 0.18em; }
+	.answer { min-height: 6.2em; }
+	.playing:not(.done) .answer::after { content: ''; display: inline-block; width: 0.5rem; height: 1em; margin-left: 2px; vertical-align: -0.15em; background: var(--mint-bright); animation: caret 0.9s steps(1) infinite; }
+	@keyframes caret { 50% { opacity: 0; } }
+
+	/* Sections */
+	section h2 { font-size: clamp(1.9rem, 3.4vw, 2.6rem); font-weight: 720; font-stretch: 90%; letter-spacing: -0.025em; line-height: 1.08; }
+	.steps { padding: clamp(3rem, 6vw, 5rem) 0; border-top: 1px solid var(--rule); }
+	.steps ol { list-style: none; counter-reset: step; margin: 2.2rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2rem; }
+	.steps li { counter-increment: step; position: relative; padding-top: 3.1rem; }
+	.steps li::before { content: counter(step); position: absolute; top: 0; left: 0; font: 700 1.9rem/1 var(--display); color: var(--indigo); }
+	.steps li:not(:last-child)::after { content: ''; position: absolute; top: 0.95rem; left: 2.4rem; right: -1.2rem; height: 1px; background: var(--rule); }
+	.steps h3 { font-size: 1.2rem; font-weight: 680; letter-spacing: -0.01em; }
+	.steps p { color: var(--ink-2); margin: 0.5rem 0 0; font-size: 1rem; }
+
+	.beyond { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: clamp(2rem, 5vw, 4.5rem); align-items: start; padding: clamp(3rem, 6vw, 5rem) 0; border-top: 1px solid var(--rule); }
+	.beyond-copy > p { color: var(--ink-2); max-width: 44ch; margin: 1rem 0 1.6rem; }
+	.kinds { margin: 0 0 1.5rem; display: grid; gap: 0.8rem; }
+	.kinds div { display: grid; grid-template-columns: 6.5rem 1fr; gap: 1rem; }
+	.kinds dt { font-weight: 700; }
+	.kinds dd { margin: 0; color: var(--ink-2); }
+	.tree { background: #fff; border: 1px solid var(--rule); border-radius: 12px; padding: 1.5rem 1.6rem; font-size: 0.98rem; }
+	.tree-title { margin: 0 0 0.8rem; font: 700 1.35rem/1 var(--display); display: flex; align-items: center; gap: 0.8rem; }
+	.levels { display: inline-flex; gap: 0.2rem; font: 600 0.72rem/1 var(--text); }
+	.levels span { padding: 0.25rem 0.45rem; border-radius: 5px; border: 1px solid var(--rule); color: var(--ink-2); }
+	.levels .on { background: var(--indigo); border-color: var(--indigo); color: #fff; }
+	.tree ul { margin: 0; padding-left: 1.2rem; }
+	.tree li { margin: 0.45rem 0; }
+	.tree em { font-style: normal; color: #8a89b3; }
+	.tree em::before { content: '— '; }
+	.badge { display: inline-grid; place-items: center; width: 1.3rem; height: 1.3rem; border-radius: 5px; font-size: 0.75rem; vertical-align: 0.05rem; }
+	.badge.new { background: #e0e7ff; color: var(--indigo); }
+	.badge.risk { background: #fee2e2; color: #b91c1c; }
+	.commented { background: linear-gradient(transparent 62%, #fff1b8 62%); }
+	.note { margin: 0.6rem 0 0.2rem; padding: 0.6rem 0.8rem; border-left: 3px solid var(--indigo); background: #f1f1fd; border-radius: 0 8px 8px 0; font-size: 0.93rem; }
+	.note .who { color: var(--indigo); margin-right: 0.4rem; }
+
+	.claude { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(2rem, 5vw, 4.5rem); padding: clamp(3rem, 6vw, 5rem) 0; border-top: 1px solid var(--rule); }
+	.claude p { color: var(--ink-2); max-width: 40ch; }
+	.others { font-size: 0.98rem; }
+	.others a { display: block; margin-top: 0.4rem; font-weight: 600; }
+	.plugin { margin: 0; }
+	.plugin div { display: grid; grid-template-columns: 11.5rem 1fr; gap: 1.2rem; padding: 1rem 0; border-bottom: 1px solid var(--rule); }
+	.plugin div:first-child { border-top: 1px solid var(--rule); }
+	.plugin dt { font-weight: 700; }
+	.plugin dt code { font-size: 0.92rem; font-weight: 600; color: var(--mint); }
+	.plugin dd { margin: 0; }
+
+	.get { padding: clamp(3rem, 6vw, 5rem) 0; border-top: 1px solid var(--rule); }
+	.get-inner { max-width: 44rem; }
+	.get p { color: var(--ink-2); margin: 0.8rem 0 1.4rem; }
+	.get pre { margin-bottom: 1rem; }
+
+	footer { display: flex; justify-content: space-between; align-items: center; padding: 2rem 0 3rem; border-top: 1px solid var(--rule); font-size: 0.95rem; }
+
+	@media (max-width: 900px) {
+		.hero, .beyond, .claude { grid-template-columns: 1fr; }
+		.steps ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.steps li::after { display: none; }
+	}
+	@media (max-width: 560px) {
+		.top { flex-wrap: wrap; gap: 0.8rem; }
+		.top nav { gap: 1.1rem; font-size: 0.95rem; }
+		.lede { font-size: 1.1rem; }
+		.steps ol { grid-template-columns: 1fr; }
+		.msg { margin-left: 1rem; }
+		.code li::before { width: 2.4rem; padding-right: 0.7rem; }
+		.plugin div, .kinds div { grid-template-columns: 1fr; gap: 0.2rem; }
+		footer { flex-direction: column; gap: 1rem; align-items: flex-start; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.playing .mark, .playing .thread { animation: none; }
+		.mark { background-size: 100% 100%; }
+		.thread { grid-template-rows: 1fr; }
+	}
+</style>

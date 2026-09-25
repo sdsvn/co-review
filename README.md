@@ -13,7 +13,7 @@ Works just as well with Pi, Codex, Cursor and any MCP agent.
 [![Pi package](https://img.shields.io/badge/Pi-package-059669?style=flat-square)](docs/agent-setup.md#pi)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-1E1B4B?style=flat-square)](#install)
 
-[Install](#install) · [Claude Code](#made-for-claude-code) · [Usage](#usage) · [Agents](#working-with-agents) · [Design docs](docs/design-docs.md) · [Contributing](#contributing)
+[Website](https://sdsvn.github.io/co-review/) · [Install](#install) · [Claude Code](#made-for-claude-code) · [Usage](#usage) · [Agents](#working-with-agents) · [Design docs](docs/design-docs.md) · [Contributing](#contributing)
 
 </div>
 
@@ -242,6 +242,8 @@ Co-Review ships **Co-Review Dark** and **Co-Review Light** themes and follows th
 
 ## Documentation
 
+The docs are published at **https://sdsvn.github.io/co-review/** (built from `docs/` by `site/`).
+
 - [Design documents](docs/design-docs.md): the design-doc format, anchors, instructing agents
 - [Connect your agent](docs/agent-setup.md): the Claude Code plugin, the Pi package, skills, MCP config for other harnesses
 - [Agents](docs/agents.md): ACP vs MCP, how the review loop works, review directories
@@ -277,7 +279,8 @@ bin/                     co-review CLI, install-cli.sh, review server mode
 integrations/pi          Pi package: extension, /co-review-design prompt, co-reviewer subagent
 plugin/                  Claude Code plugin: MCP server + channel, skills, commands, co-reviewer subagent, SessionStart hook
 .claude-plugin/          plugin marketplace manifest
-docs/                    guides and brand assets
+docs/                    guides and brand assets (the source of the website's guides)
+site/                    website and docs: Astro + Starlight, deployed to GitHub Pages
 llms.txt                 integration contract for agents
 ```
 
@@ -294,5 +297,19 @@ make install-app    # macOS: package and install locally
 ```
 
 Signing, notarizing and the packaged layout are covered in [docs/running-and-packaging.md](docs/running-and-packaging.md).
+
+
+## Website
+
+`site/` is the website and docs (Astro + Starlight). Its guides are generated from `docs/*.md` and `llms.txt` at build
+time, and `starlight-llms-txt` publishes `llms.txt`, `llms-full.txt` and `llms-small.txt` for agents.
+
+```bash
+cd site && npm install
+npm run dev        # http://localhost:4321/co-review/
+npm run build      # sync docs, type-check, build into site/dist
+```
+
+Pushes to `main` that touch `site/`, `docs/` or `llms.txt` deploy it through `.github/workflows/site.yml`.
 
 ---

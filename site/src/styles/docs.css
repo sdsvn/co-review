@@ -1,0 +1,36 @@
+/* Starlight in the Co-Review palette: indigo for actions, mint for the agent, cool paper, ink. */
+:root {
+	--sl-font: 'Hanken Grotesk Variable', system-ui, sans-serif;
+	--sl-font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+	--sl-color-accent-low: #1f1d4d;
+	--sl-color-accent: #818cf8;
+	--sl-color-accent-high: #e0e7ff;
+	--sl-color-white: #f4f4ff;
+	--sl-color-gray-1: #e2e3f3;
+	--sl-color-gray-2: #b9bbd9;
+	--sl-color-gray-3: #8a8cb8;
+	--sl-color-gray-4: #555785;
+	--sl-color-gray-5: #34345f;
+	--sl-color-gray-6: #22214a;
+	--sl-color-black: #151433;
+}
+:root[data-theme='light'] {
+	--sl-color-accent-low: #e0e7ff;
+	--sl-color-accent: #4f46e5;
+	--sl-color-accent-high: #312e81;
+	--sl-color-white: #1e1b4b;
+	--sl-color-gray-1: #2c2a5a;
+	--sl-color-gray-2: #45437a;
+	--sl-color-gray-3: #6b6a99;
+	--sl-color-gray-4: #9a99bf;
+	--sl-color-gray-5: #cfd0e6;
+	--sl-color-gray-6: #eaeaf5;
+	--sl-color-gray-7: #f3f3fa;
+	--sl-color-black: #f7f7fc;
+}
+h1, h2, h3, .site-title {
+	font-family: 'Bricolage Grotesque Variable', var(--sl-font);
+	letter-spacing: -0.015em;
+}
+.site-title { font-weight: 700; }
+.site-title img { height: 1.75rem; width: auto; }
