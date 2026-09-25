@@ -137,8 +137,13 @@ flowchart LR
 
 ## Instructing an agent
 
-Agents learn the format from the `open_review` tool description and from [`llms.txt`](../llms.txt), and they see any
-problems in the warnings returned while the review is open. To make it explicit, add to the agent's instructions:
+In **Claude Code** with the Co-Review plugin, run `/co-review:design <task>`. In **Pi** with the Co-Review package,
+run `/co-review-design <task>`. Both follow the `co-review-design` skill: write the document in this format, open it
+for review, revise it from your comments, and implement after you approve. See [Connect your agent](agent-setup.md).
+
+Other agents learn the format from the `open_review` tool description and from [`llms.txt`](../llms.txt), and they
+see any problems in the warnings returned while the review is open. To make it explicit, add to the agent's
+instructions:
 
 > For architecturally non-trivial changes, write the design first as `design/<name>/index.markdown` following
 > Co-Review's design-document format (`co-review: design` frontmatter), open it with `open_review({ dir })`, and

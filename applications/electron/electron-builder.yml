@@ -17,9 +17,14 @@ files:
   # The `co-review` CLI (and its installer), run on the app's Electron with ELECTRON_RUN_AS_NODE.
   - from: ../../bin
     to: bin
-  # Agent skills, installed from the app (Review: Install Agent Skills…).
-  - from: ../../plugin/skills
-    to: skills
+  # Agent integrations, installed from the app (Review: Add Co-Review to an Agent Harness / Install Agent Skills):
+  # the Claude Code plugin and its marketplace, and the Pi package (which reads ../../plugin/skills).
+  - from: ../../plugin
+    to: plugin
+  - from: ../../.claude-plugin
+    to: .claude-plugin
+  - from: ../../integrations/pi
+    to: integrations/pi
 extraMetadata:
   main: scripts/electron-main.js
 mac:

@@ -27,12 +27,34 @@ function exec(command: string, args: string[]): Promise<string> {
 export class AgentSetup {
 
     protected get skillsDir(): string | undefined {
-        return bundled('../../skills', '../../../../plugin/skills');
+        return bundled('../../plugin/skills', '../../../../plugin/skills');
+    }
+
+    /** Root with `.claude-plugin/marketplace.json` (the packaged app, or the checkout). */
+    protected get marketplaceDir(): string | undefined {
+        return ['../..', '../../../..'].map(c => path.resolve(__dirname, c)).find(d => fs.existsSync(path.join(d, '.claude-plugin', 'marketplace.json')));
+    }
+
+    protected get piPackageDir(): string | undefined {
+        return bundled('../../integrations/pi', '../../../../integrations/pi');
+    }
+
+    protected get installedCli(): string | undefined {
+        return [path.join('/usr/local/bin', SERVER), path.join(os.homedir(), '.local', 'bin', SERVER)].find(p => fs.existsSync(p));
+    }
+
+    /** Installs the `co-review` commands (bin/install-cli.sh: /usr/local/bin when writable, else ~/.local/bin). */
+    async installCli(): Promise<string> {
+        const script = bundled('../../bin/install-cli.sh', '../../../../bin/install-cli.sh');
+        if (!script) {
+            throw new Error('install-cli.sh is not bundled with this build.');
+        }
+        return exec('/bin/sh', [script]);
     }
 
     /** How a harness should launch `co-review mcp`: the installed CLI, else this app's own runtime. */
     launch(): McpLaunch {
-        const cli = [path.join('/usr/local/bin', SERVER), path.join(os.homedir(), '.local', 'bin', SERVER)].find(p => fs.existsSync(p));
+        const cli = this.installedCli;
         if (cli) {
             return { command: cli, args: ['mcp'] };
         }
@@ -44,7 +66,7 @@ export class AgentSetup {
 
     info(workspaceRoot?: string): AgentSetupInfo {
         const launch = this.launch();
-        return { launch, skills: this.skillTargets(workspaceRoot), harnesses: this.harnesses(launch), skillsAvailable: !!this.skillsDir };
+        return { launch, skills: this.skillTargets(workspaceRoot), harnesses: this.harnesses(launch), skillsAvailable: !!this.skillsDir, cliInstalled: !!this.installedCli };
     }
 
     protected skillTargets(workspaceRoot?: string): SkillTarget[] {
@@ -85,8 +107,15 @@ export class AgentSetup {
         const appSupport = mac ? path.join(home, 'Library', 'Application Support') : path.join(home, '.config');
         const claudeArgs = ['mcp', 'add', '-s', 'user', ...Object.entries(env).flatMap(([k, v]) => ['-e', `${k}=${v}`]), SERVER, '--', l.command, ...l.args];
         const quote = (s: string) => /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
+        const cli = (label: string, id: string, commands: string[][], detail?: string): HarnessSetup =>
+            ({ id, label, kind: 'cli', argv: commands, snippet: commands.map(c => c.map(quote).join(' ')).join('\n'), detail });
+        const market = this.marketplaceDir;
+        const pi = this.piPackageDir;
         return [
-            { id: 'claude-code', label: 'Claude Code', kind: 'cli', argv: ['claude', ...claudeArgs], snippet: ['claude', ...claudeArgs].map(quote).join(' ') },
+            ...market ? [cli('Claude Code: plugin (skills, commands and MCP server)', 'claude-code-plugin',
+                [['claude', 'plugin', 'marketplace', 'add', market], ['claude', 'plugin', 'install', 'co-review@co-review']])] : [],
+            cli('Claude Code: MCP server only', 'claude-code', [['claude', ...claudeArgs]]),
+            ...pi ? [cli('Pi: package (extension, /co-review, co-reviewer subagent, skills)', 'pi', [['pi', 'install', pi]])] : [],
             { id: 'codex', label: 'Codex', kind: 'toml', file: path.join(home, '.codex', 'config.toml'),
                 snippet: [`[mcp_servers.${SERVER}]`, `command = ${JSON.stringify(l.command)}`, `args = ${JSON.stringify(l.args)}`,
                     ...hasEnv ? [`env = { ${Object.entries(env).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join(', ')} }`] : [],
@@ -117,8 +146,10 @@ export class AgentSetup {
             throw new Error(`Unknown harness ${harnessId}`);
         }
         if (h.kind === 'cli') {
-            await exec(h.argv![0], h.argv!.slice(1));
-            return 'Added to Claude Code (user scope).';
+            for (const [command, ...args] of h.argv!) {
+                await exec(command, args);
+            }
+            return `Set up ${h.label}.`;
         }
         if (!h.file || h.kind === 'manual') {
             throw new Error(`${h.label}'s config can't be edited safely; paste the snippet into ${h.file}.`);

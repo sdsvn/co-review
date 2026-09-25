@@ -1,10 +1,16 @@
 {
   "name": "co-review",
-  "version": "0.1.0",
-  "description": "Review with a human in Co-Review: the co-review and co-review-design skills, and the Co-Review MCP server (open_review, await_comment, reply, …).",
+  "displayName": "Co-Review",
+  "version": "0.2.0",
+  "description": "Hand your work to a human for review in Co-Review and stay as their co-reviewer: review tools (MCP), live review comments (channel), the co-review and co-review-design skills, slash commands, a background co-reviewer subagent, and a session hook that surfaces waiting questions.",
   "author": { "name": "Co-Review contributors" },
-  "keywords": ["review", "code-review", "design-review", "mcp"],
+  "homepage": "https://github.com/sdsvn/co-review",
+  "repository": "https://github.com/sdsvn/co-review",
+  "keywords": ["review", "code-review", "design-review", "mcp", "channel"],
   "mcpServers": {
     "co-review": { "command": "co-review", "args": ["mcp"] }
-  }
+  },
+  "channels": [
+    { "server": "co-review", "displayName": "Co-Review" }
+  ]
 }

@@ -3,14 +3,14 @@
 An agent is a **participant** in a review: it answers questions in threads, adds findings, and
 asks the reviewer to decide. There are two ways for an agent to join, depending on *who starts whom*.
 
-| | **ACP** — Co-Review starts the agent | **MCP** — the agent (in its harness) starts Co-Review |
+| | **ACP** — Co-Review starts the agent | **MCP / Pi** — the agent (in its harness) starts Co-Review |
 |---|---|---|
-| Who initiates | The reviewer, from the Review panel (*Connect agent*) | The agent, e.g. Claude Code working on a task |
+| Who initiates | The reviewer, from the Review panel (*Connect agent*) | The agent: Claude Code or Pi working on a task |
 | Transport | [Agent Client Protocol](https://agentclientprotocol.com) over stdio | [Model Context Protocol](https://modelcontextprotocol.io) tools (Streamable HTTP, or stdio via `co-review mcp`) |
 | Latency | Immediate: every question starts a turn; the answer **streams** | The agent answers when it calls `await_comment`; answers arrive whole |
 | Agent's context | A fresh session per thread (knows only the repo + thread) | The agent's own session — it knows what it just built and why |
 | Agent activity | Tool calls shown live; permission requests as buttons | `ask_reviewer` for decisions; the rest happens in the harness |
-| Agents | Claude Code (`claude-agent-acp`), Gemini CLI, OpenCode, Goose, any ACP agent | Claude Code, Codex, Cursor, Windsurf, Zed, any MCP client |
+| Agents | Claude Code (`claude-agent-acp`), Gemini CLI, OpenCode, Goose, any ACP agent | Claude Code (plugin), Pi (native package), Codex, Cursor, VS Code, Zed, any MCP client |
 
 **Rule of thumb:** use **ACP** when you start reviewing and want an on-call expert (fast, streaming).
 Use **MCP** when an agent did (or is doing) the work and should defend and explain it as your
@@ -30,8 +30,10 @@ login/config). Its file reads/writes through ACP are limited to the repository.
 
 ## MCP: let an agent in a harness open a review
 
-Add Co-Review's MCP server to your harness (Claude Code, Codex, Cursor, VS Code, Zed, Gemini CLI, OpenCode, Goose, …)
-and, optionally, install the skills. [Connect your agent](agent-setup.md) has the config for each harness; inside
+In **Claude Code**, install the Co-Review plugin: tools, skills, slash commands, a background `co-reviewer` subagent, a
+session hook and an optional live channel that pushes your questions into the session. In **Pi**, the Co-Review
+package. Other harnesses (Codex, Cursor, VS Code, Zed, Gemini CLI, OpenCode, Goose, …) add the MCP
+server and, optionally, the skills. [Connect your agent](agent-setup.md) has the config for each harness; inside
 Co-Review, **Review: Add Co-Review to an Agent Harness (MCP)…** does it for you.
 
 `co-review mcp` uses the harness's working directory as the repository, reuses a running Co-Review
@@ -39,7 +41,7 @@ Co-Review, **Review: Add Co-Review to an Agent Harness (MCP)…** does it for yo
 that speaks Streamable HTTP can also connect directly to `http://127.0.0.1:<port>/mcp?root=<repo>`
 (local connections only).
 
-Then tell the agent, for example:
+Then start it: `/co-review:review` in Claude Code, `/co-review` in Pi, or say it in any harness:
 
 > Open a Co-Review review for this repository and be my co-reviewer: add findings for anything
 > risky in your change, then keep answering my questions in the review until I say we're done.

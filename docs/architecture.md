@@ -12,7 +12,9 @@ extensions/review      @co-review/review
   src/browser          frontend: review panel, inline editor UI, commands
 bin/co-review.mjs      CLI: start the app, `mcp` stdio bridge for agent harnesses
 bin/review-server.mjs  review server mode (`co-review-server`): open a review directory from a script
-integrations/pi        Pi package: co-review extension + co-reviewer subagent
+integrations/pi        Pi package: co-review extension, /co-review-design prompt, co-reviewer subagent, skills
+plugin/                Claude Code plugin: MCP server + channel, skills, commands, subagent, SessionStart hook
+                       (.claude-plugin/ is its marketplace)
 ```
 
 ## Backend (`src/node`)
@@ -24,7 +26,8 @@ integrations/pi        Pi package: co-review extension + co-reviewer subagent
 - **`AcpAgentService`** — ACP client: launches the review's agent, one session per thread,
   streams answers/tool activity into threads, routes permission requests to the reviewer.
 - **`CoReviewerMcp`** — `/mcp` (Streamable HTTP) for agents in their own harness; registers the
-  running instance in `~/.co-review/server.json`.
+  running instance in `~/.co-review/server.json`. For Claude Code clients it also acts as a channel
+  (`claude/channel`): questions and submissions are pushed into the session (`startChannel`).
 - **`BundleService`** — review directories: document, patches, `PR.md`, sidecar findings
   (proposed, idempotent), suggested edits (document rewrite / patch hand-off), OpenSpec detection, and the `review.json` state file; **`review-payloads`** maps threads to the agent-facing shapes (`t<N>` ids, targets, raw anchors).
 - **`MobileReview`** — the phone view (`/m/`) and its small REST API (`/api/m`), local hosts plus `CO_REVIEW_ALLOWED_HOSTS`.

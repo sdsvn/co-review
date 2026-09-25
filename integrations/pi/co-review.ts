@@ -14,13 +14,15 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const CLI = resolve(here, "..", "..", "bin", "co-review.mjs");
+// The installed `co-review` command (desktop app or checkout), else this checkout's CLI on Pi's Node.
+const INSTALLED = [join("/usr/local/bin", "co-review"), join(homedir(), ".local", "bin", "co-review")].find(p => existsSync(p));
+const CLI = INSTALLED ? [INSTALLED] : [process.execPath, resolve(here, "..", "..", "bin", "co-review.mjs")];
 const HOME = process.env.CO_REVIEW_HOME || join(homedir(), ".co-review");
 
 interface Thread {
@@ -47,7 +49,7 @@ class CoReviewConnection {
 		}
 		// Start Co-Review (or reuse a running desktop/browser instance) without opening a browser.
 		await new Promise<void>((ok, fail) => {
-			const child = spawn(process.execPath, [CLI, "--no-open", root], { stdio: ["ignore", "ignore", "pipe"] });
+			const child = spawn(CLI[0], [...CLI.slice(1), "--no-open", root], { stdio: ["ignore", "ignore", "pipe"] });
 			let err = "";
 			child.stderr.on("data", d => (err += d));
 			child.on("error", fail);
@@ -153,11 +155,11 @@ export default function coReview(pi: ExtensionAPI) {
 		);
 	};
 
-	const start = async (ctx: ExtensionContext, opts: { root?: string; title?: string; listen: boolean }) => {
+	const start = async (ctx: ExtensionContext, opts: { root?: string; dir?: string; title?: string; listen: boolean }) => {
 		const root = resolve(opts.root ?? ctx.cwd);
 		await connection.connect(root);
-		const opened = await connection.call<{ reviewId: string; url?: string; note?: string; openThreads: number }>(
-			"open_review", { root, ...(opts.title ? { title: opts.title } : {}) });
+		const opened = await connection.call<{ reviewId: string; url?: string; note?: string; openThreads: number; format?: { warnings: string[] } }>(
+			"open_review", { root, ...(opts.dir ? { dir: resolve(root, opts.dir) } : {}), ...(opts.title ? { title: opts.title } : {}) });
 		connection.reviewId = opened.reviewId;
 		connection.url = opened.url;
 		if (opts.listen) {
@@ -200,7 +202,7 @@ export default function coReview(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "co_review_start",
 		label: "Co-Review: start",
-		description: "Open a Co-Review review of a repository (default: the working directory) in the reviewer's browser and join it as co-reviewer.",
+		description: "Open a Co-Review review of a repository (default: the working directory), or of a review directory (a design document and/or patches, `dir`), and join it as co-reviewer.",
 		promptSnippet: "Open a Co-Review code review with the user and act as co-reviewer",
 		promptGuidelines: [
 			"Use co_review_start when the user asks to review code together in Co-Review; afterwards answer reviewer questions with co_review_reply.",
@@ -208,12 +210,14 @@ export default function coReview(pi: ExtensionAPI) {
 		],
 		parameters: Type.Object({
 			root: Type.Optional(Type.String({ description: "Absolute repository path; defaults to the working directory" })),
+			dir: Type.Optional(Type.String({ description: "Review directory with a design document (index.markdown) and/or *.patch files, relative to root or absolute" })),
 			title: Type.Optional(Type.String({ description: "Title for a new review; omit to join the latest one" }))
 		}),
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const listen = ctx.hasUI;
-			const opened = await start(ctx, { root: params.root, title: params.title, listen });
-			const where = opened.url ? `Reviewer URL: ${opened.url}` : opened.note ?? "";
+			const opened = await start(ctx, { root: params.root, dir: params.dir, title: params.title, listen });
+			const warnings = opened.format?.warnings?.length ? `\nFix the design document, then call co_review_start again: ${opened.format.warnings.join(" ")}` : "";
+			const where = (opened.url ? `Reviewer URL: ${opened.url}` : opened.note ?? "") + warnings;
 			return text(listen
 				? `Joined review ${opened.reviewId} (${opened.openThreads} open threads). ${where}\nReviewer questions will arrive as [Co-Review] messages; answer each with co_review_reply.`
 				: `Joined review ${opened.reviewId} (${opened.openThreads} open threads). ${where}\nNow loop: co_review_wait → investigate → co_review_reply, until the reviewer says the review is done.`);
@@ -264,8 +268,35 @@ export default function coReview(pi: ExtensionAPI) {
 			}))
 		}),
 		async execute(_id, params) {
-			const r = await connection.call<{ created: { number: number }[] }>("add_findings", params);
-			return text(`Added ${r.created.length} finding(s): ${r.created.map(c => `#${c.number}`).join(", ")}`);
+			const r = await connection.call<{ created: number; ids: string[] }>("add_findings", params);
+			return text(`Added ${r.created} finding(s): ${r.ids.join(", ")}`);
+		}
+	});
+
+	pi.registerTool({
+		name: "co_review_verdict",
+		label: "Co-Review: verdict",
+		description: "Wait for the reviewer to submit the review (Approve / Request changes / Comment). Returns the decision, their message, the open comments and accepted suggestions to apply.",
+		parameters: Type.Object({
+			timeoutSec: Type.Optional(Type.Number({ description: "Seconds to wait (default 300)" }))
+		}),
+		async execute(_id, params, signal) {
+			const timeoutSec = params.timeoutSec ?? 300;
+			const r = await connection.call<{
+				status: string; decision?: string; summary?: string; round?: number;
+				comments?: { id: string; where: string; line?: number; body: string }[];
+				acceptedSuggestions?: { path?: string; startLine?: number; before: string; after: string }[];
+			}>("await_review", { timeoutSec }, (timeoutSec + 30) * 1000, signal);
+			if (r.status !== "submitted") {
+				return text("Not submitted yet. Keep answering with co_review_wait, or call co_review_verdict again.");
+			}
+			const comments = (r.comments ?? []).map(c => `- ${c.id} ${c.where}${c.line ? `:${c.line}` : ""}: ${c.body}`).join("\n");
+			const suggestions = (r.acceptedSuggestions ?? []).map(s => `- ${s.path}:${s.startLine}\n  - ${s.before}\n  + ${s.after}`).join("\n");
+			return text([
+				`Round ${r.round}: ${r.decision}${r.summary ? ` — "${r.summary}"` : ""}`,
+				comments && `Open comments:\n${comments}`,
+				suggestions && `Accepted suggestions (apply each as a commit):\n${suggestions}`
+			].filter(Boolean).join("\n\n"));
 		}
 	});
 

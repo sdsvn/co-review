@@ -4,19 +4,23 @@
 
 # Co-Review
 
-**Review code and designs with an AI agent as your co-reviewer.**
+**Review code and designs with Claude Code as your co-reviewer.**
+
+Works just as well with Pi, Codex, Cursor and any MCP agent.
 
 [![Built on Eclipse Theia](https://img.shields.io/badge/built%20on-Eclipse%20Theia-4F46E5?style=flat-square)](https://theia-ide.org)
-[![Agents](https://img.shields.io/badge/agents-ACP%20%2B%20MCP-059669?style=flat-square)](docs/agents.md)
+[![Made for Claude Code](https://img.shields.io/badge/made%20for-Claude%20Code-D97757?style=flat-square)](#made-for-claude-code)
+[![Pi package](https://img.shields.io/badge/Pi-package-059669?style=flat-square)](docs/agent-setup.md#pi)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-1E1B4B?style=flat-square)](#install)
 
-[Install](#install) · [Usage](#usage) · [Agents](#working-with-agents) · [Design docs](docs/design-docs.md) · [Contributing](#contributing)
+[Install](#install) · [Claude Code](#made-for-claude-code) · [Usage](#usage) · [Agents](#working-with-agents) · [Design docs](docs/design-docs.md) · [Contributing](#contributing)
 
 </div>
 
-Co-Review is a review tool with IDE features, not an IDE. Open a repository, a branch, a commit or a design document,
-comment on it the way you would on a pull request, and ask an agent about anything you're reading. The agent answers
-in the same thread, with links into the code, and waits for your verdict before it changes anything.
+Co-Review is a review tool with IDE features, not an IDE. When Claude Code finishes a change, it opens the
+change in Co-Review, and you review it the way you would a pull request: comment on lines, functions, designs and
+diagrams, and ask about anything you're reading. The agent that did the work answers in the same thread, with links
+into the code, and waits for your verdict before it changes anything.
 
 It is built on [Eclipse Theia](https://theia-ide.org) as a platform, so code navigation, search, Git and language
 servers are the real thing. Everything unrelated to reviewing is removed.
@@ -27,11 +31,14 @@ servers are the real thing. Everything unrelated to reviewing is removed.
                      Co-Review  (browser or desktop app, Theia)
                       │  reviews in ~/.co-review, outside the repo
           ┌───────────┴────────────┐
-         ACP                      MCP
- Co-Review launches the    the agent that did the work opens the
- agent for your question   review from its own harness and answers
- (Claude Code, Gemini,     your comments in a loop
-  OpenCode, Goose)         (Claude Code, Codex, Cursor, Pi, …)
+   Claude Code plugin        Pi package, or any
+   (MCP, live channel,       MCP client (Codex,
+    skills, commands,         Cursor, VS Code, …)
+    subagent, hook)
+          │                        │
+   the agent that did the work opens the review and answers your
+   comments in a loop — or Co-Review launches an agent for a
+   question (ACP: Claude Code, Gemini, OpenCode, Goose)
 ```
 
 ## Features
@@ -50,6 +57,44 @@ servers are the real thing. Everything unrelated to reviewing is removed.
 - **One verdict.** Approve, Request changes or Comment, with a message. The agent gets every open comment in one batch.
 - **Phone view.** An installable page to read, reply, accept findings and submit away from your desk.
 - **Desktop app and CLI.** `Co-Review.app` with a `co-review` command, or the browser app from a checkout.
+
+## Made for Claude Code
+
+One plugin install makes Claude Code a co-reviewer:
+
+```bash
+/plugin marketplace add sdsvn/co-review
+/plugin install co-review@co-review
+```
+
+- **`/co-review:review`** when a change is ready: Claude opens it in Co-Review, points out what deserves attention,
+  answers your comments in their threads, and acts on your verdict.
+- **`/co-review:design <task>`** to design first: Claude writes a design doc, you review it, and it implements what
+  you approved.
+- **Live comments.** With Claude Code's channels on, your questions reach the running session the moment you ask
+  them. Claude answers and keeps working ([how](docs/agent-setup.md#live-review-comments-channel)).
+- **A background co-reviewer.** The `co-reviewer` subagent keeps answering your review while the main conversation
+  fixes things.
+- **It remembers.** Opening Claude Code in a repository with open reviews tells it which questions are waiting.
+- **Plain requests work too**, through the skills: "review this with me", "design this first".
+
+Co-Review can also launch Claude Code itself for a quick question (**⋯ → Connect agent… → Claude Code**, then
+**Ask Agent** on any selection).
+
+### Pi and other agents
+
+**Pi** has a native package: extension, `/co-review`, `/co-review-design`, a `co-reviewer` subagent and the skills.
+
+```bash
+pi install /path/to/co-review/integrations/pi
+```
+
+**Codex, Cursor, VS Code, Gemini CLI, Zed, OpenCode, Goose** and any other MCP client: add the MCP server
+([config for each](docs/agent-setup.md#other-harnesses-mcp)) and, optionally, the skills with
+`npx skills add sdsvn/co-review`.
+
+All of them need the `co-review` command ([Install](#install)). Inside Co-Review, **Review: Add Co-Review to an
+Agent Harness (MCP)…** sets any of them up for you.
 
 ## Why not pull-request review?
 
@@ -140,32 +185,18 @@ run `tailscale serve --bg 3000` and start Co-Review with `CO_REVIEW_ALLOWED_HOST
 
 ## Working with agents
 
-| | ACP: Co-Review launches the agent | MCP: the agent brings Co-Review |
+| | The agent brings Co-Review | Co-Review launches the agent (ACP) |
 |---|---|---|
-| Best for | Asking questions while you review | An agent that did the work and hands it to you |
-| Setup | **⋯ → Connect agent…** | `claude mcp add -s user co-review -- co-review mcp` |
-| Flow | Select code → **Ask Agent** (`Cmd+Alt+A`) | Agent calls `open_review`, then answers in a loop |
+| Best for | Claude Code or Pi did the work and hands it to you | Asking questions while you review |
+| Setup | The Claude Code plugin, the Pi package, or MCP ([above](#made-for-claude-code)) | **⋯ → Connect agent… → Claude Code** (or Gemini, OpenCode, Goose) |
+| Start | `/co-review:review` (Claude Code), `/co-review` (Pi) | Select code → **Ask Agent** (`Cmd+Alt+A`) |
 
-With MCP, tell your agent something like:
+When the agent brings Co-Review, it knows what it just built and why. It opens the review, adds findings for real
+risks, then answers your comments in a loop until you submit. The panel shows it as **listening**, or **busy** while
+it works; your questions are delivered when it checks in.
 
-> Open a Co-Review review of this change, add findings for anything risky, then answer my questions in the review
-> until I submit.
-
-The panel shows the agent as **listening**, or **busy** while it works; your questions are delivered when it checks
-in. The full contract is in [llms.txt](llms.txt), and [integrations/pi](integrations/pi) is a native
-[Pi](https://pi.dev) package with a `/co-review` command and a `co-reviewer` subagent.
-
-To set up an agent, open the Command Palette in Co-Review and run **Review: Add Co-Review to an Agent Harness
-(MCP)…** and **Review: Install Agent Skills…**. Or install from your agent:
-
-```bash
-/plugin marketplace add sdsvn/co-review     # Claude Code: skills + MCP server
-/plugin install co-review@co-review
-npx skills add sdsvn/co-review              # any agent: the co-review and co-review-design skills
-```
-
-[Connect your agent](docs/agent-setup.md) has the MCP config for Claude Code, Codex, Cursor, Claude Desktop, VS Code,
-Windsurf, Gemini CLI, OpenCode, Zed and Goose, plus Pi.
+The full contract is in [llms.txt](llms.txt). Skills for other agents: `npx skills add sdsvn/co-review`, or
+**Review: Install Agent Skills…** in the app.
 
 > [!IMPORTANT]
 > Agents and language servers use Co-Review's environment. The desktop app loads your login shell's `PATH`, and
@@ -212,7 +243,7 @@ Co-Review ships **Co-Review Dark** and **Co-Review Light** themes and follows th
 ## Documentation
 
 - [Design documents](docs/design-docs.md): the design-doc format, anchors, instructing agents
-- [Connect your agent](docs/agent-setup.md): skills, the Claude Code plugin, MCP config for each harness
+- [Connect your agent](docs/agent-setup.md): the Claude Code plugin, the Pi package, skills, MCP config for other harnesses
 - [Agents](docs/agents.md): ACP vs MCP, how the review loop works, review directories
 - [Running and packaging](docs/running-and-packaging.md): build, run, package, install, phone view
 - [Architecture](docs/architecture.md): how the Theia extension is organized
@@ -243,8 +274,8 @@ extensions/review        the review extension
   src/electron-node      desktop-only backend bindings
   src/browser            review panel, inline editor UI, document and patch views, themes
 bin/                     co-review CLI, install-cli.sh, review server mode
-integrations/pi          Pi package: extension + co-reviewer subagent
-plugin/                  Claude Code plugin: the agent skills (plugin/skills) + MCP server
+integrations/pi          Pi package: extension, /co-review-design prompt, co-reviewer subagent
+plugin/                  Claude Code plugin: MCP server + channel, skills, commands, co-reviewer subagent, SessionStart hook
 .claude-plugin/          plugin marketplace manifest
 docs/                    guides and brand assets
 llms.txt                 integration contract for agents

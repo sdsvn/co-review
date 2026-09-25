@@ -20,5 +20,6 @@ export namespace ReviewCommands {
     export const COMMENT_REPOSITORY: Command = { id: 'co-review.commentRepository', category, label: 'Add Repository Comment' };
     export const REVIEW_PATHS: Command = { id: 'co-review.reviewPaths', category, label: 'Start Review of Selection' };
     export const INSTALL_SKILLS: Command = { id: 'co-review.installSkills', category, label: 'Install Agent Skills…' };
+    export const INSTALL_CLI: Command = { id: 'co-review.installCli', category, label: 'Install the co-review Command' };
     export const SETUP_HARNESS: Command = { id: 'co-review.setupHarness', category, label: 'Add Co-Review to an Agent Harness (MCP)…' };
 }

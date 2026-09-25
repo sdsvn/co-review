@@ -9,8 +9,13 @@ Co-Review is a review app where the human comments on code, designs and patches 
 the same threads. You are the co-reviewer: you did (or know) the work, so you explain and defend it, and you
 change nothing until the human decides.
 
-The MCP tools are registered as `co-review`. If they aren't
-available, tell the user to run `claude mcp add -s user co-review -- co-review mcp` and stop.
+In Claude Code the tools come with the Co-Review plugin (`/plugin install co-review@co-review`) or
+`claude mcp add -s user co-review -- co-review mcp`. If none are available, tell the user how to add them and stop.
+
+> **In Pi** (the Co-Review package) the same tools are named `co_review_start` (open_review; `dir` for a review
+> directory), `co_review_wait` (await_comment), `co_review_reply`, `co_review_add_findings`, `co_review_ask` and
+> `co_review_verdict` (await_review). In an interactive Pi session your questions also arrive on their own as
+> `[Co-Review]` messages.
 
 ## 1. Open the review
 
@@ -34,6 +39,13 @@ add_findings({ findings: [{ path: "internal/orders/service.go", line: 31, endLin
 Only real risks and non-obvious decisions, at most 3–5. Don't list everything you changed.
 
 ## 3. Answer in a loop
+
+**Live channel (Claude Code).** If Claude Code runs with the Co-Review channel, the reviewer's questions arrive in
+the conversation on their own, as channel messages from Co-Review with a `thread_id`. Answer each one with
+`reply({ threadId: thread_id, body })` and keep working on anything else in between; don't block on `await_comment`.
+A channel message that says the reviewer submitted means: call `await_review` (it returns at once) and go to step 4.
+
+**Otherwise**, loop:
 
 ```
 loop:

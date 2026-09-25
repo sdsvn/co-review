@@ -7,7 +7,9 @@
     {
       "name": "co-review",
       "source": "./plugin",
-      "description": "Skills and MCP server for reviewing an agent's work with a human in Co-Review."
+      "description": "Review code and designs with Claude Code as your co-reviewer: MCP tools, live channel, skills, commands, subagent and session hook.",
+      "version": "0.2.0",
+      "homepage": "https://github.com/sdsvn/co-review"
     }
   ],
   "metadata": {

@@ -148,6 +148,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         registry.registerCommand(ReviewCommands.GO_TO_COMMENT, { isEnabled: () => !!this.reviews.activeReview, execute: () => this.goToComment() });
         registry.registerCommand(ReviewCommands.INSTALL_SKILLS, { execute: () => this.installSkills() });
         registry.registerCommand(ReviewCommands.SETUP_HARNESS, { execute: () => this.setupHarness() });
+        registry.registerCommand(ReviewCommands.INSTALL_CLI, { execute: () => this.installCli() });
         registry.registerCommand(ReviewCommands.REVIEW_ACTIONS, { isEnabled: () => !!this.reviews.activeReview, execute: () => this.reviewActions() });
         registry.registerCommand(ReviewCommands.CONFIGURE_AGENT, {
             isEnabled: () => !!this.reviews.activeReview,
@@ -400,7 +401,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         const setup = await this.service.getAgentSetup(this.reviews.workspaceRoot);
         const picked = await this.quickInput.pick(setup.harnesses.map(h => ({
             label: h.label, id: h.id,
-            description: h.kind === 'cli' ? 'claude mcp add' : h.file,
+            description: h.kind === 'cli' ? h.snippet.split('\n').map(c => c.split(' ').slice(0, 3).join(' ')).join(' · ') : h.file,
             detail: h.kind === 'manual' ? 'Copies the config to paste in' : undefined
         })), { placeHolder: 'Add Co-Review\'s MCP server to…' });
         const harness = setup.harnesses.find(h => h.id === picked?.id);
@@ -414,6 +415,13 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         if (harness.kind === 'manual') {
             return copy();
         }
+        // The plugin's MCP server and the Pi extension launch `co-review` from PATH.
+        if (!setup.cliInstalled && (harness.id === 'claude-code-plugin' || harness.id === 'pi')) {
+            const install = await this.messages.info(`${harness.label} needs the co-review command on your PATH. Install it now?`, 'Install', 'Skip');
+            if (install === 'Install' && !await this.installCli()) {
+                return;
+            }
+        }
         const where = harness.kind === 'cli' ? `by running: ${harness.snippet}` : `to ${harness.file}`;
         const choice = await this.messages.info(`Add Co-Review to ${harness.label} ${where}?`, 'Add', 'Copy config');
         if (choice === 'Copy config') {
@@ -425,6 +433,17 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             } catch (e) {
                 await copy(`${e instanceof Error ? e.message : e}.`);
             }
+        }
+    }
+
+    /** Installs the `co-review` command; resolves to whether it worked. */
+    protected async installCli(): Promise<boolean> {
+        try {
+            this.messages.info(await this.service.installCli());
+            return true;
+        } catch (e) {
+            this.messages.error(`Could not install the co-review command: ${e instanceof Error ? e.message : e}`);
+            return false;
         }
     }
 

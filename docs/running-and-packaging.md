@@ -38,6 +38,9 @@ unsigned; to sign on macOS set `CSC_LINK`/`CSC_KEY_PASSWORD` (and remove `identi
 set `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID` to notarize. Unsigned macOS
 builds must be opened with right-click → Open the first time.
 
+The package also bundles the agent integrations that the app installs for you: the Claude Code plugin (`plugin/`,
+`.claude-plugin/`), the Pi package (`integrations/pi`) and the `co-review` CLI (`bin/`).
+
 The package contains the built frontend and backend (`lib/`, `src-gen/`), the production
 `node_modules` and the VS Code built-in plugins (`plugins/`, picked up by
 `scripts/electron-main.js`). Excluded built-ins (debugger, notebooks, Emmet, extra themes, …)

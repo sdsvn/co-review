@@ -162,4 +162,8 @@ export class ReviewServiceImpl implements ReviewService {
     applyHarnessSetup(harnessId: string): Promise<string> {
         return this.setup.apply(harnessId);
     }
+
+    installCli(): Promise<string> {
+        return this.setup.installCli();
+    }
 }

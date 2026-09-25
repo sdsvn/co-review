@@ -37,6 +37,8 @@ interface Session {
     delivered: Set<string>;
     /** Submissions already returned by await_review. */
     consumedSubmit: number;
+    /** Pushes review events into a Claude Code session (channels); see startChannel. */
+    channel?: { dispose(): void };
 }
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
@@ -132,7 +134,10 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 })
             };
             created.server = this.createServer(created, root, baseUrl);
-            created.transport.onclose = () => created.transport.sessionId && this.sessions.delete(created.transport.sessionId);
+            created.transport.onclose = () => {
+                created.channel?.dispose();
+                return created.transport.sessionId && this.sessions.delete(created.transport.sessionId);
+            };
             await created.server.connect(created.transport);
             session = created;
         }
@@ -146,9 +151,14 @@ export class CoReviewerMcp implements BackendApplicationContribution {
 
     protected createServer(session: Session, defaultRoot: string | undefined, baseUrl: string): McpServerType {
         const server = new McpServer({ name: 'co-review', version: '0.1.0' }, {
+            // Claude Code channels: review events are pushed into the session (see startChannel).
+            capabilities: { experimental: { 'claude/channel': {} } },
             instructions: 'Co-Review is a repository review app. Call open_review, tell the reviewer the URL, then loop: '
                 + 'await_comment → investigate the repository → reply. Use add_findings for issues you find, '
-                + 'ask_reviewer when you need a decision. Reference code as path/to/file.ext:line.'
+                + 'ask_reviewer when you need a decision. Reference code as path/to/file.ext:line. '
+                + 'In Claude Code with channels on, the reviewer\'s questions and submissions also arrive as <channel source="co-review"> '
+                + 'messages (thread_id attribute): answer each with reply({ threadId: thread_id }) instead of looping await_comment, '
+                + 'and on a submission call await_review (it returns immediately).'
         });
         const rootArg = z.string().optional().describe('Absolute path of the repository (defaults to the one Co-Review was started for)');
         const reviewArg = z.string().optional().describe('Review id (defaults to the review opened with open_review)');
@@ -207,6 +217,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             }
             review = await this.store.setAgent(review.id, { id: agent.id, name: agent.name, transport: 'mcp' });
             currentReviewId = review.id;
+            this.startChannel(session, review, agent);
             session.consumedSubmit = review.verdict?.count ?? 0;
             this.presence.seen(review.id);
             // The desktop app shows the review itself (its frontend switches to it); a browser
@@ -387,6 +398,59 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         });
 
         return server;
+    }
+
+    /**
+     * Claude Code channels: pushes the reviewer's questions and submissions into the agent's session as they happen,
+     * so it answers without polling. Only for Claude Code clients; a session not started with channels ignores the
+     * notifications. Pushed questions are not marked delivered, so await_comment still returns them in that case.
+     */
+    protected startChannel(session: Session, opened: Review, agent: Participant): void {
+        session.channel?.dispose();
+        if (!/claude/i.test(session.server.server.getClientVersion()?.name ?? '')) {
+            return;
+        }
+        const pushed = new Set<string>();
+        let submits = opened.verdict?.count ?? 0;
+        const notify = (content: string, meta: Record<string, string>) =>
+            session.server.server.notification({ method: 'notifications/claude/channel', params: { content, meta } });
+        const push = async () => {
+            const review = await this.store.get(opened.id);
+            if (!review) {
+                return;
+            }
+            for (const thread of this.waitingThreads(review, agent, session)) {
+                const last = thread.messages[thread.messages.length - 1];
+                if (!pushed.has(last.id)) {
+                    pushed.add(last.id);
+                    await notify(this.channelText(review, thread), { review_id: review.id, thread_id: threadRef(thread), event: 'comment' });
+                }
+            }
+            const verdict = review.verdict;
+            if (verdict && verdict.count > submits) {
+                submits = verdict.count;
+                await notify(`The reviewer submitted round ${verdict.count}: ${verdict.decision}${verdict.summary ? ` — "${verdict.summary}"` : ''}. `
+                    + 'Call await_review (it returns immediately) for the open comments and accepted suggestions.', { review_id: review.id, event: 'submitted' });
+            }
+        };
+        const run = () => push().catch(error => console.error('[co-review] channel push failed', error));
+        const listener = this.store.onDidChange(change => change.kind === 'changed' && change.review.id === opened.id && run());
+        session.channel = listener;
+        run();
+    }
+
+    /** A thread as a channel message: where it is, the code, and the conversation. */
+    protected channelText(review: Review, thread: ReviewThread): string {
+        const t = this.describe(review, thread) as { location: { path?: string; startLine?: number; endLine?: number; symbol?: string }; code?: string;
+            messages: { author: string; body: string }[] };
+        const l = t.location;
+        const where = l.path ? `${l.path}${l.startLine ? `:${l.startLine}${l.endLine && l.endLine !== l.startLine ? `-${l.endLine}` : ''}` : ''}` : 'the repository';
+        return [
+            `#${thread.number} on ${where}${l.symbol ? ` (${l.symbol})` : ''}${thread.intent === 'question' ? ', a question for you' : ''}`,
+            t.code ? t.code.split('\n').map(line => `> ${line}`).join('\n') : '',
+            ...t.messages.map(m => `${m.author}: ${m.body}`),
+            `Answer with reply({ threadId: "${threadRef(thread)}" }).`
+        ].filter(Boolean).join('\n\n');
     }
 
     /** Open threads whose latest message is from the reviewer and addressed to this agent. */

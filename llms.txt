@@ -9,7 +9,7 @@ Two integration paths:
 
 ## MCP (agent in a harness)
 
-Setup for each harness, and the `co-review` / `co-review-design` skills: `docs/agent-setup.md`.
+Claude Code: install the Co-Review plugin (`/plugin marketplace add sdsvn/co-review`, `/plugin install co-review@co-review`); it provides these tools as `plugin:co-review:co-review`, the `co-review` / `co-review-design` skills, the `/co-review:review` and `/co-review:design` commands, a background `co-review:co-reviewer` subagent, a SessionStart hook, and a channel: with `claude --dangerously-load-development-channels plugin:co-review@co-review` (research preview) the reviewer's questions arrive as channel messages (meta `thread_id`, `event: comment | submitted`); answer with `reply({ threadId: thread_id })` instead of looping `await_comment`. Pi: the native package in `integrations/pi` (tools `co_review_*`, `/co-review`, `/co-review-design`). Other harnesses: `docs/agent-setup.md`.
 
 Endpoint: `co-review mcp` (stdio; `node <co-review>/bin/co-review.mjs mcp [repo]`, repo defaults to the working directory; starts Co-Review if it is not running), or Streamable HTTP at `http://127.0.0.1:<port>/mcp?root=<abs repo path>` (local connections only; the running instance is recorded in `~/.co-review/server.json`).
 

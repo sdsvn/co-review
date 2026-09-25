@@ -45,8 +45,10 @@ export interface HarnessSetup {
     file?: string;
     /** For `json`: the top-level key that holds the servers. */
     key?: string[];
-    /** For `cli`: the command to run. */
-    argv?: string[];
+    /** Shown under the label. */
+    detail?: string;
+    /** For `cli`: the commands to run, in order. */
+    argv?: string[][];
 }
 
 export interface AgentSetupInfo {
@@ -54,6 +56,8 @@ export interface AgentSetupInfo {
     skills: SkillTarget[];
     skillsAvailable: boolean;
     harnesses: HarnessSetup[];
+    /** Whether the `co-review` command is installed (the Claude Code plugin and Pi need it). */
+    cliInstalled: boolean;
 }
 
 export interface ReviewService extends RpcServer<ReviewClient> {
@@ -94,6 +98,8 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     installSkills(targetId: string, workspaceRoot?: string): Promise<string[]>;
     /** Adds Co-Review's MCP server to a harness's config; returns what was done. */
     applyHarnessSetup(harnessId: string): Promise<string>;
+    /** Installs the `co-review` and `co-review-server` commands; returns the installer's output. */
+    installCli(): Promise<string>;
 }
 
 export interface ReviewClient {

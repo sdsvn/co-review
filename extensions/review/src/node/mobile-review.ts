@@ -44,6 +44,30 @@ export class MobileReview implements BackendApplicationContribution {
                 updatedAt: r.updatedAt, agent: r.agent?.name
             })));
         });
+        // Open reviews of a repository (reviews of it and of review directories inside it), for hooks and scripts.
+        // `format=claude-hook` answers with Claude Code SessionStart context, or 204 when there is nothing to say.
+        api.get('/status', async (req, res) => {
+            const root = path.resolve(String(req.query.root ?? ''));
+            const reviews = (await this.store.listAll()).map(r => ({ r, dir: r.bundle?.dir ?? FileUri.fsPath(r.workspaceRoot) }))
+                .filter(({ r, dir }) => (dir === root || dir.startsWith(root + path.sep)) && r.threads.some(t => t.status === 'open' || t.status === 'proposed'))
+                .map(({ r, dir }) => ({
+                    id: r.id, title: r.title, root: dir,
+                    open: r.threads.filter(t => t.status === 'open').length,
+                    proposed: r.threads.filter(t => t.status === 'proposed').length,
+                    needsReply: r.threads.filter(t => t.status === 'open' && t.messages[t.messages.length - 1]?.author.kind === 'human').length
+                }));
+            if (req.query.format !== 'claude-hook') {
+                return res.json(reviews);
+            }
+            if (!reviews.length) {
+                return res.status(204).end();
+            }
+            const lines = reviews.map(v => `- "${v.title}": ${v.needsReply} question(s) waiting for an answer, ${v.open} open thread(s)`
+                + `${v.proposed ? `, ${v.proposed} proposed finding(s)` : ''}${v.root !== root ? ` (review directory ${path.relative(root, v.root)})` : ''}`);
+            res.json({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: ['Co-Review has open reviews for this repository:', ...lines,
+                'If the user wants to continue reviewing, rejoin with the co-review skill (open_review with this repository, or its `dir`), '
+                + 'answer the waiting questions, and wait for their verdict.'].join('\n') } });
+        });
         // Long poll: returns when the review changed after `since` (or after 25 s).
         api.get('/reviews/:id', async (req, res) => {
             const since = Number(req.query.since ?? 0);
