@@ -47,40 +47,36 @@ Method, examples and full specification: `docs/design-docs.md`.
 
 Declare the structure with frontmatter; Co-Review then renders the design tree and checks the document against the contract, returning departures in `format.warnings` from `open_review` and in `doc.format` from `await_review` / `get_review` (also shown as a banner to the reviewer). Undeclared documents are rendered leniently (`*.pseudocode.md` or a `## Design` section → tree; otherwise plain Markdown); nothing is ever dropped — sections outside the contract render as Markdown.
 
-A design document is the smallest document that lets the reviewer understand, challenge and approve the change. Investigate the code first, reuse existing patterns, don't invent requirements (ask under Open Questions), and choose the simplest design that works. Think about compatibility, security, failure handling, migration and so on, but write down only what materially affects the design, where it belongs.
+A design document is the smallest document that lets the reviewer understand, challenge and approve the change. The instructions every agent gets:
 
-~~~markdown
----
-co-review: design
-title: Retry outbound webhooks      # optional; else the `# ` heading
----
-# Retry outbound webhooks
+<!-- prompt: design -->
+1. Investigate the code first and reuse existing patterns. If something new is needed (a dependency, service or
+   table), make it an explicit design step. Don't invent requirements: ask under Open Questions.
+2. Write `design/<name>/index.markdown`, for a person to read:
 
-## Context
-Why this change, what happens today. Only what the reviewer needs.
+       ---
+       co-review: design
+       ---
+       # <the change, as a short imperative>
+       ## Context         why change, what happens today (a few sentences)
+       ## Design          required: one nested "- " list, 2 spaces per level
+                          L1 what (a behaviour, not a technology), L2 how, L3 what can go wrong
+       ## Alternatives    optional: real choices, their trade-offs, why this one
+       ## Behaviour       optional: runtime scenarios (failure, retry, crash, race)
+       ## Open Questions  optional: decisions only the reviewer can make, as "- " items
 
-## Design
-- L1 what: a behaviour that matters from outside (not a technology)
-  - L2 how: components, data flow, persistence, the existing pattern reused
-    - L3 what can go wrong: a failure mode or edge case that matters
-- Another L1 step — optional short reason after an em dash
+   Plain language, one decision per step. Name code once, at the top level (entry point, module, new table), then
+   describe it in words. No line numbers, no file:line links, no pasted code (Mermaid is fine). Think through
+   compatibility, security, failure handling and migration, but write down only what changes the design. Size it
+   to the change: about 10-30 lines if small, 30-80 medium, 80-150 large. Cut what doesn't help the reviewer decide.
+3. Open it with `open_review({ dir })`. Co-Review checks it and lists problems in `format.warnings`: fix every
+   one and open it again, then share the URL.
+4. Answer comments in their threads and revise the design; keep the wording of commented steps stable.
+5. Implement only after approval (`await_review`). If the code must depart from the approved design, update the
+   design and ask again.
+<!-- /prompt -->
 
-## Alternatives
-Optional: a real choice the reviewer may challenge, its trade-offs, and why this one.
-
-## Behaviour
-Optional: runtime scenarios (failure, retry, crash, race), prose or Mermaid.
-```mermaid
-%% id: flow
-sequenceDiagram
-  api->>db: persist delivery
-```
-
-## Open Questions
-- Optional: a genuinely unresolved decision that needs the reviewer
-~~~
-
-Rules: only Design is required; include the other sections only when they help, in this order (Context, Design, Alternatives, Behaviour, Diagrams, Open Questions; `## Diagrams` is accepted for Mermaid). Size follows complexity: about 10–30 lines for a small change, 30–80 medium, 80–150 large, more only when justified. `## Design` is ONE nested `- ` list, 2 spaces per level (not `*`, `+` or `1.`). The document is read by a person: plain language; name code once, at the top level (entry point, module, new table), then describe it in words; no line numbers or `file:line` links; no pasted code (Mermaid is fine). One concrete decision per step, a line or two long; optional markers in backticks: `?` open question, `⚠` risk, `✎` new name. Comments anchor to a step's text (backticks/asterisks stripped, whitespace collapsed, first 80 chars): keep commented steps' wording stable across revisions and add or move steps instead of rewording. Give Mermaid blocks `%% id:` and nodes explicit ids. `format.warnings` also reports line references, non-Mermaid code blocks, steps longer than about two lines and code names repeated in 3+ steps: fix every warning and open the document again before sharing the URL. Implement only after approval; if the implementation must depart from the approved design, update the design and get it approved again.
+Format details: sections that are present keep the order Context, Design, Alternatives, Behaviour, Diagrams, Open Questions (`## Diagrams` holds Mermaid; `Behavior` is accepted). `## Design` steps are `- ` items only (not `*`, `+` or `1.`); an optional short reason goes after ` — `; optional markers in backticks: `?` open question, `⚠` risk, `✎` new name. Comments anchor to a step's text (backticks/asterisks stripped, whitespace collapsed, first 80 chars), so add or move steps instead of rewording commented ones. Give Mermaid blocks `%% id:` and nodes explicit ids. Besides the structure, `format.warnings` reports line references, non-Mermaid code blocks, steps longer than about two lines, and code names repeated in 3+ steps.
 
 ## Review directories
 

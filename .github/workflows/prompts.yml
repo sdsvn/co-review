@@ -1,0 +1,18 @@
+# The agent prompts are written once in prompts/ and copied by `make prompts`; fail when a copy was edited by hand
+# or not regenerated.
+name: Prompts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node bin/gen-prompts.mjs --check

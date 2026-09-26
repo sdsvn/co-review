@@ -9,7 +9,7 @@ import { Readable, Writable } from 'stream';
 import { AgentActivity, AgentConfig, AgentSetting, MessageStatus, Participant, PermissionRequest, Review, ReviewThread } from '../common/review-model';
 import { ReviewStore } from './review-store';
 import { HumanDecisions } from './agent-coordination';
-import { ANSWER_STYLE } from './answer-style';
+import { ANSWER_STYLE } from './prompts.gen';
 import { RepoIndex } from './repo-index';
 
 /**

@@ -18,7 +18,7 @@ import { SyntaxServiceImpl } from './syntax-service-impl';
 import { BundleService } from './bundle-service';
 import { documentFormat, DocumentFormat } from '../common/design-format';
 import { acceptedSuggestions, commentOf, findThread, threadRef } from './review-payloads';
-import { ANSWER_STYLE, ANSWER_STYLE_SHORT } from './answer-style';
+import { ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT } from './prompts.gen';
 import { LANGUAGE_BY_EXTENSION, RepoIndex } from './repo-index';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -181,18 +181,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + '`markdown` and/or `patch` strings. A `dir` can also be a knowledge bundle such as OKF (`<repo>/okf`): every Markdown page '
                 + 'is a review page, `/x.md` links resolve from the bundle root and `path:line` links open the code. '
                 + 'Then loop await_comment → reply, and/or await_review for the reviewer\'s Submit.\n\n'
-                + 'Design documents: the smallest document that lets the reviewer understand, challenge and approve the change. Investigate '
-                + 'the code first, reuse existing patterns, and don\'t invent requirements. Start with frontmatter `---\\nco-review: design\\n---` '
-                + '(the structure is checked; departures come back in `format.warnings`), then `# <title>`, `## Context` (why, what exists '
-                + 'today), `## Design` (required), and only if they help `## Alternatives`, `## Behaviour`, `## Open Questions` (genuinely '
-                + 'unresolved decisions), in that order. `## Design` is one nested `- ` list, 2 spaces per level: L1 = what (behaviour, not '
-                + 'technology), L2 = how, L3 = failure modes and edge cases that matter. One concrete decision per step. Size follows '
-                + 'complexity (about 10–30 lines small, 30–80 medium, 80–150 large). A person reads it: plain language, name code once at the top '
-                + 'level (entry point, module, new table) then describe it in words, no line numbers or file:line links, no pasted code '
-                + '(Mermaid is fine). Fix every `format.warnings` item and open it again before sharing the URL. Comments anchor to step '
-                + 'text, so keep commented steps\' '
-                + 'wording stable across revisions. Mermaid blocks start with `%% id: <name>`. Implement only after approval; if the code must '
-                + 'depart from the approved design, update it and ask again.',
+                + 'Design documents: to have a design reviewed before implementing, write the smallest document that lets the reviewer '
+                + 'understand, challenge and approve the change:\n' + DESIGN_PROMPT,
             inputSchema: {
                 root: rootArg,
                 dir: z.string().optional().describe('Review directory (index.markdown or *.pseudocode.md, *.patch, PR.md, <patch>.comments.json)'),

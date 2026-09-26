@@ -12,10 +12,12 @@ change nothing until the human decides.
 In Claude Code the tools come with the Co-Review plugin (`/plugin install co-review@co-review`) or
 `claude mcp add -s user co-review -- co-review mcp`. If none are available, tell the user how to add them and stop.
 
-> **In Pi or Oh My Pi** (the Co-Review package) the same tools are named `co_review_start` (open_review; `dir` for a review
-> directory), `co_review_wait` (await_comment), `co_review_reply`, `co_review_add_findings`, `co_review_ask`,
-> `co_review_verdict` (await_review) and `co_review_map` (repo_map). In an interactive Pi or omp session your questions also arrive on their own as
-> `[Co-Review]` messages.
+<!-- prompt: pi-tools -->
+> **In Pi or Oh My Pi** (the Co-Review package) the tools are named `co_review_start` (open_review; `dir` for a
+> review directory), `co_review_wait` (await_comment), `co_review_reply`, `co_review_add_findings`, `co_review_ask`,
+> `co_review_verdict` (await_review) and `co_review_map` (repo_map). In an interactive session, the reviewer's
+> questions also arrive on their own as `[Co-Review]` messages.
+<!-- /prompt -->
 
 ## 1. Open the review
 

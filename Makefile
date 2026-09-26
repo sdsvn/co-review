@@ -6,6 +6,7 @@
 #   make package        installable desktop app (dmg/zip, AppImage/deb or nsis) in applications/electron/dist
 #   make install-app    macOS: build and install Co-Review.app + the `co-review` command
 #   make install-cli    the `co-review` command, running from this checkout
+#   make prompts        copy the shared agent prompts (prompts/) to the skills, commands, agents, app and docs
 #
 # Native modules (node-pty, drivelist, …) are compiled either for Node (browser app) or for
 # Electron (desktop app); each target switches them as needed, so the two can be built alternately.
@@ -18,7 +19,7 @@ THEIA := $(CURDIR)/node_modules/.bin/theia
 BROWSER := applications/browser
 ELECTRON := applications/electron
 
-.PHONY: help install plugins extension browser start dev desktop-build desktop package package-dir install-app install-cli mcp-claude clean distclean
+.PHONY: help install plugins prompts check-prompts extension browser start dev desktop-build desktop package package-dir install-app install-cli mcp-claude clean distclean
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2}'
@@ -30,7 +31,13 @@ install: ## Install npm dependencies and download the VS Code built-in plugins
 plugins: ## (Re)download the VS Code built-in plugins from Open VSX into plugins/
 	npm run download:plugins
 
-extension: ## Compile the review extension (TypeScript)
+prompts: ## Copy the shared agent prompts in prompts/ everywhere agents read them
+	node bin/gen-prompts.mjs
+
+check-prompts: ## Fail if a copy of the shared agent prompts is out of date
+	node bin/gen-prompts.mjs --check
+
+extension: prompts ## Compile the review extension (TypeScript)
 	npm run -w @co-review/review build
 
 browser: extension ## Build the browser app

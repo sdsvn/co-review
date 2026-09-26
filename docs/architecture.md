@@ -14,6 +14,9 @@ extensions/review      @co-review/review
   src/browser          Frontend: review panel, inline editor
                        UI, commands
 bin/co-review.mjs      CLI: start the app, `mcp` stdio bridge
+bin/gen-prompts.mjs    copies prompts/ into skills, commands,
+                       agents, app text and docs
+prompts/               agent prompts, written once
 bin/review-server.mjs  Review server mode (co-review-server)
 integrations/shared    Pi / Oh My Pi extension and slash
                        commands, shared by both packages

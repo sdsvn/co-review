@@ -9,80 +9,45 @@ description: Design a non-trivial change before coding and have the human review
 change.** It exists for review: show the decisions, assumptions, trade-offs, important behaviour, failure modes and
 open questions, and nothing else. Full method and examples: Co-Review's `docs/design-docs.md`.
 
-> **In Pi or Oh My Pi** (the Co-Review package) the tools are `co_review_start` (open_review; `dir` for a review
-> directory), `co_review_wait` (await_comment), `co_review_reply`, `co_review_ask` and `co_review_verdict`
-> (await_review). In an interactive session, the reviewer's comments also arrive on their own as `[Co-Review]`
-> messages.
+<!-- prompt: pi-tools -->
+> **In Pi or Oh My Pi** (the Co-Review package) the tools are named `co_review_start` (open_review; `dir` for a
+> review directory), `co_review_wait` (await_comment), `co_review_reply`, `co_review_add_findings`, `co_review_ask`,
+> `co_review_verdict` (await_review) and `co_review_map` (repo_map). In an interactive session, the reviewer's
+> questions also arrive on their own as `[Co-Review]` messages.
+<!-- /prompt -->
 
-## 1. Investigate before designing
+## The steps
 
-- Read the code the change touches first: the source, abstractions, APIs, data models, tests, infrastructure, event
-  flows. Find how the repository already solves similar problems.
-- **Prefer existing patterns.** Don't add a new abstraction, dependency, service, store, protocol or infrastructure
-  when an existing one does the job. If something new is needed, make it an explicit Design step.
-- **Don't invent** requirements, constraints, traffic numbers, SLAs, guarantees or business rules. If missing
-  information would change the design, ask it under Open Questions.
-- Choose the simplest design that solves the actual problem. No speculative scalability, configurability,
-  extensibility or abstraction.
-- Think through requirements, compatibility, security, performance, observability, migration, testing, rollout and
-  failure handling, but only write down what materially affects the design, where it belongs.
+<!-- prompt: design -->
+1. Investigate the code first and reuse existing patterns. If something new is needed (a dependency, service or
+   table), make it an explicit design step. Don't invent requirements: ask under Open Questions.
+2. Write `design/<name>/index.markdown`, for a person to read:
 
-## 2. Write the document
+       ---
+       co-review: design
+       ---
+       # <the change, as a short imperative>
+       ## Context         why change, what happens today (a few sentences)
+       ## Design          required: one nested "- " list, 2 spaces per level
+                          L1 what (a behaviour, not a technology), L2 how, L3 what can go wrong
+       ## Alternatives    optional: real choices, their trade-offs, why this one
+       ## Behaviour       optional: runtime scenarios (failure, retry, crash, race)
+       ## Open Questions  optional: decisions only the reviewer can make, as "- " items
 
-`design/<short-name>/index.markdown` in the repository (or a scratch directory if the user doesn't want design docs
-committed):
+   Plain language, one decision per step. Name code once, at the top level (entry point, module, new table), then
+   describe it in words. No line numbers, no file:line links, no pasted code (Mermaid is fine). Think through
+   compatibility, security, failure handling and migration, but write down only what changes the design. Size it
+   to the change: about 10-30 lines if small, 30-80 medium, 80-150 large. Cut what doesn't help the reviewer decide.
+3. Open it with `open_review({ dir })`. Co-Review checks it and lists problems in `format.warnings`: fix every
+   one and open it again, then share the URL.
+4. Answer comments in their threads and revise the design; keep the wording of commented steps stable.
+5. Implement only after approval (`await_review`). If the code must depart from the approved design, update the
+   design and ask again.
+<!-- /prompt -->
 
-````markdown
----
-co-review: design
----
-# <The change, as a short imperative>
+Put the directory in a scratch location instead if the user doesn't want design documents committed.
 
-## Context
-Why are we changing this, what happens today, why it must change. Only what the reviewer needs.
-
-## Design
-- <L1 what: a responsibility or behaviour that matters from outside>
-  - <L2 how: components, data flow, APIs, persistence, the pattern reused>
-    - <L3 what can go wrong: failure, retry, concurrency, consistency, edge case, security, compatibility>
-
-## Alternatives
-Optional. Only a real choice a reviewer may challenge: each option's trade-off, and why this one.
-
-## Behaviour
-Optional. Runtime scenarios not obvious from the Design (failure, retry, crash, race). Mermaid welcome.
-
-## Open Questions
-Optional. `- ` items: genuinely unresolved decisions that need the reviewer.
-````
-
-- **Only Design is required.** Leave out optional sections that don't help. Don't add others: a migration, a
-  compatibility constraint or a security boundary goes where it matters, usually as a Design step.
-- **Size follows complexity**: about 10–30 lines for a small change, 30–80 for a medium one, 80–150 for a large one,
-  more only when the complexity justifies it. Never pad; never drop a decision or failure mode to stay short.
-- **What before how.** An L1 states behaviour ("Deliver each webhook at least once"), not technology ("Use Kafka").
-  Add L3 only where it matters.
-- **Be concrete.** "Retry server errors with exponential backoff", not "handle transient failures appropriately".
-  One decision per step, a line or two long; details go in child steps. Don't restate the task.
-- **A person reads this, not a compiler.** Plain language. Name code once, at the top level (the entry point, module
-  or new table a step is about), then refer to it in words. **No line numbers, no `file:line` links, no pasted
-  code** (Mermaid is fine). Those belong in review threads and in the implementation.
-- Format: `## Design` is one nested `- ` list, 2 spaces per level (not `*`, `+` or `1.`). An optional short reason
-  goes after ` — `. Optional markers in backticks: `?` open question, `⚠` risk, `✎` new name. Mermaid blocks start
-  with `%% id: <name>` and use explicit node ids (`api[CreateOrder]`).
-
-## 3. Self-review, then open it
-
-Check: is the problem clear; are the important decisions and trade-offs visible; is what separate from how; are the
-failure modes that matter covered; were existing patterns used; is anything more complex than needed; are the open
-questions real; can a person follow it without opening the code; is the size right? **Remove anything that doesn't
-help the reviewer understand or decide.**
-
-Then `open_review({ dir: "<absolute path to design/<short-name>>" })`. Co-Review checks the document and returns
-problems in `format.warnings`: the structure, line references, pasted code, overlong steps, and code names repeated
-across steps. Fix every warning and open it again; share the `url` only when the list is empty.
-
-## 4. Review loop
+## Answering review comments
 
 Follow the `co-review` skill's loop (`await_comment` → investigate → `reply`). For each comment:
 
@@ -94,7 +59,7 @@ Follow the `co-review` skill's loop (`await_comment` → investigate → `reply`
   doesn't. Prefer adding or restructuring steps around a commented one. If a step is wrong, fix it anyway.
 - Move settled Open Questions into the Design.
 
-## 5. After the verdict
+## After the verdict
 
 `await_review` returns the decision:
 

@@ -191,14 +191,16 @@ make help                          # all targets
 ```
 
 The browser and desktop apps compile native modules for different runtimes; `make browser` and `make desktop-build`
-switch between them, so build the one you run. There are no automated tests yet: changes are verified in the running
+switch between them, so build the one you run. Agent instructions (skills, commands, subagents, tool text) are
+written once in [`prompts/`](prompts/README.md): edit them there and run `make prompts`. There are no automated tests yet: changes are verified in the running
 app and with scripted MCP and ACP clients against a local server. Releases are built by
 `.github/workflows/release.yml` when a `v*` tag is pushed.
 
 ```
 applications/            Theia browser and desktop apps (composition, electron-builder config)
 extensions/review        the review extension (common · node · electron-node · browser)
-bin/                     co-review CLI, install-cli.sh, review server mode
+bin/                     co-review CLI, install-cli.sh, review server mode, gen-prompts.mjs
+prompts/                 the agent prompts, written once; `make prompts` copies them everywhere
 plugin/, .claude-plugin/ Claude Code plugin and its marketplace manifest
 integrations/shared      the Pi / Oh My Pi extension and slash commands
 integrations/pi, omp     Pi and Oh My Pi packages (harness adapter, co-reviewer agent)
