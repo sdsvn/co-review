@@ -13,8 +13,8 @@ In Claude Code the tools come with the Co-Review plugin (`/plugin install co-rev
 `claude mcp add -s user co-review -- co-review mcp`. If none are available, tell the user how to add them and stop.
 
 > **In Pi** (the Co-Review package) the same tools are named `co_review_start` (open_review; `dir` for a review
-> directory), `co_review_wait` (await_comment), `co_review_reply`, `co_review_add_findings`, `co_review_ask` and
-> `co_review_verdict` (await_review). In an interactive Pi session your questions also arrive on their own as
+> directory), `co_review_wait` (await_comment), `co_review_reply`, `co_review_add_findings`, `co_review_ask`,
+> `co_review_verdict` (await_review) and `co_review_map` (repo_map). In an interactive Pi session your questions also arrive on their own as
 > `[Co-Review]` messages.
 
 ## 1. Open the review
@@ -38,6 +38,29 @@ add_findings({ findings: [{ path: "internal/orders/service.go", line: 31, endLin
 
 Only real risks and non-obvious decisions, at most 3–5. Don't list everything you changed.
 
+### Reviewing the whole repository (first-pass audit)
+
+When the human wants the **entire repository** reviewed rather than a change, do a first pass for them, so they
+start from a map of what matters instead of 5,000 files:
+
+1. Call `repo_map({ overview: true })` for where to start and how the code clusters (it uses a Graphify graph when
+   the repository has one), and `repo_map` for every file and what it defines. Split the repository into **areas**: 4–10 parts a person
+   would review separately (e.g. `api`, `storage`, `auth`, `build`), usually top-level folders or packages.
+2. For each area, read the code that carries the most risk (entry points, anything handling input, money, auth,
+   concurrency or persistence), not every file.
+3. Add findings with the area as the first label and `status: "proposed"`, so the human accepts or dismisses each:
+
+   ```
+   add_findings({ findings: [{ path: "internal/orders/service.go", line: 31,
+     body: "…what's wrong, why it matters, what to do…", severity: "high",
+     labels: ["orders"], status: "proposed" }] })
+   ```
+
+   A finding about a whole area goes on its folder (`path` without `line`); one about the repository on `path: "."`.
+4. At most 3 findings per area, and only ones you'd defend in a review. Say plainly when an area looks fine.
+5. Tell the human the areas and counts in one short message, then answer their questions as usual. The panel's
+   **By area** view groups the findings by their first label.
+
 ## 3. Answer in a loop
 
 **Live channel (Claude Code).** If Claude Code runs with the Co-Review channel, the reviewer's questions arrive in
@@ -58,8 +81,13 @@ loop:
 
 How to answer:
 
-- **Answer the question first**, in one or two sentences, then the evidence.
-- Reference code as `path/to/file.go:42` or `path:40-48`. They become links.
+- The reviewer is a person reading a chat thread: reply the way a knowledgeable colleague would.
+- **Answer the question first**, in plain language, then a little of the why. A few sentences, or a short list
+  when there are steps; no headings, tables or long code blocks.
+- Explain in words; don't walk through file paths and line numbers. If a pointer helps, end with one or two links
+  like `path/to/file.go:42` (they become links).
+- **Be quick.** Read only what you need. `repo_map` lists every file with its classes and functions (narrow it with
+  `path` or `query`), so you can go straight to the right place instead of searching.
 - **Don't edit files** while the review is open unless the human asks in the thread. If they ask, make the
   change, then reply with what changed and where.
 - If you need the human to choose, `ask_reviewer({ question, options: [...] })` shows buttons and blocks

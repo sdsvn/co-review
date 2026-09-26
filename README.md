@@ -41,7 +41,8 @@ servers are the real thing. Everything unrelated to reviewing is removed.
           │                        │
    the agent that did the work opens the review and answers your
    comments in a loop — or Co-Review launches an agent for a
-   question (ACP: Claude Code, Gemini, OpenCode, Goose)
+   question (ACP: Claude Code, Gemini, OpenCode, Goose, Oh My Pi,
+   Pi, Codex — with the model you pick)
 ```
 
 ## Features
@@ -51,12 +52,21 @@ servers are the real thing. Everything unrelated to reviewing is removed.
 - **Comments that follow the code.** Each comment is anchored to its symbol and its Tree-sitter tokens. It survives
   edits and moves, and it's marked *outdated* rather than jumping onto code it wasn't about.
 - **Agents as reviewers.** Select lines and **Ask Agent**. The answer streams into the thread with the agent's steps,
-  and permission requests become buttons for you.
+  and permission requests become buttons for you. Pick the agent's model and reasoning effort from the list it offers.
+  Agents answer the way a colleague would, briefly and in plain language.
+- **A map of the repository.** A Tree-sitter index of every file and what it defines, built on demand and kept
+  outside the repository, takes agents straight to the right code. With a [Graphify](#review-the-whole-repository)
+  graph, the repository overview also shows the most connected code and how its parts depend on each other.
 - **Design review.** Rendered Markdown, Mermaid diagrams with per-node comments, and a foldable L1 · L2 · L3 design
   tree whose structure is [declared and checked](docs/design-docs.md).
 - **Patch review.** `.patch` and `.diff` files open as pull-request pages with PR metadata and line comments.
 - **Findings and suggestions.** Agent findings arrive as *proposed*, and you accept or dismiss them. Suggested edits
   are accepted with one click.
+- **Whole-repository reviews.** An overview page says where to start. Mark files as viewed (`Cmd+Alt+V`) and see
+  how much of each area you've covered, in the panel and in the explorer; a file changed since you viewed it counts
+  as unviewed. `/co-review:audit` has the agent do a first pass, with its findings grouped by area.
+- **Knowledge bundles.** Review a repository through its OKF bundle: every concept page is a commentable review page,
+  and its links open the code at the line.
 - **One verdict.** Approve, Request changes or Comment, with a message. The agent gets every open comment in one batch.
 - **Phone view.** An installable page to read, reply, accept findings and submit away from your desk.
 - **Desktop app and CLI.** `Co-Review.app` with a `co-review` command, or the browser app from a checkout.
@@ -74,6 +84,8 @@ One plugin install makes Claude Code a co-reviewer:
   answers your comments in their threads, and acts on your verdict.
 - **`/co-review:design <task>`** to design first: Claude writes a design doc, you review it, and it implements what
   you approved.
+- **`/co-review:audit [focus]`** to review the whole repository: Claude splits it into areas, adds a few proposed
+  findings per area for you to accept or dismiss, then answers your questions.
 - **Live comments.** With Claude Code's channels on, your questions reach the running session the moment you ask
   them. Claude answers and keeps working ([how](docs/agent-setup.md#live-review-comments-channel)).
 - **A background co-reviewer.** The `co-reviewer` subagent keeps answering your review while the main conversation
@@ -86,18 +98,26 @@ Co-Review can also launch Claude Code itself for a quick question (**⋯ → Con
 
 ### Pi and other agents
 
-**Pi** has a native package: extension, `/co-review`, `/co-review-design`, a `co-reviewer` subagent and the skills.
+**Pi** has a native package: extension, `/co-review`, `/co-review-design`, `/co-review-audit`, a `co-reviewer`
+subagent and the skills. It ships inside Co-Review; install it from there:
 
 ```bash
-pi install /path/to/co-review/integrations/pi
+# macOS app
+pi install /Applications/Co-Review.app/Contents/Resources/app/integrations/pi
+# Linux
+pi install ~/.local/share/co-review/resources/app/integrations/pi
+# a clone of this repository
+pi install ./integrations/pi
 ```
+
+Or click **Connect an Agent** in the Review panel and pick **Pi: package**; Co-Review runs `pi install` for you.
 
 **Codex, Cursor, VS Code, Gemini CLI, Zed, OpenCode, Goose** and any other MCP client: add the MCP server
 ([config for each](docs/agent-setup.md#other-harnesses-mcp)) and, optionally, the skills with
 `npx skills add sdsvn/co-review`.
 
-All of them need the `co-review` command ([Install](#install)). Inside Co-Review, **Review: Add Co-Review to an
-Agent Harness (MCP)…** sets any of them up for you.
+All of them need the `co-review` command ([Install](#install)). Inside Co-Review, **Connect an Agent** in the Review
+panel (or **Review: Add Co-Review to an Agent Harness (MCP)…**) sets any of them up for you.
 
 ## Why not pull-request review?
 
@@ -161,6 +181,25 @@ Until an agent joins the review, everything is a plain comment: **Ask Agent** on
 Reply, resolve and collapse threads inline. The panel lists threads by file (**Open / Proposed / Resolved / All**).
 **⋯** has the rest: go to a comment, collapse or expand all, change agent, open the phone view, rename or delete.
 
+### Review the whole repository
+
+Start an **entire repository** review. The panel's **Coverage** section shows how many source files you've viewed,
+overall and per area; click an area to open its next unviewed file.
+
+- **Overview** (next to the coverage bar, or **⋯ → Repository overview**) opens a page with where to start, the areas
+  of the code and how they connect. Its links open the code at the line.
+- **Mark a file as viewed** with `Cmd+Alt+V`, the status bar item, or the editor's right-click menu. The explorer
+  shows a check on viewed files and the number of open threads on files and folders.
+- **Let the agent go first:** `/co-review:audit` (Claude Code) or `/co-review-audit` (Pi) adds proposed findings,
+  labelled by area. **By area** in the panel groups them; accept or dismiss each.
+
+For a richer overview, build a [Graphify](https://pypi.org/project/graphifyy/) graph first (`graphify update .`, code
+only, no LLM). Co-Review reads `graphify-out/graph.json`: the most connected code, its clusters, and a diagram of the
+links between them. Without it, the overview uses the Tree-sitter repo map.
+
+To review through an **OKF** knowledge bundle, have the agent open it: `open_review({ dir: "<repo>/okf" })`. Each
+concept page opens as a review page with its type and the code it describes, and agents see which page you commented on.
+
 ### Designs and patches
 
 `index.markdown` and `*.pseudocode.md` open in the rendered review view. For any other `.md` file, use **Open With
@@ -186,8 +225,8 @@ run `tailscale serve --bg 3000` and start Co-Review with `CO_REVIEW_ALLOWED_HOST
 | | The agent brings Co-Review | Co-Review launches the agent (ACP) |
 |---|---|---|
 | Best for | Claude Code or Pi did the work and hands it to you | Asking questions while you review |
-| Setup | The Claude Code plugin, the Pi package, or MCP ([above](#made-for-claude-code)) | **⋯ → Connect agent… → Claude Code** (or Gemini, OpenCode, Goose) |
-| Start | `/co-review:review` (Claude Code), `/co-review` (Pi) | Select code → **Ask Agent** (`Cmd+Alt+A`) |
+| Setup | The Claude Code plugin, the Pi package, or MCP ([above](#made-for-claude-code)) | **⋯ → Connect agent…**: Claude Code, Gemini, OpenCode, Goose, Oh My Pi, Pi or Codex, then the model |
+| Start | `/co-review:review` or `/co-review:audit` (Claude Code), `/co-review` or `/co-review-audit` (Pi) | Select code → **Ask Agent** (`Cmd+Alt+A`) |
 
 When the agent brings Co-Review, it knows what it just built and why. It opens the review, adds findings for real
 risks, then answers your comments in a loop until you submit. The panel shows it as **listening**, or **busy** while
@@ -224,6 +263,7 @@ workspaces: if the status bar shows **Restricted Mode**, click it and trust the 
 | `Cmd+Alt+A` | Ask the agent about the line or selection |
 | `Cmd+Alt+↓` / `Cmd+Alt+↑` | Next / previous comment |
 | `Cmd+Alt+O` | Go to comment… |
+| `Cmd+Alt+V` | Mark the file as viewed (or not) |
 | `Cmd+Enter` / `Esc` | Submit / discard an empty draft |
 | `Cmd+Shift+Alt+R` | Show or hide the Review panel |
 
@@ -270,12 +310,12 @@ applications/browser     Theia browser app (composition only)
 applications/electron    Theia desktop app, electron-builder config, app icon
 extensions/review        the review extension
   src/common             review model, protocols, design-document format
-  src/node               store, Tree-sitter, ACP client, MCP endpoint, review directories, phone view
+  src/node               store, Tree-sitter, repo map and overview, ACP client, MCP endpoint, review directories, phone view
   src/electron-node      desktop-only backend bindings
   src/browser            review panel, inline editor UI, document and patch views, themes
 bin/                     co-review CLI, install-cli.sh, review server mode
-integrations/pi          Pi package: extension, /co-review-design prompt, co-reviewer subagent
-plugin/                  Claude Code plugin: MCP server + channel, skills, commands, co-reviewer subagent, SessionStart hook
+integrations/pi          Pi package: extension, /co-review-design and /co-review-audit prompts, co-reviewer subagent
+plugin/                  Claude Code plugin: MCP server + channel, skills, commands (review, design, audit), co-reviewer subagent, SessionStart hook
 .claude-plugin/          plugin marketplace manifest
 docs/                    guides and brand assets (the source of the website's guides)
 site/                    website and docs: Astro + Starlight, deployed to GitHub Pages

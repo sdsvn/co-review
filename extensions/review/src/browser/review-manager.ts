@@ -3,7 +3,7 @@ import URI from '@theia/core/lib/common/uri';
 import { StorageService } from '@theia/core/lib/browser/storage-service';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
-import { AgentConfig, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus } from '../common/review-model';
+import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewCoverage, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus } from '../common/review-model';
 import { ReviewService } from '../common/review-protocol';
 import { ReviewClientImpl } from './review-client';
 import { AnchorState } from './review-locations';
@@ -334,6 +334,33 @@ export class ReviewManager {
 
     getAgentPresets(): Promise<AgentConfig[]> {
         return this.service.getAgentPresets();
+    }
+
+    /** Whether the reviewer marked the file (a URI) as viewed in the active review. */
+    isViewed(uri: string): boolean {
+        return !!this.activeReview?.viewed?.[this.relativePath(uri)];
+    }
+
+    async setViewed(uris: string[], viewed: boolean): Promise<void> {
+        const review = this.activeReview;
+        if (review) {
+            await this.service.setViewed(review.id, uris.map(u => this.relativePath(u)), viewed);
+        }
+    }
+
+    writeOverview(): Promise<string | undefined> {
+        const review = this.activeReview;
+        return review ? this.service.writeOverview(review.id) : Promise.resolve(undefined);
+    }
+
+    getCoverage(): Promise<ReviewCoverage | undefined> {
+        const review = this.activeReview;
+        return review ? this.service.getCoverage(review.id) : Promise.resolve(undefined);
+    }
+
+    getAgentSettings(): Promise<AgentSetting[]> {
+        const review = this.activeReview;
+        return review ? this.service.getAgentSettings(review.id) : Promise.resolve([]);
     }
 
     async setAgent(agent: AgentConfig | undefined): Promise<void> {

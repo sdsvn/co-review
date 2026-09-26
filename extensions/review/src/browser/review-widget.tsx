@@ -4,7 +4,7 @@ import { Message } from '@theia/core/lib/browser/widgets/widget';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { codicon } from '@theia/core/lib/browser/widgets/widget';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
-import { AgentConfig, CodeLocation, Review, ReviewDecision, ReviewScope, ReviewThread } from '../common/review-model';
+import { AgentConfig, CodeLocation, Review, ReviewCoverage, ReviewDecision, ReviewScope, ReviewThread } from '../common/review-model';
 import { ReviewManager } from './review-manager';
 import { ReviewCommands } from './review-commands';
 import { ReviewNavigator } from './review-navigator';
@@ -24,7 +24,13 @@ export class ReviewWidget extends ReactWidget {
     @inject(CommandService) protected readonly commands: CommandService;
 
     protected filter: Filter = 'open';
+    /** Threads grouped by file (default) or by area: their first label, e.g. the part of the repository a finding is about. */
+    protected grouping: 'file' | 'area' = 'file';
     protected selectedThreadId: string | undefined;
+    /** How much of the repository the reviewer has viewed; refreshed shortly after the review changes. */
+    protected coverage: ReviewCoverage | undefined;
+    protected coverageExpanded = true;
+    protected coverageTimer: number | undefined;
     protected pendingScroll = false;
 
     @postConstruct()
@@ -36,7 +42,10 @@ export class ReviewWidget extends ReactWidget {
         this.title.iconClass = codicon('comment-discussion');
         this.addClass('co-review');
         this.node.tabIndex = 0;
-        this.toDispose.push(this.reviews.onDidChange(() => this.update()));
+        this.toDispose.push(this.reviews.onDidChange(() => {
+            this.update();
+            this.refreshCoverage();
+        }));
         this.toDispose.push(this.reviews.onDidChangeDrafts(() => this.update()));
         this.toDispose.push(this.reviews.onDidRequestReveal(threadId => {
             this.selectedThreadId = threadId;
@@ -48,6 +57,46 @@ export class ReviewWidget extends ReactWidget {
             this.update();
         }));
         this.update();
+        this.refreshCoverage();
+    }
+
+    protected refreshCoverage(): void {
+        window.clearTimeout(this.coverageTimer);
+        this.coverageTimer = window.setTimeout(async () => {
+            this.coverage = await this.reviews.getCoverage().catch(() => undefined);
+            this.update();
+        }, 400);
+    }
+
+    /** Viewed files, overall and per area; an area opens its next file not viewed yet. */
+    protected renderCoverage(review: Review): React.ReactNode {
+        const coverage = this.coverage;
+        if (!coverage?.total || review.bundle) {
+            return undefined;
+        }
+        const bar = (viewed: number, total: number) => <span className='co-review-progress'>
+            <span style={{ width: `${Math.round(100 * viewed / Math.max(total, 1))}%` }} />
+        </span>;
+        return <div className='co-review-coverage'>
+            <div className='co-review-coverage-header' onClick={() => { this.coverageExpanded = !this.coverageExpanded; this.update(); }}
+                title='Files you marked as viewed (⌘⌥V in the editor); a file changed since counts as not viewed'>
+                <span className={codicon(this.coverageExpanded ? 'chevron-down' : 'chevron-right')} />
+                <span>Viewed {coverage.viewed} of {coverage.total} files</span>
+                {bar(coverage.viewed, coverage.total)}
+                <span className='co-review-link' title='Where to start, the areas of the code and how they connect'
+                    onClick={e => { e.stopPropagation(); this.commands.executeCommand(ReviewCommands.OPEN_OVERVIEW.id); }}>Overview</span>
+            </div>
+            {this.coverageExpanded && coverage.areas.length > 1 && <div className='co-review-coverage-areas'>
+                {coverage.areas.map(area => <div key={area.path} className={`co-review-coverage-area ${area.next ? '' : 'done'}`}
+                    title={area.next ? `Open the next file to review: ${area.next}` : 'All files viewed'}
+                    onClick={() => area.next && this.navigator.openReference(area.next)}>
+                    <span className={codicon(area.next ? 'folder' : 'pass-filled')} />
+                    <span className='co-review-coverage-path'>{area.path === '.' ? '(root)' : area.path}</span>
+                    <span className='co-review-coverage-count'>{area.viewed}/{area.total}</span>
+                    {bar(area.viewed, area.total)}
+                </div>)}
+            </div>}
+        </div>;
     }
 
     protected override onUpdateRequest(msg: Message): void {
@@ -93,6 +142,8 @@ export class ReviewWidget extends ReactWidget {
             <p>No review is active for this repository.</p>
             <p>A review can span the whole repository, a branch, a commit, or selected files and folders.</p>
             <button className='theia-button' onClick={() => this.commands.executeCommand(ReviewCommands.CREATE_REVIEW.id)}>Start a Review</button>
+            <p>Want Claude Code, Pi or another agent to answer your questions and open reviews of its own work?</p>
+            <button className='theia-button secondary' onClick={() => this.commands.executeCommand(ReviewCommands.SETUP_HARNESS.id)}>Connect an Agent</button>
         </div>;
     }
 
@@ -105,12 +156,13 @@ export class ReviewWidget extends ReactWidget {
             .sort((a, b) => this.sortKey(a).localeCompare(this.sortKey(b)) || a.number - b.number);
         const groups = new Map<string, ReviewThread[]>();
         for (const thread of threads) {
-            const key = this.groupKey(thread.location);
+            const key = this.grouping === 'area' ? thread.labels?.[0] ?? 'Other' : this.groupKey(thread.location);
             groups.set(key, [...(groups.get(key) ?? []), thread]);
         }
         const drafts = this.reviews.drafts;
         return <>
             {this.renderSummary(review)}
+            {this.renderCoverage(review)}
             {(review.bundle || review.agent) && <SubmitReview review={review} manager={this.reviews} />}
             {drafts.length > 0 && <div className='co-review-drafts'>
                 <div className='co-review-section-header'>
@@ -131,18 +183,36 @@ export class ReviewWidget extends ReactWidget {
                 {proposed > 0 && this.renderFilter('proposed', `Proposed ${proposed}`)}
                 {this.renderFilter('resolved', `Resolved ${resolved}`)}
                 {this.renderFilter('all', `All ${review.threads.length}`)}
+                {review.threads.some(t => t.labels?.length) && <>
+                    <span className='co-review-spacer' />
+                    <span className={`co-review-filter ${this.grouping === 'area' ? 'active' : ''}`}
+                        title='Group threads by area (their first label) instead of by file'
+                        onClick={() => { this.grouping = this.grouping === 'area' ? 'file' : 'area'; this.update(); }}>
+                        <span className={codicon('tag')} /> By area
+                    </span>
+                </>}
             </div>
             <div className='co-review-threads'>
                 {threads.length === 0 && <div className='co-review-hint'>
                     {review.threads.length === 0
-                        ? 'Hover a line in the editor and click + to comment (drag for several lines), or select code and choose Ask Agent.'
+                        ? review.agent
+                            ? 'Hover a line in the editor and click + to comment (drag for several lines), or select code and choose Ask Agent.'
+                            : <>Hover a line in the editor and click + to comment (drag for several lines).
+                                To ask an agent about code, <span className='co-review-link'
+                                    onClick={() => this.commands.executeCommand(ReviewCommands.CONFIGURE_AGENT.id)}>connect one</span>.</>
                         : `No ${this.filter} threads.`}
                 </div>}
-                {[...groups.entries()].map(([key, group]) => <div key={key} className='co-review-group'>
-                    <div className='co-review-group-header' title={key}>
-                        <span className={codicon(group[0].location.kind === 'repository' ? 'repo' : group[0].location.kind === 'directory' ? 'folder' : 'file')} />
-                        <span className='co-review-group-label' onClick={() => group[0].location.uri && this.navigator.open({ kind: 'file', uri: group[0].location.uri })}>{key}</span>
-                    </div>
+                {[...groups.entries()].sort(([a], [b]) => this.grouping === 'area' ? a.localeCompare(b) : 0).map(([key, group]) => <div key={key} className='co-review-group'>
+                    {this.grouping === 'area'
+                        ? <div className='co-review-group-header' title={`${group.length} thread${group.length === 1 ? '' : 's'} labelled ${key}`}>
+                            <span className={codicon('tag')} />
+                            <span className='co-review-group-label'>{key}</span>
+                            <span className='co-review-group-count'>{group.length}</span>
+                        </div>
+                        : <div className='co-review-group-header' title={key}>
+                            <span className={codicon(group[0].location.kind === 'repository' ? 'repo' : group[0].location.kind === 'directory' ? 'folder' : 'file')} />
+                            <span className='co-review-group-label' onClick={() => group[0].location.uri && this.navigator.open({ kind: 'file', uri: group[0].location.uri })}>{key}</span>
+                        </div>}
                     {group.map(thread => <ThreadView key={thread.id}
                         manager={this.reviews}
                         thread={thread}
@@ -165,6 +235,8 @@ export class ReviewWidget extends ReactWidget {
         const agentTitle = !agent ? 'Connect an agent to ask questions'
             : mcp ? (listening ? `${agent.name} is listening (via MCP)` : `${agent.name} is busy; questions are delivered when it checks in`)
                 : `${agent.name} (ACP): ${AgentConfig.commandLine(agent)}`;
+        // The model (and effort, mode) chosen for an ACP agent; the agent's defaults when none.
+        const chosen = agent?.settingsLabel ?? Object.values(agent?.settings ?? {}).join(' · ');
         return <div className='co-review-summary'>
             <span className={codicon(this.scopeIcon(review.scope))} />
             <span className='co-review-summary-scope'>{ReviewScope.label(review.scope, uri => this.reviews.relativePath(uri))}</span>
@@ -174,6 +246,10 @@ export class ReviewWidget extends ReactWidget {
                 <span className={codicon('hubot')} />{agent ? agent.name : 'Connect agent'}
                 {mcp && <span className={`co-review-dot ${listening ? 'on' : ''}`} />}
             </span>
+            {AgentConfig.isAcp(agent) && <span className='co-review-summary-agent co-review-summary-model' title={`Model: ${chosen || 'the agent\'s default'} — click to choose`}
+                onClick={() => this.commands.executeCommand(ReviewCommands.AGENT_SETTINGS.id)}>
+                <span className={codicon('settings-gear')} />{chosen || 'default model'}
+            </span>}
         </div>;
     }
 

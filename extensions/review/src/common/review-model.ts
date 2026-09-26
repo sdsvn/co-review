@@ -163,6 +163,28 @@ export interface AgentConfig {
     transport?: 'acp' | 'mcp';
     command?: string;
     args?: string[];
+    /**
+     * ACP session settings the reviewer chose, such as the model or reasoning effort: setting id → value
+     * (see AgentSetting). Applied to every session the agent opens for this review.
+     */
+    settings?: Record<string, string>;
+    /** How the chosen settings read, e.g. "Claude Sonnet 5 · high" (shown next to the agent). */
+    settingsLabel?: string;
+}
+
+/** A choice an ACP agent offers for its sessions (an ACP config option, or its session mode). */
+export interface AgentSetting {
+    /** The config option id, or `AgentSetting.MODE` for the session mode. */
+    id: string;
+    name: string;
+    /** `model`, `thought_level`, `mode`, … */
+    category?: string;
+    current: string;
+    options: { value: string; name: string; description?: string }[];
+}
+
+export namespace AgentSetting {
+    export const MODE = '__mode';
 }
 
 export namespace AgentConfig {
@@ -171,6 +193,10 @@ export namespace AgentConfig {
     }
     export function commandLine(agent: AgentConfig): string {
         return [agent.command ?? '', ...(agent.args ?? [])].join(' ').trim();
+    }
+    /** Whether two configs run the same agent process (they may differ in settings only). */
+    export function sameProcess(a: AgentConfig | undefined, b: AgentConfig | undefined): boolean {
+        return !!a && !!b && a.id === b.id && a.transport === b.transport && commandLine(a) === commandLine(b);
     }
 }
 
@@ -247,6 +273,11 @@ export interface ReviewActivity {
 export interface Review {
     id: string;
     title: string;
+    /**
+     * Files the reviewer marked as viewed: repository-relative path → when. A file changed since then counts as
+     * not viewed again (see ReviewCoverage).
+     */
+    viewed?: Record<string, number>;
     /** Workspace root URI the review belongs to. */
     workspaceRoot: string;
     scope: ReviewScope;
@@ -294,4 +325,18 @@ export namespace ReviewScope {
             case 'commit': return `Commit ${scope.sha.slice(0, 10)}`;
         }
     }
+}
+
+/** How much of the repository the reviewer has looked at: its source files, overall and per area (folder). */
+export interface ReviewCoverage {
+    total: number;
+    viewed: number;
+    areas: {
+        /** Repository-relative folder, or `.` for files at the root. */
+        path: string;
+        total: number;
+        viewed: number;
+        /** The first file of the area not viewed yet (or changed since). */
+        next?: string;
+    }[];
 }

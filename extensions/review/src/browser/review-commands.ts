@@ -9,6 +9,11 @@ export namespace ReviewCommands {
     export const COMMENT_SELECTION: Command = { id: 'co-review.commentSelection', category, label: 'Add Review Comment' };
     export const ASK_SELECTION: Command = { id: 'co-review.askSelection', category, label: 'Ask Agent About Selection' };
     export const CONFIGURE_AGENT: Command = { id: 'co-review.configureAgent', category, label: 'Connect ACP Agent…' };
+    export const AGENT_SETTINGS: Command = { id: 'co-review.agentSettings', category, label: 'Choose Agent Model…' };
+    export const TOGGLE_VIEWED: Command = { id: 'co-review.toggleViewed', category, label: 'Mark File as Viewed / Not Viewed' };
+    /** The same for the file or folder selected in the explorer. */
+    export const TOGGLE_VIEWED_PATH: Command = { id: 'co-review.toggleViewedPath', category, label: 'Mark as Viewed / Not Viewed' };
+    export const OPEN_OVERVIEW: Command = { id: 'co-review.openOverview', category, label: 'Open Repository Overview' };
     export const REVIEW_ACTIONS: Command = { id: 'co-review.reviewActions', category, label: 'Review Actions…' };
     export const COLLAPSE_ALL: Command = { id: 'co-review.collapseAll', category, label: 'Collapse All Comments' };
     export const EXPAND_ALL: Command = { id: 'co-review.expandAll', category, label: 'Expand All Comments' };

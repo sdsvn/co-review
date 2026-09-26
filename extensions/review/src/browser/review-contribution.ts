@@ -18,7 +18,7 @@ import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import { NavigatorContextMenu } from '@theia/navigator/lib/browser/navigator-contribution';
 import * as monaco from '@theia/monaco-editor-core';
-import { AgentConfig, CodeLocation, ReviewScope, ThreadIntent } from '../common/review-model';
+import { AgentConfig, AgentSetting, CodeLocation, ReviewScope, ThreadIntent } from '../common/review-model';
 import { DOCUMENT_NAMES } from '../common/patch';
 import { OpenerService, open } from '@theia/core/lib/browser/opener-service';
 import { ReviewService } from '../common/review-protocol';
@@ -75,11 +75,74 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         };
         this.reviews.onDidChange(update);
         update();
+        // Whether the file in the editor is viewed; click to toggle.
+        const viewed = () => {
+            const uri = this.editorManager.currentEditor?.editor.uri.toString();
+            const review = this.reviews.activeReview;
+            if (!uri || !review || review.bundle || !uri.startsWith('file:')) {
+                this.statusBar.removeElement('co-review-viewed');
+                return;
+            }
+            const done = this.reviews.isViewed(uri);
+            this.statusBar.setElement('co-review-viewed', {
+                text: done ? '$(pass-filled) Viewed' : '$(circle-large-outline) Not viewed',
+                tooltip: done ? 'You marked this file as viewed; click to unmark' : 'Mark this file as viewed (⌘⌥V)',
+                alignment: StatusBarAlignment.LEFT,
+                priority: 99,
+                command: ReviewCommands.TOGGLE_VIEWED.id
+            });
+        };
+        this.reviews.onDidChange(viewed);
+        this.editorManager.onCurrentEditorChanged(viewed);
+        viewed();
+    }
+
+    /** Writes the repository overview (from Graphify's graph when there is one) and opens it as a rendered page. */
+    protected async openOverview(): Promise<void> {
+        const uri = await this.reviews.writeOverview();
+        if (uri) {
+            await this.navigator.open({ kind: 'document', uri });
+        }
+    }
+
+    /** Toggles "viewed" for a file or folder (all of its files), or the file in the editor. */
+    protected async toggleViewed(uri: URI | undefined): Promise<void> {
+        const target = uri ?? this.editorManager.currentEditor?.editor.uri;
+        if (!target) {
+            return;
+        }
+        const stat = await this.fileService.resolve(target).catch(() => undefined);
+        if (stat?.isDirectory) {
+            const coverage = await this.reviews.getCoverage();
+            const folder = this.reviews.relativePath(target.toString());
+            const area = coverage?.areas.find(a => a.path === folder || folder.startsWith(`${a.path}/`) || a.path.startsWith(`${folder}/`));
+            this.messages.info(area ? `${area.viewed} of ${area.total} files viewed in ${area.path}.` : 'Mark files one by one: open each and press ⌘⌥V.');
+            return;
+        }
+        await this.reviews.setViewed([target.toString()], !this.reviews.isViewed(target.toString()));
     }
 
     /** After the layout is restored (opening earlier would be undone by the restore). */
-    onDidInitializeLayout(): Promise<void> {
-        return this.openBundleDocument();
+    async onDidInitializeLayout(): Promise<void> {
+        await this.openBundleDocument();
+        await this.welcome();
+    }
+
+    /** The first time Co-Review runs, the Review panel opens, so a new user sees where to start. */
+    protected async welcome(): Promise<void> {
+        const key = 'co-review.welcomed';
+        try {
+            if (localStorage.getItem(key)) {
+                return;
+            }
+            localStorage.setItem(key, '1');
+        } catch {
+            return;
+        }
+        await this.reviews.ready;
+        if (!this.reviews.activeReview) {
+            await this.openView({ reveal: true });
+        }
     }
 
     /** A review directory opens on its document, or its first patch. */
@@ -154,6 +217,23 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             isEnabled: () => !!this.reviews.activeReview,
             execute: () => this.configureAgent()
         });
+        // The file in the editor (shortcut, status bar, editor menu); the explorer's selection has its own command.
+        registry.registerCommand(ReviewCommands.TOGGLE_VIEWED, {
+            isEnabled: () => !!this.reviews.activeReview && !!this.editorManager.currentEditor,
+            execute: () => this.toggleViewed(undefined)
+        });
+        registry.registerCommand(ReviewCommands.TOGGLE_VIEWED_PATH, UriAwareCommandHandler.MonoSelect(this.selectionService, {
+            isEnabled: () => !!this.reviews.activeReview,
+            execute: uri => this.toggleViewed(uri)
+        }));
+        registry.registerCommand(ReviewCommands.OPEN_OVERVIEW, {
+            isEnabled: () => !!this.reviews.activeReview && !this.reviews.activeReview.bundle,
+            execute: () => this.openOverview()
+        });
+        registry.registerCommand(ReviewCommands.AGENT_SETTINGS, {
+            isEnabled: () => AgentConfig.isAcp(this.reviews.activeReview?.agent),
+            execute: () => this.chooseAgentSettings()
+        });
         registry.registerCommand(ReviewCommands.COMMENT_REPOSITORY, { execute: () => this.startDraft({ kind: 'repository' }) });
         registry.registerCommand(ReviewCommands.COMMENT_PATH, UriAwareCommandHandler.MonoSelect(this.selectionService, {
             execute: uri => this.commentOnPath(uri)
@@ -169,6 +249,8 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         menus.registerMenuAction(REVIEW_CONTEXT_MENU_GROUP, { commandId: ReviewCommands.COMMENT_SYMBOL.id, order: 'b' });
         menus.registerMenuAction(REVIEW_NAVIGATOR_GROUP, { commandId: ReviewCommands.COMMENT_PATH.id, order: 'a' });
         menus.registerMenuAction(REVIEW_NAVIGATOR_GROUP, { commandId: ReviewCommands.REVIEW_PATHS.id, order: 'b' });
+        menus.registerMenuAction(REVIEW_NAVIGATOR_GROUP, { commandId: ReviewCommands.TOGGLE_VIEWED_PATH.id, order: 'c' });
+        menus.registerMenuAction(REVIEW_CONTEXT_MENU_GROUP, { commandId: ReviewCommands.TOGGLE_VIEWED.id, label: 'Mark File as Viewed / Not Viewed', order: 'c' });
     }
 
     override registerKeybindings(keybindings: KeybindingRegistry): void {
@@ -178,6 +260,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         keybindings.registerKeybinding({ command: ReviewCommands.NEXT_COMMENT.id, keybinding: 'ctrlcmd+alt+down', when: 'editorTextFocus' });
         keybindings.registerKeybinding({ command: ReviewCommands.PREVIOUS_COMMENT.id, keybinding: 'ctrlcmd+alt+up', when: 'editorTextFocus' });
         keybindings.registerKeybinding({ command: ReviewCommands.GO_TO_COMMENT.id, keybinding: 'ctrlcmd+alt+o' });
+        keybindings.registerKeybinding({ command: ReviewCommands.TOGGLE_VIEWED.id, keybinding: 'ctrlcmd+alt+v', when: 'editorTextFocus' });
     }
 
     protected currentEditor(): MonacoEditor | undefined {
@@ -354,11 +437,13 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             return;
         }
         const actions = [
+            ...review.bundle ? [] : [{ label: '$(map) Repository overview', id: ReviewCommands.OPEN_OVERVIEW.id }],
             { label: '$(list-selection) Go to comment…', id: ReviewCommands.GO_TO_COMMENT.id },
             { label: '$(fold) Collapse all comments', id: ReviewCommands.COLLAPSE_ALL.id },
             { label: '$(unfold) Expand all comments', id: ReviewCommands.EXPAND_ALL.id },
             { label: '$(comment) Comment on the repository', id: ReviewCommands.COMMENT_REPOSITORY.id },
             { label: `$(hubot) ${review.agent ? 'Change agent…' : 'Connect agent…'}`, id: ReviewCommands.CONFIGURE_AGENT.id },
+            ...AgentConfig.isAcp(review.agent) ? [{ label: '$(settings-gear) Choose agent model…', id: ReviewCommands.AGENT_SETTINGS.id }] : [],
             { label: '$(device-mobile) Open mobile view', id: 'co-review.mobile' },
             { label: '$(plug) Add Co-Review to an agent harness (MCP)…', id: ReviewCommands.SETUP_HARNESS.id },
             { label: '$(book) Install agent skills…', id: ReviewCommands.INSTALL_SKILLS.id },
@@ -472,7 +557,9 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             return this.reviews.setAgent(undefined);
         }
         if (picked.agent) {
-            return this.reviews.setAgent(picked.agent);
+            // Keep the model choice when reconnecting the same agent.
+            await this.reviews.setAgent(review.agent?.id === picked.agent.id ? { ...picked.agent, settings: review.agent.settings } : picked.agent);
+            return this.chooseAgentSettings(false);
         }
         const commandLine = await this.quickInput.input({
             prompt: 'Command that starts an ACP agent on stdio (run in the repository root)',
@@ -485,6 +572,55 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         }
         const name = await this.quickInput.input({ prompt: 'Display name for this agent', value: parts[0].split('/').pop() });
         await this.reviews.setAgent({ id: 'custom', name: name?.trim() || parts[0], transport: 'acp', command: parts[0], args: parts.slice(1) });
+        await this.chooseAgentSettings(false);
+    }
+
+    /**
+     * Lets the reviewer pick what the agent offers for its sessions over ACP: the model, then reasoning effort.
+     * Modes are left alone: some grant permissions (bypassPermissions). Escape keeps the agent's default. `explicit`: asked for, so say when there is nothing to pick.
+     */
+    protected async chooseAgentSettings(explicit = true): Promise<void> {
+        const agent = this.reviews.activeReview?.agent;
+        if (!AgentConfig.isAcp(agent)) {
+            return;
+        }
+        const progress = await this.messages.showProgress({ text: `Asking ${agent.name} which models it offers…` });
+        let settings: AgentSetting[];
+        try {
+            settings = await this.reviews.getAgentSettings();
+        } catch (e) {
+            this.messages.error(`Could not start ${agent.name}: ${e instanceof Error ? e.message : e}`);
+            return;
+        } finally {
+            progress.cancel();
+        }
+        const order = ['model', 'thought_level'];
+        const offered = settings.filter(s => order.includes(s.category ?? '') && s.options.length > 1)
+            .sort((a, b) => order.indexOf(a.category!) - order.indexOf(b.category!));
+        if (!offered.length) {
+            if (explicit) {
+                this.messages.info(`${agent.name} doesn't offer a choice of model over ACP; it uses its own default.`);
+            }
+            return;
+        }
+        const chosen: Record<string, string> = { ...agent.settings };
+        for (const setting of offered) {
+            const current = chosen[setting.id] ?? setting.current;
+            // The current choice first, then the agent's order.
+            const options = [...setting.options].sort((a, b) => Number(b.value === current) - Number(a.value === current));
+            const picked = await this.quickInput.pick(options.map(o => ({
+                label: `${o.value === current ? '$(check) ' : ''}${o.name}`, description: o.description ?? (o.name !== o.value ? o.value : undefined), value: o.value
+            })), { placeHolder: `${agent.name}: ${setting.name} (Escape keeps ${setting.options.find(o => o.value === current)?.name ?? current})` });
+            if (!picked) {
+                break;
+            }
+            chosen[setting.id] = picked.value;
+        }
+        if (JSON.stringify(chosen) !== JSON.stringify(agent.settings ?? {})) {
+            const settingsLabel = offered.filter(s => chosen[s.id] !== undefined)
+                .map(s => s.options.find(o => o.value === chosen[s.id])?.name ?? chosen[s.id]).join(' · ');
+            await this.reviews.setAgent({ ...agent, settings: chosen, settingsLabel });
+        }
     }
 
     protected async renameReview(): Promise<void> {

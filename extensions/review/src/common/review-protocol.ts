@@ -1,5 +1,5 @@
 import { RpcServer } from '@theia/core/lib/common/messaging';
-import { AgentConfig, AgentPresence, CodeLocation, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, ThreadOptions, ThreadStatus } from './review-model';
+import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, ReviewDecision, Participant, Review, ReviewCoverage, ReviewScope, ReviewThread, ThreadOptions, ThreadStatus } from './review-model';
 
 export const REVIEW_SERVICE_PATH = '/services/co-review';
 export const ReviewService = Symbol('ReviewService');
@@ -80,6 +80,14 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     getAgentPresets(): Promise<AgentConfig[]>;
     /** Sets (or removes) the ACP agent participating in the review. */
     setAgent(reviewId: string, agent: AgentConfig | undefined): Promise<Review>;
+    /** What the review's ACP agent lets you choose for its sessions (models, reasoning effort, modes); starts it if needed. */
+    getAgentSettings(reviewId: string): Promise<AgentSetting[]>;
+    /** Marks repository-relative files as viewed (or not). */
+    setViewed(reviewId: string, paths: string[], viewed: boolean): Promise<Review>;
+    /** How much of the repository's source the reviewer has viewed, overall and per area. */
+    getCoverage(reviewId: string): Promise<ReviewCoverage | undefined>;
+    /** Writes the repository overview page (where to start, areas, how they connect) and returns its file URI. */
+    writeOverview(reviewId: string): Promise<string | undefined>;
     /** Sends the thread to the review's agent (marks it as a question). */
     askAgent(reviewId: string, threadId: string): Promise<void>;
     cancelAgent(reviewId: string, threadId: string): Promise<void>;

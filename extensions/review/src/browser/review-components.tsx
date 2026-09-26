@@ -354,6 +354,7 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
             {thread.location.symbol && <span className='co-review-symbol' title={thread.location.symbol}>{thread.location.symbol}</span>}
             {thread.intent === 'question' && <span className={`${codicon('hubot')} co-review-mark`} title='Question for the agent' />}
             {thread.severity && <span className={`co-review-badge severity-${thread.severity}`}>{thread.severity}</span>}
+            {thread.labels?.map(label => <span key={label} className='co-review-badge label'>{label}</span>)}
             {props.anchorState && props.anchorState !== 'exact' &&
                 <span className={`co-review-badge ${props.anchorState}`}
                     title={props.anchorState === 'moved' ? 'The commented code moved; the comment followed it.' : 'The commented code no longer exists.'}>

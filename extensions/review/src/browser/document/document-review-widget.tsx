@@ -11,6 +11,9 @@ import { DraftEditor, ThreadView } from '../review-components';
 import { ReviewDraft, ReviewManager } from '../review-manager';
 import { ReviewNavigator } from '../review-navigator';
 import { MermaidBlock, render } from './document-render';
+import { splitFrontmatter } from '../../common/design-format';
+
+const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
 export const DocumentReviewWidgetOptions = Symbol('DocumentReviewWidgetOptions');
 export interface DocumentReviewWidgetOptions {
@@ -204,6 +207,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
                 + `<ul>${rendered.format.warnings.map(w => `<li>${w.replace(/</g, '&lt;').replace(/`([^`]+)`/g, '<code>$1</code>')}</li>`).join('')}</ul>`;
             this.content.prepend(note);
         }
+        this.renderMeta();
         this.setLevel(this.level);
         await this.renderOpenSpec();
         await this.resolveImages();
@@ -312,6 +316,59 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         });
     }
 
+    /**
+     * A link in the document: another page (`./x.md`, or `/packages/x.md` from the review directory's root, as in
+     * OKF bundles) opens as a review page; source code (`src/a.ts:42`, `src/a.ts#L42-L50`) opens in the editor at
+     * that line; a folder is revealed in the explorer. Code paths are tried next to the document, then from the
+     * review directory and the folder above it (the repository, for a bundle such as `<repo>/okf`).
+     */
+    protected async openLink(href: string): Promise<void> {
+        const m = href.match(/^(.*?)(?::(\d+)(?:-(\d+))?|#L(\d+)(?:-L?(\d+))?)?$/)!;
+        const target = m[1].replace(/#.*$/, '');
+        const line = Number(m[2] ?? m[4]) || undefined;
+        const endLine = Number(m[3] ?? m[5]) || undefined;
+        const dir = this.reviews.activeReview?.bundle?.dir;
+        const bases = target.startsWith('/')
+            ? dir ? [URI.fromFilePath(dir)] : []
+            : [this.uri.parent, ...dir ? [URI.fromFilePath(dir), URI.fromFilePath(dir).parent] : [],
+                ...this.reviews.root ? [new URI(this.reviews.root)] : []];
+        const rel = target.replace(/^\/+/, '');
+        let uri: URI | undefined;
+        for (const base of bases) {
+            const candidate = rel ? base.resolve(rel) : base;
+            if (await this.fileService.exists(candidate)) {
+                uri = candidate;
+                break;
+            }
+        }
+        if (!uri) {
+            open(this.openers, this.uri.parent.resolve(rel));
+            return;
+        }
+        const stat = await this.fileService.resolve(uri);
+        if (stat.isDirectory) {
+            await this.navigator.open({ kind: 'directory', uri: uri.toString() });
+        } else if (/\.(md|markdown|patch|diff)$/i.test(uri.path.base) && !line) {
+            open(this.openers, uri);
+        } else {
+            await this.navigator.openReference(uri.path.fsPath(), line, endLine);
+        }
+    }
+
+    /** Knowledge-base pages (OKF and similar) describe themselves in frontmatter: show what the page is about. */
+    protected renderMeta(): void {
+        const { data } = splitFrontmatter(this.source);
+        if (!data.type || data['co-review']) {
+            return;
+        }
+        const meta = document.createElement('div');
+        meta.className = 'co-review-doc-meta';
+        meta.innerHTML = `<span class="co-review-doc-type">${escape(data.type)}</span>`
+            + (data.description ? `<span>${escape(data.description)}</span>` : '')
+            + (data.resource ? `<a href="${escape(data.resource)}" title="Open in the code"><span class="${codicon('code')}"></span>${escape(data.resource)}</a>` : '');
+        this.content.prepend(meta);
+    }
+
     protected onContentClick(e: MouseEvent): void {
         const target = e.target as Element;
         const link = target.closest('a[href]');
@@ -320,10 +377,11 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             const href = link.getAttribute('href')!;
             if (/^https?:/i.test(href)) {
                 window.open(href, '_blank', 'noopener');
-            } else if (!href.startsWith('#') || href.startsWith('#/patch/')) {
-                // `limiter.patch`, `#/patch/limiter` and relative files open in Co-Review (patches as review pages).
-                const rel = href.startsWith('#/patch/') ? `${href.slice('#/patch/'.length)}.patch` : decodeURI(href.split('#')[0]);
-                open(this.openers, this.uri.parent.resolve(rel));
+            } else if (href.startsWith('#/patch/')) {
+                // `#/patch/limiter` opens the patch as a review page.
+                open(this.openers, this.uri.parent.resolve(`${href.slice('#/patch/'.length)}.patch`));
+            } else if (!href.startsWith('#')) {
+                this.openLink(decodeURI(href));
             }
             return;
         }

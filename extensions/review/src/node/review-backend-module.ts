@@ -12,6 +12,7 @@ import { ReviewServiceImpl } from './review-service-impl';
 import { ReviewStore } from './review-store';
 import { AcpAgentService } from './acp-agent-service';
 import { AgentSetup } from './agent-setup';
+import { RepoIndex } from './repo-index';
 
 export default new ContainerModule(bind => {
     bind(ReviewStore).toSelf().inSingletonScope();
@@ -19,6 +20,7 @@ export default new ContainerModule(bind => {
     bind(HumanDecisions).toSelf().inSingletonScope();
     bind(BundleService).toSelf().inSingletonScope();
     bind(AgentSetup).toSelf().inSingletonScope();
+    bind(RepoIndex).toSelf().inSingletonScope();
     bind(AgentPresenceTracker).toSelf().inSingletonScope();
     bind(CoReviewerMcp).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(CoReviewerMcp);

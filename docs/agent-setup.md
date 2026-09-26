@@ -12,20 +12,30 @@ What an agent gets:
   verdict. `co-review-design` writes a design document, has you review it, and implements only after you approve.
 - **Slash commands** to start either workflow.
 
-Before you start, install the `co-review` command (the Claude Code plugin and Pi launch it): `make install-app`
-on macOS, or **Review: Install the co-review Command** inside the app.
+**Before you start:** agents launch Co-Review through the `co-review` command, so it has to be on your `PATH`.
+Check with `which co-review`.
+
+- If you installed with `install.sh`, it's already there.
+- If you built from source, run `make install-cli`.
+- Or, inside Co-Review, open the command palette (`Cmd/Ctrl+Shift+P`) and run **Review: Install the co-review
+  Command**.
 
 ## Claude Code
 
-Co-Review is built for Claude Code. The Co-Review plugin brings everything in one install:
+Co-Review is built for Claude Code. The Co-Review plugin brings everything in one install.
+
+**Option 1: from Claude Code.** Type these two commands in a Claude Code session:
 
 ```bash
 /plugin marketplace add sdsvn/co-review
 /plugin install co-review@co-review
 ```
 
-Or, from inside Co-Review: **Review: Add Co-Review to an Agent Harness (MCP)… → Claude Code: plugin**, which runs
-the same two steps (`claude plugin marketplace add …`, `claude plugin install …`).
+**Option 2: let Co-Review do it.** In Co-Review, open the Review panel and click **Connect an Agent** (or run
+**Review: Add Co-Review to an Agent Harness (MCP)…** from the command palette). Pick **Claude Code: plugin** and
+confirm. Co-Review runs the same two steps with the `claude` command line.
+
+Either way, restart Claude Code afterwards so it loads the plugin.
 
 | The plugin adds | What it does |
 |---|---|
@@ -33,6 +43,7 @@ the same two steps (`claude plugin marketplace add …`, `claude plugin install 
 | **Skills** `co-review`, `co-review-design` | The workflows; they also trigger on requests like "review this with me" or "design this first" |
 | **`/co-review:review [focus]`** | Opens this change in Co-Review and stays as your co-reviewer until you submit |
 | **`/co-review:design <task>`** | Writes a design doc, opens it for review, revises it, implements after approval |
+| **`/co-review:audit [focus]`** | Reviews the whole repository with you: first-pass findings grouped by area, then answers your questions |
 | **Subagent** `co-review:co-reviewer` | Runs in the background and answers your review while the main conversation keeps working ("keep answering my review while you fix the tests") |
 | **Live channel** | Your questions and your Submit arrive in the running session the moment you make them (below) |
 | **SessionStart hook** | Opening Claude Code in a repository with open reviews tells it which questions are waiting |
@@ -85,20 +96,40 @@ the Review panel, then select code → **Ask Agent**. The answer streams into th
 
 ## Pi
 
-The Pi package is native: it talks to Co-Review directly, with no MCP support needed in Pi.
+The Pi package is native: it talks to Co-Review directly, so Pi doesn't need MCP support. The package ships with
+Co-Review, so you install it from where Co-Review is installed.
+
+**Option 1: let Co-Review do it.** In Co-Review, open the Review panel and click **Connect an Agent** (or run
+**Review: Add Co-Review to an Agent Harness (MCP)…** from the command palette, `Cmd/Ctrl+Shift+P`). Pick
+**Pi: package** and confirm. Co-Review runs `pi install` with the right path for you.
+
+**Option 2: install it from a terminal.** Run the command for how you installed Co-Review:
 
 ```bash
-pi install /path/to/co-review/integrations/pi
+# macOS app (installed by install.sh)
+pi install /Applications/Co-Review.app/Contents/Resources/app/integrations/pi
 ```
 
-Or, from inside Co-Review: **Review: Add Co-Review to an Agent Harness (MCP)… → Pi: package**.
+```bash
+# Linux (installed by install.sh)
+pi install ~/.local/share/co-review/resources/app/integrations/pi
+```
+
+```bash
+# From a clone of the repository
+pi install ./integrations/pi
+```
+
+On macOS, use `~/Applications/Co-Review.app/…` instead if the app was installed there (`install.sh` falls back to
+it when `/Applications` isn't writable). Then start a new Pi session so it loads the package.
 
 | In Pi | Does |
 |---|---|
 | `/co-review` | Opens a review of the working directory; your questions arrive in the session as you ask them |
 | `/co-review-design <task>` | Writes a design doc, opens it for review, implements after approval |
+| `/co-review-audit [focus]` | Reviews the whole repository with you: first-pass findings grouped by area |
 | `pi --co-review` | Starts Pi already listening to the review |
-| `co_review_start`, `co_review_wait`, `co_review_reply`, `co_review_add_findings`, `co_review_ask` | The tools, for the model and for subagents |
+| `co_review_start`, `co_review_wait`, `co_review_reply`, `co_review_add_findings`, `co_review_ask`, `co_review_map` | The tools, for the model and for subagents |
 | `co-reviewer` subagent | Stays in the review as co-reviewer while the main session keeps working |
 
 The package also loads the `co-review` and `co-review-design` skills. In an interactive session, Pi waits for your
@@ -109,7 +140,7 @@ questions without spending tokens: a background listener hands each one to the s
 | Where | Install |
 |---|---|
 | Any agent, with the [`skills`](https://www.npmjs.com/package/skills) CLI | `npx skills add sdsvn/co-review` |
-| From inside Co-Review | **Review: Install Agent Skills…** (Claude Code, `~/.agents/skills`, or this repository) |
+| From inside Co-Review | Command palette → **Review: Install Agent Skills…**, then pick Claude Code, `~/.agents/skills`, or this repository |
 | Manually | copy `plugin/skills/co-review` and `plugin/skills/co-review-design` into the agent's skills directory |
 
 The skills live in [`plugin/skills`](../plugin/skills). The Claude Code plugin is [`plugin/`](../plugin), listed in
@@ -123,9 +154,12 @@ repository.
 
 > [!NOTE]
 > Apps opened from the Dock (Cursor, Claude Desktop, VS Code) may not have `~/.local/bin` on their `PATH`. Use the
-> absolute path, for example `/usr/local/bin/co-review` or `~/.local/bin/co-review` (`which co-review` shows it), or
-> let **Review: Add Co-Review to an Agent Harness (MCP)…** write it for you: it merges JSON (keeping a backup),
-> appends TOML, and copies the snippet where a config can't be edited safely (Zed, Goose).
+> absolute path instead, for example `/usr/local/bin/co-review` or `~/.local/bin/co-review` (`which co-review`
+> shows it).
+>
+> Or let Co-Review write the config: **Connect an Agent** in the Review panel, then pick the harness. It merges JSON
+> configs (keeping a backup), appends to TOML ones, and copies the snippet to paste where a config can't be edited
+> safely (Zed, Goose).
 
 > [!TIP]
 > `await_comment` and `await_review` wait for you for up to a few minutes. Where a harness has a tool-call timeout,

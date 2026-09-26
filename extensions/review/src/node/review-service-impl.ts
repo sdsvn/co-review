@@ -2,13 +2,14 @@ import { DisposableCollection } from '@theia/core/lib/common/disposable';
 import { FileUri } from '@theia/core/lib/common/file-uri';
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { execFile } from 'child_process';
-import { AgentConfig, AgentPresence, CodeLocation, ReviewDecision, Participant, Review, ReviewThread, ThreadOptions, ThreadStatus } from '../common/review-model';
+import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, ReviewDecision, Participant, Review, ReviewCoverage, ReviewThread, ThreadOptions, ThreadStatus } from '../common/review-model';
 import { AcpAgentService } from './acp-agent-service';
 import { BundleService } from './bundle-service';
 import { currentUser } from './participants';
 import { AgentPresenceTracker, HumanDecisions } from './agent-coordination';
 import { AgentSetupInfo, CreateReviewParams, GitInfo, ReviewClient, ReviewService } from '../common/review-protocol';
 import { AgentSetup } from './agent-setup';
+import { RepoIndex } from './repo-index';
 import { ReviewStore } from './review-store';
 
 function git(cwd: string, args: string[]): Promise<string | undefined> {
@@ -36,6 +37,9 @@ export class ReviewServiceImpl implements ReviewService {
 
     @inject(AgentPresenceTracker)
     protected readonly presence: AgentPresenceTracker;
+
+    @inject(RepoIndex)
+    protected readonly index: RepoIndex;
 
     protected client: ReviewClient | undefined;
     protected readonly toDispose = new DisposableCollection();
@@ -120,6 +124,28 @@ export class ReviewServiceImpl implements ReviewService {
 
     setAgent(reviewId: string, agent: AgentConfig | undefined): Promise<Review> {
         return this.store.setAgent(reviewId, agent);
+    }
+
+    getAgentSettings(reviewId: string): Promise<AgentSetting[]> {
+        return this.agents.getSettings(reviewId);
+    }
+
+    setViewed(reviewId: string, paths: string[], viewed: boolean): Promise<Review> {
+        return this.store.setViewed(reviewId, paths, viewed);
+    }
+
+    async writeOverview(reviewId: string): Promise<string | undefined> {
+        const review = await this.store.get(reviewId);
+        if (!review || review.bundle) {
+            return undefined;
+        }
+        return FileUri.create(await this.index.writeOverview(FileUri.fsPath(review.workspaceRoot), review.viewed)).toString();
+    }
+
+    async getCoverage(reviewId: string): Promise<ReviewCoverage | undefined> {
+        const review = await this.store.get(reviewId);
+        // Review directories (designs, patches) are not repository reviews.
+        return review && !review.bundle ? this.index.coverage(FileUri.fsPath(review.workspaceRoot), review.viewed) : undefined;
     }
 
     async askAgent(reviewId: string, threadId: string): Promise<void> {

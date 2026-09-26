@@ -13,6 +13,8 @@ import { ReviewContribution } from './review-contribution';
 import { ReviewEditorDecorator } from './review-editor-decorator';
 import { ReviewManager } from './review-manager';
 import { ReviewNavigator } from './review-navigator';
+import { ReviewNavigatorDecorator } from './review-navigator-decorator';
+import { NavigatorTreeDecorator } from '@theia/navigator/lib/browser/navigator-decorator-service';
 import { ReviewSelectionActions } from './review-selection-actions';
 import { ReviewWidget } from './review-widget';
 import { ReviewShellFilter } from './review-shell';
@@ -39,6 +41,8 @@ export default new ContainerModule(bind => {
     bind(ReviewLocations).toSelf().inSingletonScope();
     bind(ReviewManager).toSelf().inSingletonScope();
     bind(ReviewNavigator).toSelf().inSingletonScope();
+    bind(ReviewNavigatorDecorator).toSelf().inSingletonScope();
+    bind(NavigatorTreeDecorator).toService(ReviewNavigatorDecorator);
 
     bind(ReviewEditorDecorator).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(ReviewEditorDecorator);

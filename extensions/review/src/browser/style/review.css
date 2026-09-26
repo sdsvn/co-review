@@ -8,15 +8,15 @@
 .co-review .action-label:hover, .co-review-inline-content .action-label:hover { background: var(--theia-toolbar-hoverBackground); }
 
 .co-review-summary { display: flex; align-items: center; gap: 6px; color: var(--theia-descriptionForeground); min-width: 0; }
-.co-review-summary-scope { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-review-summary-scope { min-width: 4em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .co-review-summary-agent { display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
 .co-review-summary-agent:hover { color: var(--theia-foreground); }
 .co-review-summary-agent.none { color: var(--theia-textLink-foreground); }
 .co-review-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--theia-descriptionForeground); opacity: 0.6; }
 .co-review-dot.on { background: var(--theia-charts-green); opacity: 1; }
 
-.co-review-filters { display: flex; gap: 14px; border-bottom: 1px solid var(--theia-panel-border); }
-.co-review-filter { cursor: pointer; color: var(--theia-descriptionForeground); padding-bottom: 3px; }
+.co-review-filters { display: flex; flex-wrap: wrap; gap: 4px 14px; border-bottom: 1px solid var(--theia-panel-border); }
+.co-review-filter { cursor: pointer; white-space: nowrap; color: var(--theia-descriptionForeground); padding-bottom: 3px; }
 .co-review-filter.active { color: var(--theia-foreground); border-bottom: 2px solid var(--theia-focusBorder); }
 
 .co-review-empty, .co-review-hint { color: var(--theia-descriptionForeground); padding: 6px 0; line-height: 1.5; }
@@ -39,10 +39,10 @@
 .co-review-draft { border: 1px dashed var(--theia-focusBorder) !important; }
 .co-review-draft.asking { border-color: var(--theia-coReview-agent) !important; }
 
-.co-review-thread-header { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.co-review-thread-header { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
 .co-review-toggle { cursor: pointer; }
 .co-review-number { font-weight: 600; }
-.co-review-location { cursor: pointer; color: var(--theia-textLink-foreground); font-family: var(--theia-code-font-family); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.co-review-location { cursor: pointer; color: var(--theia-textLink-foreground); font-family: var(--theia-code-font-family); white-space: nowrap; overflow: hidden; min-width: 6em; max-width: 100%; text-overflow: ellipsis; }
 .co-review-location:hover { text-decoration: underline; }
 .co-review-location.static { cursor: default; color: var(--theia-descriptionForeground); text-decoration: none; }
 .co-review-symbol { font-family: var(--theia-code-font-family); color: var(--theia-descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -282,3 +282,33 @@ details[open] > summary.co-review-step-line::before { content: '▾'; }
     margin: 4px 0 0;
     padding-left: 18px;
 }
+
+/* Frontmatter of knowledge-base pages (OKF): type · description · the code it describes. */
+.co-review-doc-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 16px;
+    padding: 8px 12px; border-radius: 6px; background: var(--theia-editorWidget-background); color: var(--theia-descriptionForeground); }
+.co-review-doc-meta .co-review-doc-type { padding: 1px 8px; border-radius: 10px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .04em; background: var(--theia-badge-background); color: var(--theia-badge-foreground); }
+.co-review-doc-meta a { display: inline-flex; align-items: center; gap: 4px; font-family: var(--theia-code-font-family); }
+
+/* The chosen model next to the agent: truncated so the scope stays readable. */
+.co-review-summary-model { display: block; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Labels on threads (e.g. the area of the repository a finding is about), and area group counts. */
+.co-review-badge.label { background: var(--theia-badge-background); color: var(--theia-badge-foreground); opacity: .85; }
+.co-review-group-count { margin-left: auto; color: var(--theia-descriptionForeground); font-size: 11px; }
+
+/* Coverage: files viewed, overall and per area. */
+.co-review-coverage { margin: 6px 0; }
+.co-review-coverage-header { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--theia-descriptionForeground); }
+.co-review-coverage-header:hover { color: var(--theia-foreground); }
+.co-review-coverage-areas { max-height: 220px; overflow-y: auto; margin: 4px 0 0 18px; }
+.co-review-coverage-area { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
+.co-review-coverage-area:hover .co-review-coverage-path { text-decoration: underline; }
+.co-review-coverage-area.done { cursor: default; color: var(--theia-descriptionForeground); }
+.co-review-coverage-area.done:hover .co-review-coverage-path { text-decoration: none; }
+.co-review-coverage-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--theia-code-font-family); }
+.co-review-coverage-count { color: var(--theia-descriptionForeground); font-size: 11px; }
+.co-review-progress { flex: 0 0 60px; height: 4px; border-radius: 2px; background: var(--theia-progressBar-background, #888); opacity: .9;
+    background: color-mix(in srgb, var(--theia-descriptionForeground) 25%, transparent); overflow: hidden; }
+.co-review-progress > span { display: block; height: 100%; background: var(--theia-progressBar-background); }
+.co-review-coverage-header .co-review-progress { margin-left: auto; }

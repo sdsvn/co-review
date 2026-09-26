@@ -1,6 +1,7 @@
 import { FileUri } from '@theia/core/lib/common/file-uri';
 import * as path from 'path';
 import { CodeLocation, DocAnchor, PatchAnchor, Review, ReviewThread } from '../common/review-model';
+import { DOCUMENT_NAMES } from '../common/patch';
 
 /**
  * The agent-facing shape of threads: short ids (`t<N>`), `target` (`doc` / `patch:<slug>`) and raw
@@ -18,10 +19,15 @@ export function findThread(review: Review, id: string): ReviewThread | undefined
     return review.threads.find(t => t.id === id || (m && t.number === Number(m[1])));
 }
 
-export function targetOf(thread: ReviewThread): string {
+/**
+ * Where a thread is: `doc` (the review directory's document), `doc:<path>` (another Markdown page of the
+ * directory, e.g. a concept page of an OKF bundle), `patch:<slug>`, or `code`.
+ */
+export function targetOf(thread: ReviewThread, dir?: string): string {
     const l = thread.location;
     if (l.kind === 'document') {
-        return 'doc';
+        const rel = dir && l.uri ? path.relative(dir, FileUri.fsPath(l.uri)).split(path.sep).join('/') : undefined;
+        return rel && !rel.startsWith('..') && !DOCUMENT_NAMES.includes(rel) ? `doc:${rel}` : 'doc';
     }
     if (l.kind === 'patch' && l.uri) {
         return `patch:${path.basename(FileUri.fsPath(l.uri)).replace(/\.(patch|diff)$/, '')}`;
@@ -64,7 +70,7 @@ export function commentOf(thread: ReviewThread, root: string, extra: Record<stri
     return {
         id: threadRef(thread),
         threadId: thread.id,
-        target: targetOf(thread),
+        target: targetOf(thread, root),
         kind: anchor.type,
         where: where(anchor),
         line: line(anchor),
@@ -94,9 +100,12 @@ export function locationFromAnchor(dir: string, docFile: string | undefined, tar
             anchor: { text: anchor.source ?? '' }
         };
     }
+    // `doc:<path>`: another page of the review directory; it must stay inside it.
+    const page = t.startsWith('doc:') ? path.resolve(dir, t.slice('doc:'.length)) : undefined;
+    const file = page && page.startsWith(path.resolve(dir) + path.sep) ? page : docFile;
     return {
         kind: 'document',
-        uri: docFile ? FileUri.create(docFile).toString() : undefined,
+        uri: file ? FileUri.create(file).toString() : undefined,
         docAnchor: anchor as DocAnchor,
         anchor: { text: anchor.exact ?? anchor.source ?? '' }
     };
@@ -125,7 +134,7 @@ export function toStateFile(review: Review, doc: { slug: string; title: string; 
         doc: { slug: doc?.slug ?? '', title: doc?.title ?? review.title, version: review.bundle?.docVersion ?? 1, markdown: doc?.markdown ?? '' },
         threads: review.threads.map(t => ({
             id: threadRef(t),
-            target: targetOf(t),
+            target: targetOf(t, root),
             anchor: anchorOf(t, root),
             status: t.status,
             severity: t.severity ?? 'medium',
