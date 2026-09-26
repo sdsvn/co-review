@@ -19,6 +19,8 @@ const MAX_FILE_BYTES = 256 * 1024;
 const MAX_CHILDREN = 12;
 /** A map younger than this is reused as is; older ones re-check file times and re-parse what changed. */
 const FRESH_MS = 30_000;
+/** Repository maps kept in memory; others are read back from disk when needed. */
+const MAX_MAPS = 3;
 /** Bumped when the stored map's shape changes; an older map is rebuilt. */
 const MAP_VERSION = 1;
 const SKIPPED_DIRS = new Set(['node_modules', 'vendor', 'dist', 'out', 'target', '__pycache__']);
@@ -58,7 +60,7 @@ export class RepoIndex {
     @inject(SyntaxServiceImpl) protected readonly syntax: SyntaxServiceImpl;
     @inject(ReviewStore) protected readonly store: ReviewStore;
 
-    /** root -> the latest build; builds of one repository run one after the other. */
+    /** root -> the latest build (the MAX_MAPS most recently used repositories); builds of one repository run one after the other. */
     protected readonly maps = new Map<string, Promise<RepoMap>>();
 
     /** The map of the repository at `root`, refreshed when older than a few seconds (or always, with `refresh`). */
@@ -66,7 +68,15 @@ export class RepoIndex {
         const previous = this.maps.get(root) ?? this.load(root);
         const next = previous.catch(() => undefined).then(map =>
             map && !refresh && Date.now() - map.builtAt < FRESH_MS ? map : this.build(root, map));
+        // Most recently used last; maps of repositories no longer in use are dropped (they are saved on disk).
+        this.maps.delete(root);
         this.maps.set(root, next);
+        for (const key of this.maps.keys()) {
+            if (this.maps.size <= MAX_MAPS) {
+                break;
+            }
+            this.maps.delete(key);
+        }
         return next;
     }
 

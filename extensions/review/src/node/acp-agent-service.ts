@@ -199,6 +199,7 @@ export class AcpAgentService {
         const previous = this.queues.get(threadId) ?? Promise.resolve();
         const next = previous.then(() => this.runTurn(reviewId, threadId)).catch(e => console.error('[co-review] agent turn failed', e));
         this.queues.set(threadId, next);
+        next.then(() => this.queues.get(threadId) === next && this.queues.delete(threadId));
         return next;
     }
 
@@ -334,6 +335,9 @@ export class AcpAgentService {
         const root = FileUri.fsPath(review.workspaceRoot);
         const child = spawn(config.command, config.args ?? [], { cwd: root, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
         const stderr: string[] = [];
+        // A pipe breaks when the agent exits mid-write; the exit handler reports it, the error must not crash the backend.
+        child.stdin!.on('error', () => undefined);
+        child.stdout!.on('error', () => undefined);
         child.stderr!.on('data', chunk => {
             stderr.push(chunk.toString());
             stderr.splice(0, Math.max(0, stderr.length - 50));

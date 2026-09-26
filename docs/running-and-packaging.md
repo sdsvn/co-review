@@ -140,7 +140,7 @@ way `gopls`, other language servers and ACP agents are found just as in a termin
 **Language servers.** Go to definition, find references and the like come from VS Code extensions. They are listed
 in `theiaPlugins` in the root `package.json` and downloaded into `plugins/` by `make plugins`.
 
-- Included: the built-ins (TypeScript/JavaScript, JSON, Markdown, PHP) and `golang.Go`, which needs `gopls`.
+- Included: the built-ins (TypeScript/JavaScript, JSON, PHP; Markdown renders in Co-Review's own view, VS Code's Markdown preview is excluded) and `golang.Go`, which needs `gopls`.
 - For other languages, add an [Open VSX](https://open-vsx.org) extension to that list.
 - Language servers only start in trusted workspaces.
 

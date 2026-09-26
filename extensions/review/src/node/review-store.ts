@@ -343,6 +343,8 @@ export class ReviewStore {
             return result;
         });
         this.queues.set(reviewId, next);
+        const forget = () => this.queues.get(reviewId) === next && this.queues.delete(reviewId);
+        next.then(forget, forget);
         return next;
     }
 

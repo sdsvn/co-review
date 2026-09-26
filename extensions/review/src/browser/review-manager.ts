@@ -94,6 +94,7 @@ export class ReviewManager {
         });
         this.client.onDidDeleteReview(({ reviewId }) => {
             this._reviews = this._reviews.filter(r => r.id !== reviewId);
+            this.presence.delete(reviewId);
             if (this._activeReviewId === reviewId) {
                 this.setActiveReview(this._reviews[0]?.id);
             }
@@ -164,6 +165,10 @@ export class ReviewManager {
     }
 
     setActiveReview(reviewId: string | undefined): void {
+        if (reviewId !== this._activeReviewId) {
+            // Anchor states belong to the threads on screen; the new review's views compute their own.
+            this.anchorStates.clear();
+        }
         this._activeReviewId = reviewId;
         this.storage.setData(ACTIVE_REVIEW_KEY, reviewId);
         this.onDidChangeEmitter.fire();

@@ -95,6 +95,8 @@ export class HtmlReviewWidget extends BaseWidget implements Navigatable {
     protected picking = false;
     protected selected: string | undefined;
     protected paintTimer: number | undefined;
+    /** Increments with each load, so a slower earlier load stops instead of replacing a newer page. */
+    protected loadSeq = 0;
 
     get uri(): URI {
         return new URI(this.options.uri);
@@ -184,12 +186,19 @@ export class HtmlReviewWidget extends BaseWidget implements Navigatable {
     }
 
     protected async load(): Promise<void> {
+        const seq = ++this.loadSeq;
+        const stale = () => seq !== this.loadSeq || this.isDisposed;
         await this.reviews.ready;
         let html: string;
         try {
             html = await this.inline((await this.fileService.read(this.uri)).value);
         } catch (e) {
-            this.side.textContent = `Cannot read ${this.uri.path.base}: ${e}`;
+            if (!stale()) {
+                this.sideRoot?.render(<div className='co-review-html-empty'>Cannot read {this.uri.path.base}: {String(e)}</div>);
+            }
+            return;
+        }
+        if (stale()) {
             return;
         }
         const scrollY = this.frame?.contentWindow && !this.scripts ? this.page?.defaultView?.scrollY ?? 0 : 0;
@@ -198,7 +207,7 @@ export class HtmlReviewWidget extends BaseWidget implements Navigatable {
         frame.className = 'co-review-html-frame';
         frame.setAttribute('sandbox', this.scripts ? 'allow-scripts allow-popups allow-forms allow-modals' : 'allow-same-origin allow-popups');
         frame.srcdoc = html;
-        frame.addEventListener('load', () => this.onPageLoad(scrollY), { once: true });
+        frame.addEventListener('load', () => !stale() && this.onPageLoad(scrollY), { once: true });
         if (this.frame) {
             this.frame.replaceWith(frame);
         } else {
@@ -363,7 +372,7 @@ export class HtmlReviewWidget extends BaseWidget implements Navigatable {
 
     protected schedulePaint(): void {
         window.clearTimeout(this.paintTimer);
-        this.paintTimer = window.setTimeout(() => this.paint(), 30);
+        this.paintTimer = window.setTimeout(() => !this.isDisposed && this.paint(), 30);
     }
 
     /** Marks each anchor in the page and lists the threads and drafts in page order next to it. */
@@ -465,6 +474,7 @@ export class HtmlReviewWidget extends BaseWidget implements Navigatable {
     }
 
     override dispose(): void {
+        window.clearTimeout(this.paintTimer);
         const root = this.sideRoot;
         this.sideRoot = undefined;
         setTimeout(() => root?.unmount());

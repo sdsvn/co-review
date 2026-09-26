@@ -79,6 +79,10 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
     /** L1: top steps only; L2 (default): their children too; L3: everything. */
     protected level = 2;
     protected paintTimer: number | undefined;
+    /** Increments with each load, so a slower earlier load stops instead of overwriting a newer one. */
+    protected loadSeq = 0;
+    /** Object URLs of the images of the current render, revoked on the next render. */
+    protected imageUrls: string[] = [];
 
     get uri(): URI {
         return new URI(this.options.uri);
@@ -146,14 +150,24 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
     }
 
     protected async load(): Promise<void> {
+        const seq = ++this.loadSeq;
+        const stale = () => seq !== this.loadSeq || this.isDisposed;
         // Restored widgets load before the reviews do; the OpenSpec section and threads need them.
         await this.reviews.ready;
+        let source: string;
         try {
-            this.source = (await this.fileService.read(this.uri)).value;
+            source = (await this.fileService.read(this.uri)).value;
         } catch (e) {
-            this.content.textContent = `Cannot read ${this.uri.path.base}: ${e}`;
+            if (!stale()) {
+                this.content.textContent = `Cannot read ${this.uri.path.base}: ${e}`;
+            }
             return;
         }
+        if (stale()) {
+            return;
+        }
+        this.source = source;
+        this.revokeImages();
         const rendered = render(this.source, this.uri.path.base);
         this.title.label = `Review: ${this.uri.path.base}`;
         this.blocks = rendered.blocks;
@@ -169,9 +183,21 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         this.renderMeta();
         this.setLevel(this.level);
         await this.renderOpenSpec();
+        if (stale()) {
+            return;
+        }
         await this.resolveImages();
-        await this.renderDiagrams();
-        this.paint();
+        if (stale()) {
+            return;
+        }
+        await this.renderDiagrams(stale);
+        if (!stale()) {
+            this.paint();
+        }
+    }
+
+    protected revokeImages(): void {
+        this.imageUrls.splice(0).forEach(url => URL.revokeObjectURL(url));
     }
 
     /** The review directory's OpenSpec change as cards: the proposal, then one card per capability spec. */
@@ -222,13 +248,14 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
                 const file = await this.fileService.readFile(this.uri.parent.resolve(src));
                 const type = src.endsWith('.svg') ? 'image/svg+xml' : '';
                 img.src = URL.createObjectURL(new Blob([file.value.buffer as ArrayBuffer], { type }));
+                this.imageUrls.push(img.src);
             } catch {
                 img.alt = `${img.alt || src} (not found)`;
             }
         }
     }
 
-    protected async renderDiagrams(): Promise<void> {
+    protected async renderDiagrams(stale: () => boolean): Promise<void> {
         if (!this.blocks.length) {
             return;
         }
@@ -247,6 +274,9 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             const body = document.createElement('div');
             body.className = 'co-review-dgm-body';
             host.append(head, body);
+            if (stale()) {
+                return;
+            }
             try {
                 const { svg } = await mermaid.render(`co-review-m-${block.id}-${Date.now()}`, block.code);
                 body.innerHTML = svg;
@@ -453,7 +483,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
 
     protected schedulePaint(): void {
         window.clearTimeout(this.paintTimer);
-        this.paintTimer = window.setTimeout(() => this.paint(), 30);
+        this.paintTimer = window.setTimeout(() => !this.isDisposed && this.paint(), 30);
     }
 
     /** Places threads and drafts after the element they anchor to; unresolved anchors go to the top as outdated. */
@@ -530,5 +560,13 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
     protected override onCloseRequest(msg: Message): void {
         super.onCloseRequest(msg);
         this.dispose();
+    }
+
+    override dispose(): void {
+        window.clearTimeout(this.paintTimer);
+        this.revokeImages();
+        const roots = this.roots.splice(0);
+        setTimeout(() => roots.forEach(r => r.unmount()));
+        super.dispose();
     }
 }

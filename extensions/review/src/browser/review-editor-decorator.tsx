@@ -275,6 +275,8 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
                 showPlus(line);
             }
         };
+        // The editor may close mid-drag.
+        toDispose.push({ dispose: () => window.removeEventListener('mousemove', onDrag, true) });
         toDispose.push(control.onMouseLeave(() => dragFrom === undefined && showPlus(-1)));
         toDispose.push(control.onMouseDown(e => {
             if (e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_DECORATIONS && e.target.element?.className.includes('co-review-add')

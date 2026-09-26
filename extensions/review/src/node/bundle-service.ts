@@ -56,6 +56,13 @@ export class BundleService {
         this.store.onDidChange(change => {
             if (change.kind === 'changed' && change.review.bundle) {
                 this.scheduleExport(change.review);
+            } else if (change.kind === 'deleted') {
+                // A review directory's review is its workspace root.
+                const dir = FileUri.fsPath(change.workspaceRoot);
+                this.watchers.get(dir)?.close();
+                this.watchers.delete(dir);
+                clearTimeout(this.exportTimers.get(change.reviewId));
+                this.exportTimers.delete(change.reviewId);
             }
         });
     }

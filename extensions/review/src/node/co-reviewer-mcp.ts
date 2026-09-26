@@ -355,6 +355,11 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                         severity: finding.severity as Severity | undefined, labels: finding.labels, verdict: finding.verdict, proposal: finding.proposal
                     }, agent);
                 } else if (finding.path) {
+                    const root = FileUri.fsPath(review.workspaceRoot);
+                    const file = path.resolve(root, finding.path);
+                    if (file !== root && !file.startsWith(root + path.sep)) {
+                        return fail(`${finding.path} is outside the repository (${root}).`);
+                    }
                     const location = finding.line
                         ? await this.locationFor(review, finding.path, finding.line, finding.endLine)
                         : await this.pathLocation(review, finding.path);

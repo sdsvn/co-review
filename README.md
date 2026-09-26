@@ -59,6 +59,8 @@ so navigation, search, Git and language servers are the real thing; everything u
   right code, enriched by a [Graphify](https://pypi.org/project/graphifyy/) graph when there is one.
 - **Design review**: rendered Markdown, Mermaid diagrams with per-node comments, and an L1 · L2 · L3 design tree
   whose structure is [declared and checked](docs/design-docs.md).
+- **Rendered pages**: HTML pages open rendered (sandboxed, scripts off unless you turn them on), with comments on
+  selected text, on an element (an image, a chart, a section) or on the page, for reviewing what people will see.
 - **Patches and knowledge bundles**: `.patch` / `.diff` files open as pull-request pages; OKF bundles open as
   commentable pages linked to the code.
 - **One verdict** — Approve, Request changes or Comment — and the agent gets every open comment in one batch.
@@ -149,8 +151,8 @@ panel lists them by file (**Open / Proposed / Resolved / All**), and **⋯** has
 
 - **Whole repository:** the panel's **Coverage** shows what you've viewed, overall and per area. **Overview** says
   where to start. `/co-review:audit` (or `/co-review-audit` in Pi and Oh My Pi) lets the agent go first.
-- **Designs:** `index.markdown` and `*.pseudocode.md` open rendered (any `.md`: **Open With → Review (rendered)**).
-  Comment on text, diagram nodes and edges, or design steps. See [Design documents](docs/design-docs.md).
+- **Designs and pages:** Markdown and HTML files open rendered (the toolbar opens the source; opening at a line
+  goes to the editor). Comment on text, diagram nodes and edges, design steps, or elements of an HTML page. See [Design documents](docs/design-docs.md).
 - **Phone:** **⋯ → Open mobile view**, or `http://<host>:<port>/m/` (local connections only;
   [over Tailscale](docs/running-and-packaging.md#phone-view)).
 

@@ -107,8 +107,11 @@ export class SyntaxServiceImpl implements SyntaxService {
         if (!grammar) {
             return undefined;
         }
-        const cached = this.trees.find(t => t.grammar === grammar && t.text === text);
-        if (cached) {
+        const index = this.trees.findIndex(t => t.grammar === grammar && t.text === text);
+        if (index >= 0) {
+            // Most recently used first: the tree a caller holds is the last to be evicted (and deleted).
+            const [cached] = this.trees.splice(index, 1);
+            this.trees.unshift(cached);
             return cached;
         }
         const ts = await this.load();
