@@ -10,18 +10,22 @@ const docs = (path: string) => `${base}/docs/${path}/`;
 const github = 'https://github.com/sdsvn/co-review';
 const installLine = `curl -fsSL https://sdsvn.github.io${base}/install.sh | bash`;
 
-const words = ['your coding agent', 'Claude Code', 'Pi', 'Codex', 'Cursor', 'Copilot', 'Gemini CLI', 'OpenCode'];
+const words = ['your coding agent', 'Claude Code', 'Pi', 'Oh My Pi', 'Codex', 'Cursor', 'Copilot', 'Gemini CLI', 'OpenCode'];
 const question = "repo.Save doesn't take tx. If the charge below fails, does the deferred rollback undo the saved order?";
 const guide = docs('guides/connect-your-agent');
-const ask = '"Review this change with me in Co-Review."';
+const ask = '"Review this entire repository with me in Co-Review."';
 const mcpNote = (name: string) => `Add the co-review mcp server to ${name}'s MCP config. Adding the skills is optional.`;
 const agents: { name: string; installNote?: string; install?: string; use: { cmd: string; desc: string }[]; guide: string }[] = [
 	{ name: 'Claude Code', installNote: 'In Claude Code:', install: '/plugin marketplace add sdsvn/co-review\n/plugin install co-review@co-review', use: [
-		{ cmd: '/co-review:review', desc: 'When a change is ready: it opens the review and stays in it until you submit. Add “the whole repository” to review all of it.' },
+		{ cmd: '/co-review:audit [focus]', desc: 'Reviews the whole repository with you: splits it into areas, proposes findings in each, then answers your questions.' },
+		{ cmd: '/co-review:review', desc: 'When a change is ready: it opens the review and stays in it until you submit.' },
 		{ cmd: '/co-review:design <task>', desc: 'To design first: it writes a design doc, you review it, it builds what you approved.' }], guide: docs('start/claude-code') },
-	{ name: 'Pi', installNote: 'Pi has a native package. See the setup guide.', use: [
-		{ cmd: '/co-review', desc: 'Opens a review; your questions arrive in the session as you ask them.' },
-		{ cmd: '/co-review-design <task>', desc: 'To design first.' }], guide: `${guide}#pi` },
+	{ name: 'Pi', installNote: 'Pi has a native package that ships with Co-Review:', install: 'co-review setup pi', use: [
+		{ cmd: '/co-review-audit [focus]', desc: 'Reviews the whole repository with you, area by area.' },
+		{ cmd: '/co-review', desc: 'Opens a review; your questions arrive in the session as you ask them.' }], guide: `${guide}#pi-and-oh-my-pi` },
+	{ name: 'Oh My Pi', installNote: 'Oh My Pi has a native package that ships with Co-Review:', install: 'co-review setup omp', use: [
+		{ cmd: '/co-review-audit [focus]', desc: 'Reviews the whole repository with you, area by area.' },
+		{ cmd: '/co-review', desc: 'Only the main session listens; spawn the co-reviewer task agent to keep answering while you work.' }], guide: `${guide}#pi-and-oh-my-pi` },
 	{ name: 'Codex', use: [{ cmd: ask, desc: 'Codex opens the review, answers your comments and waits for your verdict.' }], guide: `${guide}#codex` },
 	{ name: 'Cursor', use: [{ cmd: ask, desc: 'In Agent mode, Cursor opens the review and answers in the threads.' }], guide: `${guide}#cursor` },
 	{ name: 'Copilot', use: [{ cmd: ask, desc: 'In VS Code agent mode.' }], guide: `${guide}#vs-code-copilot-agent-mode` },
@@ -29,12 +33,17 @@ const agents: { name: string; installNote?: string; install?: string; use: { cmd
 	{ name: 'OpenCode', use: [{ cmd: ask, desc: 'OpenCode opens the review and answers your comments.' }], guide: `${guide}#opencode` }
 ];
 const slug = (name: string) => name.toLowerCase().replace(/\W+/g, '-');
-const worksWith = ['Claude Code', 'Pi', 'Codex', 'Cursor', 'Copilot', 'Gemini CLI', 'OpenCode'];
+const worksWith = ['Claude Code', 'Pi', 'Oh My Pi', 'Codex', 'Cursor', 'Copilot', 'Gemini CLI', 'OpenCode'];
+const story = [
+	['01', 'It starts as your code', 'You know where everything lives and why, because you wrote it or read every line.'],
+	['02', 'Then it drifts', 'Hundreds of agent changes later, every diff looked fine. The whole? It works, but it no longer feels like yours.'],
+	['03', 'So you review it together', 'Once in a while, open the entire repository in Co-Review and read it with the agent that built it. Ask anything; it answers from the code.']
+];
 const steps = [
-	['01', 'Your agent opens its change', 'It hands you the diff, the design doc or the whole repository, and flags what deserves a closer look as proposed findings.'],
-	['02', 'You comment where you read', 'On a line, a function, a design step or a diagram node. Select a few lines and ask; the question lands in a thread under the code.'],
-	['03', 'It answers in the thread', 'From its own context: it knows what it built and why. Answers link straight to the code they talk about.'],
-	['04', 'You decide', 'Approve, request changes or comment. The agent gets every open thread in one batch and comes back for the next round.']
+	['01', 'Start from the overview', 'An overview page shows where to start, the areas of the code and how they connect. Let the agent go first with proposed findings, grouped by area.'],
+	['02', 'Read, and ask where you read', 'Comment on a line, a function, a file or a folder. Select a few lines and ask why; the question lands in a thread under the code.'],
+	['03', 'It answers from the code', 'A map of every file and what it defines takes the agent straight to the right place. Answers are short, plain and link to the code.'],
+	['04', 'Know what you have covered', 'Mark files as viewed and watch coverage per area. A file changed since you read it counts as unread again.']
 ];
 const kinds = [
 	['Code', 'Lines, ranges, functions, files or the whole repo. Comments follow the code through edits.'],
@@ -43,7 +52,8 @@ const kinds = [
 	['Patches', 'Pull-request pages with line comments and suggested edits.']
 ];
 const plugin = [
-	{ term: '/co-review:review', code: true, body: 'When a change is ready, or for the whole repository: Claude opens it for review and stays in it until you submit.' },
+	{ term: '/co-review:audit', code: true, body: 'The whole repository: Claude splits it into areas, proposes findings for you to accept or dismiss, then answers your questions.' },
+	{ term: '/co-review:review', code: true, body: 'When a change is ready: Claude opens it for review and stays in it until you submit.' },
 	{ term: '/co-review:design', code: true, body: 'Before there is code: Claude writes a design doc, you review it, it builds what you approved.' },
 	{ term: 'Live comments', body: 'With channels on, your question reaches the running session the moment you ask it.' },
 	{ term: 'co-reviewer subagent', body: 'Keeps answering your review in the background while the main conversation works.' },
@@ -56,12 +66,12 @@ const plugin = [
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Co-Review: review what your coding agent built</title>
-		<meta name="description" content="Co-Review opens your coding agent's work as a review: Claude Code, Pi, Codex, Cursor and more. Comment on code, designs and diagrams; the agent answers in the thread and waits for your verdict." />
+		<title>Co-Review: know your codebase again</title>
+		<meta name="description" content="You built it with a coding agent, and now it doesn't feel like yours. Co-Review opens the entire repository as a review so you can read it with the agent that wrote it, ask why, and know your code again. Claude Code, Pi, Oh My Pi, Codex, Cursor and more." />
 		<link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
 		<link rel="canonical" href={new URL(`${base}/`, Astro.site)} />
-		<meta property="og:title" content="Co-Review: review what your coding agent built" />
-		<meta property="og:description" content="Comment on code, designs and diagrams. Your agent answers in the thread and waits for your verdict." />
+		<meta property="og:title" content="Co-Review: know your codebase again" />
+		<meta property="og:description" content="Review your entire repository with the agent that built it. Ask why, in threads under the code." />
 	</head>
 	<body>
 		<div class="page">
@@ -79,9 +89,9 @@ const plugin = [
 
 			<section class="wrap hero">
 				<div class="pitch">
-					<div class="pill"><span class="dot"></span>Code review for coding agents</div>
-					<h1>Review what <span class="word" id="agent-word">{words[0]}</span> built. Ask it why.</h1>
-					<p class="lede">Co-Review opens your agent's work as a review: a change, a design doc or the entire repository. You comment on code, designs and diagrams like a pull request, and the agent answers in the thread, from the context of what it just did.</p>
+					<div class="pill"><span class="dot"></span>Whole-repository review with your agent</div>
+					<h1>You built it with <span class="word" id="agent-word">{words[0]}</span>. Make it yours again.</h1>
+					<p class="lede">Months of agent-written changes later, the code works, but you no longer know it. Co-Review opens the entire repository as a review: read it like a pull request, ask the agent why anything is the way it is, and come away knowing your codebase again.</p>
 					<div class="install-block">
 						<div class="cmdbar">
 							<span class="prompt">$</span>
@@ -128,10 +138,22 @@ const plugin = [
 				</div>
 			</div>
 
+			<section id="why" class="wrap how">
+				<div class="head">
+					<span class="label accent">Why Co-Review exists</span>
+					<h2>Code you shipped, but no longer know.</h2>
+					<p>Building with an agent is fast. Change by change, one diff at a time, the codebase grows past what you hold in your head. Reviewing the whole thing together, once in a while, is how you get it back.</p>
+				</div>
+				<ol class="steps">
+					{story.map(([n, title, body], i) =>
+						<li><span class={i === 2 ? 'num done' : 'num'}>{n}</span><h3>{title}</h3><p>{body}</p></li>)}
+				</ol>
+			</section>
+
 			<section id="how" class="wrap how">
 				<div class="head">
-					<span class="label accent">How a review goes</span>
-					<h2>Four steps, same as a pull request.</h2>
+					<span class="label accent">How a repository review goes</span>
+					<h2>Read the whole codebase with the agent that wrote it.</h2>
 				</div>
 				<ol class="steps">
 					{steps.map(([n, title, body], i) =>
@@ -142,9 +164,9 @@ const plugin = [
 			<section class="wrap block">
 				<div class="design-card">
 					<div class="design-copy">
-						<span class="label accent">Design before code</span>
-						<h2 class="h2-sm">Review the plan before the code exists.</h2>
-						<p>Claude writes the plan as a design tree: what happens, then how, then the edge cases. You comment on the step that worries you, it answers or revises, and it only builds what you approved.</p>
+						<span class="label accent">Changes and designs too</span>
+						<h2 class="h2-sm">Review each change, or the plan before the code.</h2>
+						<p>Between repository reviews, your agent hands over a change, a branch or a commit when it's done. Or it writes the plan first, as a design tree: what happens, then how, then the edge cases. You comment on the step that worries you, it answers or revises, and it only builds what you approved.</p>
 						<div class="kinds">
 							{kinds.map(([title, body]) => <div><span class="kind-title">{title}</span><span>{body}</span></div>)}
 						</div>
@@ -177,7 +199,7 @@ const plugin = [
 				<div class="head wide">
 					<span class="label accent">Set up your agent</span>
 					<h2>One MCP server for every agent.</h2>
-					<p>Every agent reviews through <code>co-review mcp</code>. Claude Code and Pi get native packages; the others add the server to their config and, optionally, the skills.</p>
+					<p>Every agent reviews through <code>co-review mcp</code>. Claude Code, Pi and Oh My Pi get native packages; the others add the server to their config and, optionally, the skills.</p>
 				</div>
 				<div class="tabs" role="tablist" aria-label="Agent">
 					{agents.map((a, i) =>
@@ -203,7 +225,7 @@ const plugin = [
 					<div class="claude-copy">
 						<span class="label accent">Made for Claude Code</span>
 						<h2 class="h2-sm">One plugin: review tools, workflows and slash commands.</h2>
-						<p>Also works with Pi, Codex, Cursor, VS Code, Zed, Gemini CLI and any other MCP agent. <a href={docs('guides/connect-your-agent')}>Connect your agent →</a></p>
+						<p>Also works with Pi, Oh My Pi, Codex, Cursor, VS Code, Zed, Gemini CLI and any other MCP agent. <a href={docs('guides/connect-your-agent')}>Connect your agent →</a></p>
 					</div>
 					<div class="features">
 						{plugin.map(p => <div>{p.code ? <code>{p.term}</code> : <span class="kind-title">{p.term}</span>}<span>{p.body}</span></div>)}

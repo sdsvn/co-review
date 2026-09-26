@@ -161,6 +161,9 @@ rebuild:browser|electron`, with the originals cached in `.browser_modules/`). So
 Agents launched over ACP inherit the environment of the Co-Review process. So start Co-Review from a shell where
 the agent is logged in and configured.
 
+Co-Review ships **Co-Review Dark** and **Co-Review Light** themes and follows the OS setting. Switch with
+**Preferences: Color Theme**.
+
 ## Phone view
 
 `/m/` on the running app (browser app or desktop backend) is a small page for reviewing away from your desk. You

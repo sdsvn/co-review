@@ -1,24 +1,22 @@
 ---
 title: What is Co-Review?
-description: A review tool with IDE features, built for reviewing what Claude Code builds.
+description: Review your entire repository with the coding agent that built it, and know your codebase again.
 sidebar:
   order: 1
 ---
 
-Co-Review is a review tool with IDE features, not an IDE.
-When Claude Code finishes a change, it opens the change in Co-Review and you review it the way you would a pull request.
+Building with a coding agent is fast. Change by change, each diff looks fine, and months later the codebase works but no longer feels like yours: you don't know where things live or why they're built the way they are.
 
-You are not limited to diffs. You can review:
+Co-Review is for getting it back. Once in a while, open the **entire repository** as a review and read it with the agent that built it, the way you would read a pull request:
 
-- the entire repository
-- a folder
-- a branch against its base
-- a single commit
+- an overview shows where to start and how the areas of the code connect;
+- the agent can take a first pass, with proposed findings grouped by area;
+- you comment on a line, a function, a file or a folder, and ask why, and the agent answers in the thread, from the code;
+- coverage tracks which files you've read, per area.
 
-You comment on lines, functions, designs and diagrams, and ask about anything you are reading.
-The agent that did the work answers in the same thread, with links into the code, and waits for your verdict before it changes anything.
+The same review works for everything in between: a single change, a branch against its base, a commit, or a design before any code exists. The agent answers in the thread, with links into the code, and waits for your verdict before it changes anything.
 
-Co-Review is built on [Eclipse Theia](https://theia-ide.org), so code navigation, search, Git and language servers are the real thing.
+Co-Review is a review tool with IDE features, not an IDE. It is built on [Eclipse Theia](https://theia-ide.org), so code navigation, search, Git and language servers are the real thing.
 Everything unrelated to reviewing is removed.
 
 ## What you can review

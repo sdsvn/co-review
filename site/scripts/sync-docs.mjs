@@ -20,7 +20,7 @@ const pages = {
 	'llms.txt': { slug: 'reference/agent-contract', order: 1, title: 'Agent contract (llms.txt)' },
 	'docs/architecture.md': { slug: 'reference/architecture', order: 2, title: 'Architecture' }
 };
-const readmeAnchors = { install: 'start/install', 'made-for-claude-code': 'start/claude-code' };
+const readmeAnchors = { install: 'start/install', 'claude-code': 'start/claude-code' };
 
 function link(target, from) {
 	if (/^(https?:|mailto:|#)/.test(target)) {
