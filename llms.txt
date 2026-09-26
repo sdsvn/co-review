@@ -43,9 +43,11 @@ Tools (all ids are strings; lines are 1-based). Thread ids are accepted as short
 
 ## Design documents
 
-Full specification: `docs/design-docs.md`.
+Method, examples and full specification: `docs/design-docs.md`.
 
 Declare the structure with frontmatter; Co-Review then renders the design tree and checks the document against the contract, returning departures in `format.warnings` from `open_review` and in `doc.format` from `await_review` / `get_review` (also shown as a banner to the reviewer). Undeclared documents are rendered leniently (`*.pseudocode.md` or a `## Design` section → tree; otherwise plain Markdown); nothing is ever dropped — sections outside the contract render as Markdown.
+
+A design document is the smallest document that lets the reviewer understand, challenge and approve the change. Investigate the code first, reuse existing patterns, don't invent requirements (ask under Open Questions), and choose the simplest design that works. Think about compatibility, security, failure handling, migration and so on, but write down only what materially affects the design, where it belongs.
 
 ~~~markdown
 ---
@@ -55,26 +57,30 @@ title: Retry outbound webhooks      # optional; else the `# ` heading
 # Retry outbound webhooks
 
 ## Context
-Why, constraints, links. Markdown and Mermaid.
+Why this change, what happens today. Only what the reviewer needs.
 
 ## Design
-- L1 step: what happens, in business language — reasoning after an em dash
-  - L2: how — `⚠` risk
-    - L3: edge case / error path — `?` open question
-- Another L1 step — `✎` new `DeliveryLog` table
+- L1 what: a behaviour that matters from outside (not a technology)
+  - L2 how: components, data flow, persistence, the existing pattern reused
+    - L3 what can go wrong: a failure mode or edge case that matters
+- Another L1 step — optional short reason after an em dash
 
-## Diagrams
+## Alternatives
+Optional: a real choice the reviewer may challenge, its trade-offs, and why this one.
+
+## Behaviour
+Optional: runtime scenarios (failure, retry, crash, race), prose or Mermaid.
 ```mermaid
 %% id: flow
-flowchart LR
-  a[Request] --> b{Allowed?}
+sequenceDiagram
+  api->>db: persist delivery
 ```
 
 ## Open Questions
-- Question — `?` who decides
+- Optional: a genuinely unresolved decision that needs the reviewer
 ~~~
 
-Rules: sections in this order (Context, Design, Diagrams, Open Questions; only Design is required). `## Design` is ONE nested `- ` list, 2 spaces per level (not `*`, `+` or `1.`). One idea per step. Comments anchor to a step's text (backticks/asterisks stripped, whitespace collapsed, first 80 chars): keep wording stable across revisions and add or move steps instead of rewording. Give Mermaid blocks `%% id:` and nodes explicit ids.
+Rules: only Design is required; include the other sections only when they help, in this order (Context, Design, Alternatives, Behaviour, Diagrams, Open Questions; `## Diagrams` is accepted for Mermaid). Size follows complexity: about 10–30 lines for a small change, 30–80 medium, 80–150 large, more only when justified. `## Design` is ONE nested `- ` list, 2 spaces per level (not `*`, `+` or `1.`). The document is read by a person: plain language; name code once, at the top level (entry point, module, new table), then describe it in words; no line numbers or `file:line` links; no pasted code (Mermaid is fine). One concrete decision per step, a line or two long; optional markers in backticks: `?` open question, `⚠` risk, `✎` new name. Comments anchor to a step's text (backticks/asterisks stripped, whitespace collapsed, first 80 chars): keep commented steps' wording stable across revisions and add or move steps instead of rewording. Give Mermaid blocks `%% id:` and nodes explicit ids. `format.warnings` also reports line references, non-Mermaid code blocks, steps longer than about two lines and code names repeated in 3+ steps: fix every warning and open the document again before sharing the URL. Implement only after approval; if the implementation must depart from the approved design, update the design and get it approved again.
 
 ## Review directories
 

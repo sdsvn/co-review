@@ -12,13 +12,23 @@
 
 export const DESIGN_FORMAT = 'design';
 
-/** Sections of the contract, in their canonical order; `tree` sections render as step trees. */
-export const DESIGN_SECTIONS: { key: string; heading: string; tree: boolean }[] = [
+/**
+ * Sections of the contract, in their canonical order; `tree` sections render as step trees. Only Design is
+ * required. `aliases` are other lower-cased headings accepted for the same section.
+ */
+export const DESIGN_SECTIONS: { key: string; heading: string; tree: boolean; aliases?: string[] }[] = [
     { key: 'context', heading: 'Context', tree: false },
     { key: 'design', heading: 'Design', tree: true },
+    { key: 'alternatives', heading: 'Alternatives', tree: false },
+    { key: 'behaviour', heading: 'Behaviour', tree: false, aliases: ['behavior'] },
     { key: 'diagrams', heading: 'Diagrams', tree: false },
     { key: 'open questions', heading: 'Open Questions', tree: true }
 ];
+
+/** Index of the contract section a heading key names (its key or an alias), or -1. */
+export function designSectionIndex(key: string): number {
+    return DESIGN_SECTIONS.findIndex(s => s.key === key || s.aliases?.includes(key));
+}
 
 export interface Section {
     heading: string;
@@ -123,7 +133,6 @@ export function documentFormat(markdown: string, fileName: string): DocumentForm
         if (!/^#\s+\S/m.test(body) && !data.title) {
             warnings.push('No `# ` title (or `title:` in the frontmatter).');
         }
-        const known = new Set(DESIGN_SECTIONS.map(s => s.key));
         const design = sections.find(s => s.key === 'design');
         if (!design) {
             warnings.push('No `## Design` section.');
@@ -134,14 +143,57 @@ export function documentFormat(markdown: string, fileName: string): DocumentForm
         } else if (/^\s*([*+]|\d+[.)])\s/m.test(design.body)) {
             warnings.push('`## Design` mixes `- ` with `*`, `+` or numbered items; only `- ` items become steps.');
         }
-        const extra = sections.filter(s => !known.has(s.key)).map(s => `\`## ${s.heading}\``);
+        const extra = sections.filter(s => designSectionIndex(s.key) < 0).map(s => `\`## ${s.heading}\``);
         if (extra.length) {
             warnings.push(`Sections outside the contract (shown as plain Markdown): ${extra.join(', ')}.`);
         }
-        const order = sections.map(s => DESIGN_SECTIONS.findIndex(d => d.key === s.key)).filter(i => i >= 0);
+        const order = sections.map(s => designSectionIndex(s.key)).filter(i => i >= 0);
         if (order.some((v, i) => i > 0 && v < order[i - 1])) {
-            warnings.push('Sections are out of order (Context, Design, Diagrams, Open Questions).');
+            warnings.push(`Sections are out of order (${DESIGN_SECTIONS.map(s => s.heading).join(', ')}).`);
         }
+        warnings.push(...readabilityWarnings(sections));
     }
     return { mode: declared || (detected && declaredValue === undefined) ? 'design' : 'plain', declared, warnings };
+}
+
+/** Steps longer than this (about two lines) usually hold more than one decision. */
+const LONG_STEP = 220;
+/** A code name in this many steps or more is repeated rather than introduced once. */
+const REPEATED_NAME = 3;
+
+/**
+ * A design document is read by a person, not a compiler: code details that belong in the implementation are
+ * reported, so the agent can fix them before the reviewer reads the document.
+ */
+function readabilityWarnings(sections: Section[]): string[] {
+    const warnings: string[] = [];
+    const prose = sections.map(s => s.body.replace(/^\s*(```|~~~)[\s\S]*?^\s*\1\s*$/gm, '')).join('\n').replace(/\bhttps?:\/\/\S+/g, '');
+    const lineRefs = prose.match(/[\w./-]+\.[a-z]{1,5}:\d+|#L\d+/gi) ?? [];
+    if (lineRefs.length) {
+        warnings.push(`Line references (${lineRefs.slice(0, 3).map(r => `\`${r}\``).join(', ')}): a person reads this; describe the code in words and name only the top-level module or function.`);
+    }
+    const code = sections.flatMap(s => [...s.body.matchAll(/^\s*(?:```|~~~)\s*(\w*)/gm)].filter((_m, i) => i % 2 === 0).map(m => m[1]));
+    if (code.some(lang => lang.toLowerCase() !== 'mermaid')) {
+        warnings.push('Code blocks other than Mermaid: describe the behaviour in words; the code belongs in the implementation.');
+    }
+    const design = sections.find(s => s.key === 'design');
+    const all: Step[] = [];
+    const walk = (list: Step[]): void => list.forEach(step => {
+        all.push(step);
+        walk(step.children);
+    });
+    walk(steps(design?.body));
+    const long = all.filter(s => s.text.length > LONG_STEP).length;
+    if (long) {
+        warnings.push(`${long} step${long > 1 ? 's are' : ' is'} longer than two lines: keep one decision per step, and move details into child steps.`);
+    }
+    const uses = new Map<string, number>();
+    for (const step of all) {
+        new Set([...step.text.matchAll(/`([^`?⚠✎]+)`/g)].map(m => m[1])).forEach(name => uses.set(name, (uses.get(name) ?? 0) + 1));
+    }
+    const repeated = [...uses].filter(([, n]) => n >= REPEATED_NAME).map(([name, n]) => `\`${name}\` (${n} steps)`);
+    if (repeated.length) {
+        warnings.push(`Code names repeated across steps: ${repeated.slice(0, 3).join(', ')}. Name each once where it is introduced, then refer to it in words.`);
+    }
+    return warnings;
 }

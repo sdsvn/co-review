@@ -1,5 +1,5 @@
 import * as markdownit from '@theia/core/shared/markdown-it';
-import { DESIGN_SECTIONS, DocumentFormat, documentFormat, sectionsOf, splitFrontmatter, Step, steps } from '../../common/design-format';
+import { DESIGN_SECTIONS, designSectionIndex, DocumentFormat, documentFormat, sectionsOf, splitFrontmatter, Step, steps } from '../../common/design-format';
 
 /**
  * Markdown / pseudocode rendering for document review. Block ids, node ids and step ids follow
@@ -111,7 +111,7 @@ export function render(markdown: string, fileName: string): RenderedDocument {
     let html = `<h1>${esc(docTitle)}</h1>` + prose(preamble);
     // Every section renders, in document order: the contract's tree sections as step trees, the rest as Markdown.
     for (const section of sections) {
-        const known = DESIGN_SECTIONS.find(s => s.key === section.key);
+        const known = DESIGN_SECTIONS[designSectionIndex(section.key)];
         const tree = known?.tree && steps(section.body).length > 0;
         if (tree && section.key === 'design') {
             html += `<section class="co-review-psec co-review-design"><h2>${esc(section.heading)} <span class="co-review-altitude">`
