@@ -191,6 +191,14 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             isEnabled: () => !!this.reviews.activeReview,
             execute: () => this.deleteReview()
         });
+        registry.registerCommand(ReviewCommands.ARCHIVE_REVIEW, {
+            isEnabled: () => !!this.reviews.activeReview,
+            execute: () => this.archiveReview()
+        });
+        registry.registerCommand(ReviewCommands.SHOW_ARCHIVED, {
+            isEnabled: () => this.reviews.archivedReviews.length > 0,
+            execute: () => this.showArchived()
+        });
         registry.registerCommand(ReviewCommands.COMMENT_SELECTION, {
             isEnabled: () => !!this.currentEditor(),
             execute: () => this.commentOnEditor(false)
@@ -448,6 +456,8 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             { label: '$(plug) Add Co-Review to an agent harness (MCP)…', id: ReviewCommands.SETUP_HARNESS.id },
             { label: '$(book) Install agent skills…', id: ReviewCommands.INSTALL_SKILLS.id },
             { label: '$(edit) Rename review…', id: ReviewCommands.RENAME_REVIEW.id },
+            { label: '$(archive) Archive review', id: ReviewCommands.ARCHIVE_REVIEW.id },
+            ...this.reviews.archivedReviews.length ? [{ label: '$(inbox) Show archived reviews…', id: ReviewCommands.SHOW_ARCHIVED.id }] : [],
             { label: '$(trash) Delete review…', id: ReviewCommands.DELETE_REVIEW.id }
         ];
         const picked = await this.quickInput.pick(actions, { placeHolder: review.title });
@@ -646,6 +656,30 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         }).open();
         if (confirmed) {
             await this.reviews.deleteReview(review.id);
+        }
+    }
+
+    protected async archiveReview(): Promise<void> {
+        const review = this.reviews.activeReview;
+        if (review) {
+            await this.reviews.archiveReview(review.id, true);
+            this.messages.info(`Archived "${review.title}". Reopen it from ⋯ → Show archived reviews.`);
+        }
+    }
+
+    protected async showArchived(): Promise<void> {
+        const archived = this.reviews.archivedReviews;
+        if (!archived.length) {
+            this.messages.info('No archived reviews.');
+            return;
+        }
+        const picked = await this.quickInput.pick(archived.map(r => ({
+            id: r.id,
+            label: r.title,
+            detail: `${r.threads.length} thread${r.threads.length === 1 ? '' : 's'} · archived ${new Date(r.archivedAt ?? 0).toLocaleDateString()}`
+        })), { placeHolder: 'Reopen an archived review' });
+        if (picked) {
+            await this.reviews.archiveReview(picked.id, false);
         }
     }
 }

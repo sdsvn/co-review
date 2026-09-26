@@ -70,6 +70,8 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     createReview(params: CreateReviewParams): Promise<Review>;
     renameReview(reviewId: string, title: string): Promise<Review>;
     deleteReview(reviewId: string): Promise<void>;
+    /** Archive (or unarchive) a review: hidden from the active list, kept on disk. */
+    archiveReview(reviewId: string, archived: boolean): Promise<Review>;
 
     createThread(reviewId: string, location: CodeLocation, body: string, author: Participant, options?: ThreadOptions): Promise<ReviewThread>;
     addMessage(reviewId: string, threadId: string, body: string, author: Participant): Promise<ReviewThread>;

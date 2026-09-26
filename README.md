@@ -24,8 +24,13 @@ the way you'd read a pull request. Comment on a line, a function, a file or a fo
 the thread, from the code. An overview shows where to start, the agent can take a first pass with findings grouped by
 area, and coverage tracks what you've read.
 
-The same review works for everything in between: a single change, a branch, a commit, or a design before any code
-exists. Co-Review is a review tool with IDE features, not an IDE. It's built on [Eclipse Theia](https://theia-ide.org),
+But whole-repository review is only one of three jobs Co-Review does:
+
+- **A whole repository** — read the entire codebase with the agent (as above), to get it back in your head or to check your own work.
+- **A change or pull request** — a single change, a branch against its base, a commit, or a `.patch` / `.diff` file opened as a pull-request page, with line comments, suggested edits and one verdict.
+- **A design, before the code** — review the plan, not the source: a design written as an L1 · L2 · L3 tree with Mermaid diagrams, revised from your comments before anything is built.
+
+Co-Review is a review tool with IDE features, not an IDE. It's built on [Eclipse Theia](https://theia-ide.org),
 so navigation, search, Git and language servers are the real thing; everything unrelated to reviewing is removed.
 
 ```

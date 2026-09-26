@@ -25,7 +25,7 @@ const agents: { name: string; installNote?: string; install?: string; use: { cmd
 		{ cmd: '/co-review', desc: 'Opens a review; your questions arrive in the session as you ask them.' }], guide: `${guide}#pi-and-oh-my-pi` },
 	{ name: 'Oh My Pi', installNote: 'Oh My Pi has a native package that ships with Co-Review:', install: 'co-review setup omp', use: [
 		{ cmd: '/co-review-audit [focus]', desc: 'Reviews the whole repository with you, area by area.' },
-		{ cmd: '/co-review', desc: 'Only the main session listens; spawn the co-reviewer task agent to keep answering while you work.' }], guide: `${guide}#pi-and-oh-my-pi` },
+		{ cmd: '/co-review', desc: 'Only the main session listens; spawn a task subagent to keep answering while you work.' }], guide: `${guide}#pi-and-oh-my-pi` },
 	{ name: 'Codex', use: [{ cmd: ask, desc: 'Codex opens the review, answers your comments and waits for your verdict.' }], guide: `${guide}#codex` },
 	{ name: 'Cursor', use: [{ cmd: ask, desc: 'In Agent mode, Cursor opens the review and answers in the threads.' }], guide: `${guide}#cursor` },
 	{ name: 'Copilot', use: [{ cmd: ask, desc: 'In VS Code agent mode.' }], guide: `${guide}#vs-code-copilot-agent-mode` },
@@ -44,6 +44,11 @@ const steps = [
 	['02', 'Read, and ask where you read', 'Comment on a line, a function, a file or a folder. Select a few lines and ask why; the question lands in a thread under the code.'],
 	['03', 'It answers from the code', 'A map of every file and what it defines takes the agent straight to the right place. Answers are short, plain and link to the code.'],
 	['04', 'Know what you have covered', 'Mark files as viewed and watch coverage per area. A file changed since you read it counts as unread again.']
+];
+const uses = [
+	['Repository', 'A whole repository', 'Open the entire codebase as one review, to get it back in your head or to check your own work. The overview shows where to start, the agent takes a first pass with findings grouped by area, and coverage tracks what you have read.', 'Review a repository →', docs('start/using') + '#review-a-whole-repository'],
+	['Change', 'A change or pull request', 'A single change, a branch against its base, a commit, or a .patch / .diff file opened as a pull-request page — with line comments, suggested edits and one verdict. The review you would do on a PR, wherever the change lives.', 'Review a change →', docs('start/using') + '#review-a-change-or-pull-request'],
+	['Design', 'A design, before the code', 'Review the plan, not the source: a design written as an L1 · L2 · L3 tree with Mermaid diagrams. Comment on the step or node that worries you; the agent revises and only builds what you approved.', 'Design before code →', docs('guides/design-docs')]
 ];
 const kinds = [
 	['Code', 'Lines, ranges, functions, files or the whole repo. Comments follow the code through edits.'],
@@ -89,7 +94,7 @@ const plugin = [
 
 			<section class="wrap hero">
 				<div class="pitch">
-					<div class="pill"><span class="dot"></span>Whole-repository review with your agent</div>
+					<div class="pill"><span class="dot"></span>Review code and designs with your agent</div>
 					<h1>You built it with <span class="word" id="agent-word">{words[0]}</span>. Make it yours again.</h1>
 					<p class="lede">Months of agent-written changes later, the code works, but you no longer know it. Co-Review opens the entire repository as a review: read it like a pull request, ask the agent why anything is the way it is, and come away knowing your codebase again.</p>
 					<div class="install-block">
@@ -137,6 +142,18 @@ const plugin = [
 					<span>and any MCP agent</span>
 				</div>
 			</div>
+
+			<section id="ways" class="wrap how">
+				<div class="head wide">
+					<span class="label accent">Three ways to review</span>
+					<h2>A repository, a change, or the design before it.</h2>
+					<p>The same review tool, whichever you reach for: read a whole codebase, review a single change the way you'd review a pull request, or review the plan before any code exists.</p>
+				</div>
+				<ol class="steps">
+					{uses.map(([tag, title, body, linkText, href]) =>
+						<li><span class="num">{tag}</span><h3>{title}</h3><p>{body}</p><a class="more" href={href}>{linkText}</a></li>)}
+				</ol>
+			</section>
 
 			<section id="why" class="wrap how">
 				<div class="head">

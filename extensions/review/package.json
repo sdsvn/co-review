@@ -1,6 +1,6 @@
 {
   "name": "@co-review/review",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Persistent repository review model, threads and comments for Co-Review",
   "keywords": [
     "theia-extension"

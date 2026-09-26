@@ -291,6 +291,8 @@ export interface Review {
     bundle?: ReviewBundle;
     /** The reviewer's latest submission (Submit review). */
     verdict?: ReviewVerdict;
+    /** When the reviewer archived this review; archived reviews are hidden from the active list but not deleted. */
+    archivedAt?: number;
     createdAt: number;
     updatedAt: number;
 }

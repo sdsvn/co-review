@@ -37,7 +37,7 @@ export class MobileReview implements BackendApplicationContribution {
         const api = express.Router();
         api.use(guard, express.json());
         api.get('/reviews', async (_req, res) => {
-            const reviews = await this.store.listAll();
+            const reviews = (await this.store.listAll()).filter(r => !r.archivedAt);
             res.json(reviews.map(r => ({
                 id: r.id, title: r.title, repository: path.basename(r.bundle?.dir ?? FileUri.fsPath(r.workspaceRoot)),
                 open: r.threads.filter(t => t.status === 'open').length, proposed: r.threads.filter(t => t.status === 'proposed').length,
@@ -49,7 +49,7 @@ export class MobileReview implements BackendApplicationContribution {
         api.get('/status', async (req, res) => {
             const root = path.resolve(String(req.query.root ?? ''));
             const reviews = (await this.store.listAll()).map(r => ({ r, dir: r.bundle?.dir ?? FileUri.fsPath(r.workspaceRoot) }))
-                .filter(({ r, dir }) => (dir === root || dir.startsWith(root + path.sep)) && r.threads.some(t => t.status === 'open' || t.status === 'proposed'))
+                .filter(({ r, dir }) => !r.archivedAt && (dir === root || dir.startsWith(root + path.sep)) && r.threads.some(t => t.status === 'open' || t.status === 'proposed'))
                 .map(({ r, dir }) => ({
                     id: r.id, title: r.title, root: dir,
                     open: r.threads.filter(t => t.status === 'open').length,

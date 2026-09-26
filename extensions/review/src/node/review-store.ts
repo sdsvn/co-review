@@ -153,6 +153,13 @@ export class ReviewStore {
         });
     }
 
+    archive(reviewId: string, archived: boolean): Promise<Review> {
+        return this.mutate(reviewId, review => {
+            review.archivedAt = archived ? Date.now() : undefined;
+            return review;
+        });
+    }
+
     createThread(reviewId: string, location: CodeLocation, body: string, author: Participant, options: ThreadOptions = {}): Promise<ReviewThread> {
         return this.mutate(reviewId, (review, now) => {
             const thread: ReviewThread = {

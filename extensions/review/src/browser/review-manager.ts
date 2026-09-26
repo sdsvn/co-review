@@ -120,7 +120,7 @@ export class ReviewManager {
         this._reviews = reviews;
         // `?review=<id>` (used when an agent opens a review for the reviewer) wins over the last active one.
         const requested = new URLSearchParams(window.location.search).get('review');
-        this._activeReviewId = [requested, active].find(id => reviews.some(r => r.id === id)) ?? reviews[0]?.id;
+        this._activeReviewId = [requested, active].find(id => reviews.some(r => r.id === id)) ?? reviews.find(r => !r.archivedAt)?.id;
         await Promise.all(reviews.map(async r => {
             const p = await this.service.getAgentPresence(r.id);
             if (p) {
@@ -134,7 +134,12 @@ export class ReviewManager {
 
     get root(): string | undefined { return this._root; }
     get user(): Participant { return this._user; }
-    get reviews(): readonly Review[] { return this._reviews; }
+    /** Active (non-archived) reviews, for the switcher. */
+    get reviews(): readonly Review[] { return this._reviews.filter(r => !r.archivedAt); }
+    /** Archived reviews, most recently archived first. */
+    get archivedReviews(): readonly Review[] {
+        return this._reviews.filter(r => r.archivedAt).sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
+    }
     /** Drafts of the active review. */
     get drafts(): readonly ReviewDraft[] {
         return this._drafts.filter(d => d.reviewId === this._activeReviewId);
@@ -184,6 +189,22 @@ export class ReviewManager {
 
     async renameReview(reviewId: string, title: string): Promise<void> {
         await this.service.renameReview(reviewId, title);
+    }
+
+    /** Archive (or unarchive) a review. Archiving the active one switches to the next; unarchiving activates it. */
+    async archiveReview(reviewId: string, archived: boolean): Promise<void> {
+        const updated = await this.service.archiveReview(reviewId, archived);
+        const index = this._reviews.findIndex(r => r.id === reviewId);
+        if (index >= 0) {
+            this._reviews[index] = updated;
+        }
+        if (!archived) {
+            this.setActiveReview(reviewId);
+        } else if (this._activeReviewId === reviewId) {
+            this.setActiveReview(this._reviews.find(r => !r.archivedAt)?.id);
+        } else {
+            this.onDidChangeEmitter.fire();
+        }
     }
 
     /** Opens a draft at the location, or focuses the existing draft there. */

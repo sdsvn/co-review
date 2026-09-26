@@ -102,6 +102,10 @@ export class ReviewServiceImpl implements ReviewService {
         return this.store.delete(reviewId);
     }
 
+    archiveReview(reviewId: string, archived: boolean): Promise<Review> {
+        return this.store.archive(reviewId, archived);
+    }
+
     createThread(reviewId: string, location: CodeLocation, body: string, author: Participant, options?: ThreadOptions): Promise<ReviewThread> {
         return this.store.createThread(reviewId, location, body, author, options);
     }

@@ -6,6 +6,8 @@ export namespace ReviewCommands {
     export const CREATE_REVIEW: Command = { id: 'co-review.createReview', category, label: 'New Review…' };
     export const RENAME_REVIEW: Command = { id: 'co-review.renameReview', category, label: 'Rename Review…' };
     export const DELETE_REVIEW: Command = { id: 'co-review.deleteReview', category, label: 'Delete Review…' };
+    export const ARCHIVE_REVIEW: Command = { id: 'co-review.archiveReview', category, label: 'Archive Review' };
+    export const SHOW_ARCHIVED: Command = { id: 'co-review.showArchived', category, label: 'Show Archived Reviews…' };
     export const COMMENT_SELECTION: Command = { id: 'co-review.commentSelection', category, label: 'Add Review Comment' };
     export const ASK_SELECTION: Command = { id: 'co-review.askSelection', category, label: 'Ask Agent About Selection' };
     export const CONFIGURE_AGENT: Command = { id: 'co-review.configureAgent', category, label: 'Connect ACP Agent…' };

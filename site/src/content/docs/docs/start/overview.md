@@ -7,17 +7,15 @@ sidebar:
 
 Building with a coding agent is fast. Change by change, each diff looks fine, and months later the codebase works but no longer feels like yours: you don't know where things live or why they're built the way they are.
 
-Co-Review is for getting it back. Once in a while, open the **entire repository** as a review and read it with the agent that built it, the way you would read a pull request:
+Co-Review is a review tool with IDE features — not an IDE. You open something as a review, comment on a line, a diagram node or a design step, and the agent that did the work answers in the thread, from the code, and waits for your verdict before it changes anything. It is built on [Eclipse Theia](https://theia-ide.org), so code navigation, search, Git and language servers are the real thing; everything unrelated to reviewing is removed.
 
-- an overview shows where to start and how the areas of the code connect;
-- the agent can take a first pass, with proposed findings grouped by area;
-- you comment on a line, a function, a file or a folder, and ask why, and the agent answers in the thread, from the code;
-- coverage tracks which files you've read, per area.
+## Three ways to review
 
-The same review works for everything in between: a single change, a branch against its base, a commit, or a design before any code exists. The agent answers in the thread, with links into the code, and waits for your verdict before it changes anything.
+Co-Review is not only for whole-repository reviews. The same tool covers three jobs:
 
-Co-Review is a review tool with IDE features, not an IDE. It is built on [Eclipse Theia](https://theia-ide.org), so code navigation, search, Git and language servers are the real thing.
-Everything unrelated to reviewing is removed.
+- **A whole repository** — open the entire codebase as one review to get it back in your head, or to check your own work. An overview shows where to start and how the areas connect, the agent can take a first pass with findings grouped by area, and coverage tracks which files you've read. See [Review a whole repository](/co-review/docs/start/using/#review-a-whole-repository).
+- **A change or pull request** — a single change, a branch against its base, a commit, or a `.patch` / `.diff` file opened as a pull-request page, with line comments, suggested edits and one verdict. See [Review a change or pull request](/co-review/docs/start/using/#review-a-change-or-pull-request).
+- **A design, before the code** — review the plan, not the source: a design written as a foldable L1 · L2 · L3 tree with Mermaid diagrams, where the agent revises from your comments and only builds what you approve. See [Design before the code](/co-review/docs/start/using/#design-before-the-code) and [Design documents](/co-review/docs/guides/design-docs/).
 
 ## What you can review
 

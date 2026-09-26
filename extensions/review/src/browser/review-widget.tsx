@@ -125,11 +125,12 @@ export class ReviewWidget extends ReactWidget {
 
     protected renderHeader(review: Review | undefined): React.ReactNode {
         const all = this.reviews.reviews;
+        const options = review && !all.some(r => r.id === review.id) ? [...all, review] : all;
         return <div className='co-review-header'>
             <select className='theia-select co-review-select' value={review?.id ?? ''} title='Active review'
                 onChange={e => this.reviews.setActiveReview(e.currentTarget.value || undefined)}>
                 {!review && <option value=''>No active review</option>}
-                {all.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+                {options.map(r => <option key={r.id} value={r.id}>{r.archivedAt ? `${r.title} (archived)` : r.title}</option>)}
             </select>
             <span className={`${codicon('add')} action-label`} title='New review' onClick={() => this.commands.executeCommand(ReviewCommands.CREATE_REVIEW.id)} />
             {review && <span className={`${codicon('ellipsis')} action-label`} title='More actions'

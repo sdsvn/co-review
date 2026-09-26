@@ -37,34 +37,49 @@ To connect one yourself, use **...** then **Connect agent**, and pick its model 
 Threads sit inline under the code.
 The panel lists them by file (**Open / Proposed / Resolved / All**).
 
-## Review the whole repository
+## Review a whole repository
 
-An **entire repository** review shows your progress as you read.
+An **entire repository** review shows your progress as you read. Reach for it to get a codebase back in your head, or to check your own work.
 
 - **Coverage** in the Review panel: how many source files you've viewed, overall and per area. Click an area to open its next unviewed file.
 - **Mark a file as viewed** with `Cmd+Alt+V`, the status bar item, or the editor's right-click menu. A file that changes afterwards counts as unviewed again.
 - **The explorer** shows a check on viewed files and the number of open threads on files and folders.
 - **Overview** (next to the coverage bar) opens a page with where to start, the areas of the code and how they connect. With a [Graphify](https://pypi.org/project/graphifyy/) graph (`graphify update .`, code only, no LLM) it shows the most connected code and a diagram of its clusters.
-- **`/co-review:audit`** has Claude go first: proposed findings labelled by area. **By area** in the panel groups them.
+- **`/co-review:audit`** has the agent go first: proposed findings labelled by area. **By area** in the panel groups them.
 
-## Designs, diagrams and patches
+## Review a change or pull request
 
-Rendered review view opens automatically for `index.markdown` and `*.pseudocode.md`.
-For any other `.md` file, use **Open With then Review (rendered)**.
+Between repository reviews, review one change at a time — the way you'd review a pull request.
+
+- Pick a **branch** against its base, or a single **commit**, when you start the review (above). Or let the agent open the change for you: `/co-review:review` in Claude Code, `/co-review` in Pi.
+- A **`.patch` or `.diff` file** opens as a pull-request page, with line comments and suggested edits.
+- Findings the agent proposes appear as **Proposed** (Accept / Dismiss). Your verdict returns every open comment and any accepted suggestions in one batch, and the agent commits accepted edits on the branch.
+- **Someone else's pull request?** Co-Review reviews local code, so bring the change to your machine first: check out its branch (`gh pr checkout <number>`) and review the branch against its base, or save the diff and open it as a patch — `gh pr diff <number> > pr.patch`, then open `pr.patch`.
+
+## Design before the code
+
+Review the plan before any code exists. A design document is **not source code** — it's a plan: prose, Mermaid diagrams and a foldable **L1 · L2 · L3** step tree (what happens, then how, then the edge cases), where every step, diagram node and line of text can carry a comment.
+
+Rendered review opens automatically for `index.markdown` and `*.pseudocode.md` — the filename only triggers the render; the content is a design plan, not pseudocode. For any other `.md` file, use **Open With → Review (rendered)**.
 
 Inside the rendered view you can:
 
-- Select text to comment, ask, or **Propose Edit**.
-- Comment on a diagram or one of its nodes.
+- Fold the tree to L1, L2 or L3.
 - Comment on any step of the design tree.
+- Comment on a diagram or one of its nodes.
+- Select text to comment, ask, or **Propose Edit**.
 
-`.patch` and `.diff` files open as pull-request pages.
+Have the agent write and revise the design for you: `/co-review:design <task>` (Claude Code) or `/co-review-design <task>` (Pi). It writes the plan, you review it, and it builds only what you approve. Format and details: [Design documents](/co-review/docs/guides/design-docs/).
 
 ## Submit
 
 When you are ready, click **Submit review** in the panel.
 Choose Approve, Request changes or Comment, and add a message.
 The agent gets every open comment and any accepted suggestions in one batch.
+
+## Finish a review
+
+The dropdown at the top of the panel switches between reviews. When one is done, **... then Archive review** takes it out of the dropdown while keeping it on disk — reopen it later with **... then Show archived reviews...**. Delete review removes it for good.
 
 ## From your phone
 
