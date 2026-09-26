@@ -6,7 +6,7 @@
   "description": "Agent-native repository review application",
   "main": "scripts/electron-main.js",
   "dependencies": {
-    "@co-review/review": "0.1.0",
+    "@co-review/review": "0.2.1",
     "@theia/core": "1.75.0",
     "@theia/editor": "1.75.0",
     "@theia/electron": "1.75.0",

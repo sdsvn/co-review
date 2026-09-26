@@ -3,7 +3,7 @@
   "name": "@co-review/browser-app",
   "version": "0.2.1",
   "dependencies": {
-    "@co-review/review": "0.1.0",
+    "@co-review/review": "0.2.1",
     "@theia/core": "1.75.0",
     "@theia/editor": "1.75.0",
     "@theia/file-search": "1.75.0",
