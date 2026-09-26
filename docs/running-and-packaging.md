@@ -117,8 +117,11 @@ make install-app
 writable, otherwise to `~/.local/bin`. Set `PREFIX=…` to choose another place.
 
 - `co-review [dir]` opens `dir` in the desktop app. If the app is already running, it opens a new window.
-- `co-review mcp [dir]` connects an agent (stdio MCP) to the app's backend. It starts the app if needed and finds
-  it through `~/.co-review/server.json`.
+- `co-review mcp [dir]` connects an agent (stdio MCP) to the app's backend, found through `~/.co-review/server.json`.
+  It starts the app on the agent's first tool call, not when the agent session starts.
+- `co-review status [dir]` lists the open reviews of `dir` in a running Co-Review (it never starts one).
+- `co-review setup <pi|omp>` installs the Pi or Oh My Pi package that ships with the app.
+- `co-review version` (`-v`) prints the version; `co-review help` (`-h`) lists the commands and options.
 
 Installed from the app, the shim runs `bin/co-review.mjs` inside the app bundle, on the app's own Electron
 (`ELECTRON_RUN_AS_NODE=1`). Installed from a checkout (`make install-cli`), it runs on `node` and starts the

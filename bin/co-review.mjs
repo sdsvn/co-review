@@ -1,23 +1,55 @@
 #!/usr/bin/env node
-// Co-Review command line.
-//
-//   co-review [dir]        start Co-Review (or reuse a running one) and open dir in the browser
-//   co-review mcp [dir]    MCP server on stdio for agent harnesses; bridges to Co-Review's /mcp endpoint
-//                          with dir (default: cwd) as repository, starting Co-Review on the first tool call
-//   co-review status [dir] open reviews of dir (default: cwd) in a running Co-Review; never starts it.
-//                          --claude-hook prints them as Claude Code SessionStart context (or nothing)
-//   co-review setup <pi|omp>
-//                          install the Pi or Oh My Pi package that ships with this Co-Review
-//                          (runs `pi install` / `omp install` with its path; no clone needed)
-//
-// Options: --port <n> (default: reuse a running instance, else 3000; or $CO_REVIEW_PORT), --no-open
+// Co-Review command line: see USAGE (`co-review help`).
 import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ensureServer, findServer, home, log, openUrl } from './server.mjs';
 
+const USAGE = `Usage: co-review [command] [dir] [options]
+
+Commands:
+  (none) [dir]       start Co-Review (or reuse a running one) and open dir (default: the current directory)
+  mcp [dir]          MCP server on stdio for agent harnesses; bridges to Co-Review's /mcp endpoint with dir
+                     (default: cwd) as repository, starting Co-Review on the first tool call
+  status [dir]       open reviews of dir in a running Co-Review; never starts it
+                     (--claude-hook: as Claude Code SessionStart context, or nothing)
+  setup <pi|omp>     install the Pi or Oh My Pi package that ships with this Co-Review
+  version            print the version
+  help               print this help
+
+Options:
+  --port <n>         port of the Co-Review to use or start (default: a running one, else 3000; or $CO_REVIEW_PORT)
+  --no-open          start without opening a browser or window
+  -v, --version      print the version
+  -h, --help         print this help
+`;
+
+/** This Co-Review's version: the desktop app's package.json, or the checkout's app. */
+function version() {
+    const here = dirname(fileURLToPath(import.meta.url));
+    for (const file of [join(here, '..', 'package.json'), join(here, '..', 'applications', 'electron', 'package.json')]) {
+        try {
+            const { version } = JSON.parse(readFileSync(file, 'utf8'));
+            if (version) {
+                return version;
+            }
+        } catch {
+            /* next */
+        }
+    }
+    return 'unknown';
+}
+
 const args = process.argv.slice(2);
+if (['help', '--help', '-h'].includes(args[0]) || args.includes('--help') || args.includes('-h')) {
+    process.stdout.write(USAGE);
+    process.exit(0);
+}
+if (['version', '--version', '-v'].includes(args[0])) {
+    console.log(`co-review ${version()}`);
+    process.exit(0);
+}
 const take = name => {
     const i = args.indexOf(name);
     return i < 0 ? undefined : args.splice(i, 2)[1];
@@ -25,6 +57,11 @@ const take = name => {
 const port = Number(take('--port') ?? process.env.CO_REVIEW_PORT ?? 0) || undefined;
 const noOpen = args.includes('--no-open') && !!args.splice(args.indexOf('--no-open'), 1);
 const claudeHook = args.includes('--claude-hook') && !!args.splice(args.indexOf('--claude-hook'), 1);
+const unknown = args.find(a => a.startsWith('-'));
+if (unknown) {
+    process.stderr.write(`co-review: unknown option ${unknown}\n\n${USAGE}`);
+    process.exit(2);
+}
 const command = ['mcp', 'status', 'setup'].includes(args[0]) ? args.shift() : 'start';
 const root = resolve(args[0] ?? process.cwd());
 
