@@ -160,7 +160,7 @@ flowchart LR
 To have an agent write a design document, use one of these entry points:
 
 - **Claude Code** with the Co-Review plugin: `/co-review:design <task>`
-- **Pi** with the Co-Review package: `/co-review-design <task>`
+- **Pi** or **Oh My Pi** with the Co-Review package: `/co-review-design <task>`
 
 Both follow the `co-review-design` skill: write the document in this format, open it for review, revise it from your comments, and implement after you approve. See [Connect your agent](agent-setup.md).
 

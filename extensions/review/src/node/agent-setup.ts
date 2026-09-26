@@ -39,6 +39,10 @@ export class AgentSetup {
         return bundled('../../integrations/pi', '../../../../integrations/pi');
     }
 
+    protected get ompPackageDir(): string | undefined {
+        return bundled('../../integrations/omp', '../../../../integrations/omp');
+    }
+
     protected get installedCli(): string | undefined {
         return [path.join('/usr/local/bin', SERVER), path.join(os.homedir(), '.local', 'bin', SERVER)].find(p => fs.existsSync(p));
     }
@@ -111,11 +115,13 @@ export class AgentSetup {
             ({ id, label, kind: 'cli', argv: commands, snippet: commands.map(c => c.map(quote).join(' ')).join('\n'), detail });
         const market = this.marketplaceDir;
         const pi = this.piPackageDir;
+        const omp = this.ompPackageDir;
         return [
             ...market ? [cli('Claude Code: plugin (skills, commands and MCP server)', 'claude-code-plugin',
                 [['claude', 'plugin', 'marketplace', 'add', market], ['claude', 'plugin', 'install', 'co-review@co-review']])] : [],
             cli('Claude Code: MCP server only', 'claude-code', [['claude', ...claudeArgs]]),
             ...pi ? [cli('Pi: package (extension, /co-review, co-reviewer subagent, skills)', 'pi', [['pi', 'install', pi]])] : [],
+            ...omp ? [cli('Oh My Pi: package (extension, /co-review, co-reviewer task agent, skills)', 'omp', [['omp', 'install', omp]])] : [],
             { id: 'codex', label: 'Codex', kind: 'toml', file: path.join(home, '.codex', 'config.toml'),
                 snippet: [`[mcp_servers.${SERVER}]`, `command = ${JSON.stringify(l.command)}`, `args = ${JSON.stringify(l.args)}`,
                     ...hasEnv ? [`env = { ${Object.entries(env).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join(', ')} }`] : [],

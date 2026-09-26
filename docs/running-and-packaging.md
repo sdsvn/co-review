@@ -83,7 +83,7 @@ sign on macOS, set `CSC_LINK` and `CSC_KEY_PASSWORD` and remove `identity: null`
   (debugger, notebooks, Emmet, extra themes, …) are listed under `theiaPluginsExcludeIds` in the root
   `package.json`.
 - The agent integrations the app installs for you: the Claude Code plugin (`plugin/`, `.claude-plugin/`), the Pi
-  package (`integrations/pi`) and the `co-review` command (`bin/`).
+  and Oh My Pi packages (`integrations/pi`, `integrations/omp`, sharing `integrations/shared`) and the `co-review` command (`bin/`).
 
 ### Releases
 

@@ -142,7 +142,7 @@ export class ReviewWidget extends ReactWidget {
             <p>No review is active for this repository.</p>
             <p>A review can span the whole repository, a branch, a commit, or selected files and folders.</p>
             <button className='theia-button' onClick={() => this.commands.executeCommand(ReviewCommands.CREATE_REVIEW.id)}>Start a Review</button>
-            <p>Want Claude Code, Pi or another agent to answer your questions and open reviews of its own work?</p>
+            <p>Want Claude Code, Pi, Oh My Pi or another agent to answer your questions and open reviews of its own work?</p>
             <button className='theia-button secondary' onClick={() => this.commands.executeCommand(ReviewCommands.SETUP_HARNESS.id)}>Connect an Agent</button>
         </div>;
     }

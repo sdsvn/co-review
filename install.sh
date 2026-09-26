@@ -103,5 +103,7 @@ Next:
   In Claude Code:
     /plugin marketplace add sdsvn/co-review
     /plugin install co-review@co-review
+  Pi:           co-review setup pi
+  Oh My Pi:     co-review setup omp
   Other agents: https://sdsvn.github.io/co-review/#setup
 EOF

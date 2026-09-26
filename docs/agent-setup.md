@@ -1,7 +1,7 @@
 # Connect your agent
 
 Co-Review is built for **Claude Code**: one plugin install brings the review tools, skills, slash commands, a
-background co-reviewer, live review comments and a session hook. **Pi** gets a native package too, and any other MCP
+background co-reviewer, live review comments and a session hook. **Pi** and **Oh My Pi** get native packages too, and any other MCP
 harness (Codex, Cursor, VS Code, Gemini CLI, Zed, …) works through the same MCP server.
 
 What an agent gets:
@@ -94,46 +94,59 @@ Claude Code can also be the agent Co-Review launches for a question (ACP): **⋯
 the Review panel, then select code → **Ask Agent**. The answer streams into the thread. See
 [agents.md](agents.md) for when to use which.
 
-## Pi
+## Pi and Oh My Pi
 
-The Pi package is native: it talks to Co-Review directly, so Pi doesn't need MCP support. The package ships with
-Co-Review, so you install it from where Co-Review is installed.
+Pi and Oh My Pi (`omp`) each get a native package. Both talk to Co-Review directly, so neither harness needs MCP
+support. The packages ship inside Co-Review, so customers install them without cloning anything.
 
-**Option 1: let Co-Review do it.** In Co-Review, open the Review panel and click **Connect an Agent** (or run
-**Review: Add Co-Review to an Agent Harness (MCP)…** from the command palette, `Cmd/Ctrl+Shift+P`). Pick
-**Pi: package** and confirm. Co-Review runs `pi install` with the right path for you.
-
-**Option 2: install it from a terminal.** Run the command for how you installed Co-Review:
+**Install from a terminal:**
 
 ```bash
-# macOS app (installed by install.sh)
-pi install /Applications/Co-Review.app/Contents/Resources/app/integrations/pi
+co-review setup pi
 ```
 
 ```bash
-# Linux (installed by install.sh)
-pi install ~/.local/share/co-review/resources/app/integrations/pi
+co-review setup omp
 ```
 
-```bash
-# From a clone of the repository
-pi install ./integrations/pi
-```
+This runs `pi install` or `omp install` with the package's path inside your Co-Review app. Local packages are
+linked, so they update when Co-Review does. Then start a new session.
 
-On macOS, use `~/Applications/Co-Review.app/…` instead if the app was installed there (`install.sh` falls back to
-it when `/Applications` isn't writable). Then start a new Pi session so it loads the package.
+**Or let Co-Review do it:** open the Review panel and click **Connect an Agent** (or run **Review: Add Co-Review to an
+Agent Harness (MCP)…** from the command palette, `Cmd/Ctrl+Shift+P`). Pick **Pi: package** or **Oh My Pi: package**.
 
-| In Pi | Does |
+From a clone of the repository: `pi install ./integrations/pi` or `omp install ./integrations/omp`. To try omp
+for one session without installing, run `omp -e ./integrations/omp`.
+
+| In Pi or omp | Does |
 |---|---|
 | `/co-review` | Opens a review of the working directory; your questions arrive in the session as you ask them |
 | `/co-review-design <task>` | Writes a design doc, opens it for review, implements after approval |
 | `/co-review-audit [focus]` | Reviews the whole repository with you: first-pass findings grouped by area |
-| `pi --co-review` | Starts Pi already listening to the review |
-| `co_review_start`, `co_review_wait`, `co_review_reply`, `co_review_add_findings`, `co_review_ask`, `co_review_map` | The tools, for the model and for subagents |
-| `co-reviewer` subagent | Stays in the review as co-reviewer while the main session keeps working |
+| `pi --co-review` / `omp --co-review` | Starts the session already listening to the review |
+| `co_review_start`, `co_review_wait`, `co_review_reply`, `co_review_add_findings`, `co_review_ask`, `co_review_verdict`, `co_review_map` | The tools, for the model and for subagents |
+| `co-reviewer` agent | Stays in the review as co-reviewer while the main session keeps working |
 
-The package also loads the `co-review` and `co-review-design` skills. In an interactive session, Pi waits for your
-questions without spending tokens: a background listener hands each one to the session.
+Both packages also load the `co-review` and `co-review-design` skills. In an interactive session the agent waits for
+your questions without spending tokens: a background listener hands each one to the session.
+
+How omp differs from Pi:
+
+- omp loads extensions into every task subagent. Only the main session listens for your questions and honors
+  `omp --co-review`. A subagent opens a review only when it calls `co_review_start` itself.
+- Your questions reach the session attributed to the reviewer, not recorded as something you typed.
+- `co-reviewer` is an omp task agent, limited to read-only tools plus the Co-Review tools. Spawn it to keep answering
+  in the review while the main session works on something else.
+
+Co-Review can also launch either one as the agent for a question (ACP): **⋯ → Connect agent… → Pi** or
+**Oh My Pi**. See [agents.md](agents.md).
+
+**How the packages are built:** [`integrations/shared/co-review.ts`](../integrations/shared/co-review.ts) holds the
+extension: the connection to Co-Review, the `/co-review` command, the `--co-review` flag and the tools.
+[`integrations/pi`](../integrations/pi) and [`integrations/omp`](../integrations/omp) each add a few lines for their
+harness. Both packages use the same slash commands ([`integrations/shared/commands`](../integrations/shared/commands))
+and skills ([`plugin/skills`](../plugin/skills)). Only the `co-reviewer` agent file is separate, because Pi and omp
+use different agent frontmatter.
 
 ## Skills for other agents
 

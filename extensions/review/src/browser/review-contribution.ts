@@ -500,8 +500,8 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         if (harness.kind === 'manual') {
             return copy();
         }
-        // The plugin's MCP server and the Pi extension launch `co-review` from PATH.
-        if (!setup.cliInstalled && (harness.id === 'claude-code-plugin' || harness.id === 'pi')) {
+        // The plugin's MCP server and the Pi / Oh My Pi extensions launch `co-review` from PATH.
+        if (!setup.cliInstalled && (harness.id === 'claude-code-plugin' || harness.id === 'pi' || harness.id === 'omp')) {
             const install = await this.messages.info(`${harness.label} needs the co-review command on your PATH. Install it now?`, 'Install', 'Skip');
             if (install === 'Install' && !await this.installCli()) {
                 return;

@@ -10,7 +10,7 @@ asks the reviewer to decide. There are two ways for an agent to join, depending 
 | Latency | Immediate: every question starts a turn; the answer **streams** | The agent answers when it calls `await_comment`; answers arrive whole |
 | Agent's context | A fresh session per thread (knows only the repo + thread) | The agent's own session — it knows what it just built and why |
 | Agent activity | Tool calls shown live; permission requests as buttons | `ask_reviewer` for decisions; the rest happens in the harness |
-| Agents | Claude Code (`claude-agent-acp`), Gemini CLI, OpenCode, Goose, any ACP agent | Claude Code (plugin), Pi (native package), Codex, Cursor, VS Code, Zed, any MCP client |
+| Agents | Claude Code (`claude-agent-acp`), Gemini CLI, OpenCode, Goose, any ACP agent | Claude Code (plugin), Pi and Oh My Pi (native packages), Codex, Cursor, VS Code, Zed, any MCP client |
 
 **Rule of thumb:** use **ACP** when you start reviewing and want an on-call expert (fast, streaming).
 Use **MCP** when an agent did (or is doing) the work and should defend and explain it as your
@@ -58,6 +58,7 @@ The setup depends on the harness:
 
 - **Claude Code** — install the Co-Review plugin. It provides tools, skills, slash commands, a background `co-reviewer` subagent, a session hook, and an optional live channel that pushes your questions into the session.
 - **Pi** — install the Co-Review package.
+- **Oh My Pi** — install the Co-Review omp package.
 - **Other harnesses** (Codex, Cursor, VS Code, Zed, Gemini CLI, OpenCode, Goose, etc.) — add the MCP server and, optionally, the skills.
 
 [Connect your agent](agent-setup.md) has the config for each harness. Inside Co-Review, **Review: Add Co-Review to an Agent Harness (MCP)…** does it for you.
@@ -74,7 +75,7 @@ http://127.0.0.1:<port>/mcp?root=<repo>
 
 ### Starting a review
 
-In Claude Code run `/co-review:review`. In Pi run `/co-review`. In any other harness, say:
+In Claude Code run `/co-review:review`. In Pi or Oh My Pi run `/co-review`. In any other harness, say:
 
 > Open a Co-Review review for this repository and be my co-reviewer: add findings for anything
 > risky in your change, then keep answering my questions in the review until I say we're done.

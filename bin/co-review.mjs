@@ -6,11 +6,15 @@
 //                          and bridges to its /mcp endpoint with dir (default: cwd) as repository
 //   co-review status [dir] open reviews of dir (default: cwd) in a running Co-Review; never starts it.
 //                          --claude-hook prints them as Claude Code SessionStart context (or nothing)
+//   co-review setup <pi|omp>
+//                          install the Pi or Oh My Pi package that ships with this Co-Review
+//                          (runs `pi install` / `omp install` with its path; no clone needed)
 //
 // Options: --port <n> (default: reuse a running instance, else 3000; or $CO_REVIEW_PORT), --no-open
-import { resolve } from 'node:path';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { ensureServer, home, log, openUrl } from './server.mjs';
 
 const args = process.argv.slice(2);
@@ -21,7 +25,7 @@ const take = name => {
 const port = Number(take('--port') ?? process.env.CO_REVIEW_PORT ?? 0) || undefined;
 const noOpen = args.includes('--no-open') && !!args.splice(args.indexOf('--no-open'), 1);
 const claudeHook = args.includes('--claude-hook') && !!args.splice(args.indexOf('--claude-hook'), 1);
-const command = ['mcp', 'status'].includes(args[0]) ? args.shift() : 'start';
+const command = ['mcp', 'status', 'setup'].includes(args[0]) ? args.shift() : 'start';
 const root = resolve(args[0] ?? process.cwd());
 
 async function start() {
@@ -63,7 +67,28 @@ async function status() {
     }
 }
 
-(command === 'mcp' ? mcp() : command === 'status' ? status() : start()).catch(e => {
+/** Agent packages shipped next to this CLI (in the desktop app and in a checkout): harness -> package dir. */
+const PACKAGES = { pi: 'pi', omp: 'omp' };
+
+/** Installs a bundled agent package with the harness's own installer. */
+async function setup() {
+    const harness = args[0];
+    if (!PACKAGES[harness]) {
+        throw new Error(`usage: co-review setup <${Object.keys(PACKAGES).join('|')}>`);
+    }
+    const dir = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'integrations', PACKAGES[harness]);
+    if (!existsSync(join(dir, 'package.json'))) {
+        throw new Error(`this Co-Review has no ${harness} package (${dir}); update Co-Review`);
+    }
+    log(`${harness} install ${dir}`);
+    const r = spawnSync(harness, ['install', dir], { stdio: 'inherit' });
+    if (r.error) {
+        throw new Error(r.error.code === 'ENOENT' ? `${harness} is not installed or not on PATH` : r.error.message);
+    }
+    process.exitCode = r.status ?? 1;
+}
+
+(command === 'mcp' ? mcp() : command === 'status' ? status() : command === 'setup' ? setup() : start()).catch(e => {
     log(e.message);
     process.exit(1);
 });

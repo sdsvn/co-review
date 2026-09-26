@@ -56,7 +56,7 @@ export interface AgentSetupInfo {
     skills: SkillTarget[];
     skillsAvailable: boolean;
     harnesses: HarnessSetup[];
-    /** Whether the `co-review` command is installed (the Claude Code plugin and Pi need it). */
+    /** Whether the `co-review` command is installed (the Claude Code plugin, Pi and Oh My Pi need it). */
     cliInstalled: boolean;
 }
 

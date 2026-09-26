@@ -15,8 +15,10 @@ extensions/review      @co-review/review
                        UI, commands
 bin/co-review.mjs      CLI: start the app, `mcp` stdio bridge
 bin/review-server.mjs  Review server mode (co-review-server)
-integrations/pi        Pi package: extension, prompt, subagent,
-                       skills
+integrations/shared    Pi / Oh My Pi extension and slash
+                       commands, shared by both packages
+integrations/pi        Pi package: adapter, subagent
+integrations/omp       Oh My Pi package: adapter, task agent
 plugin/                Claude Code plugin: MCP server + channel,
                        skills, commands, subagent, SessionStart
                        hook (.claude-plugin/ is its marketplace)

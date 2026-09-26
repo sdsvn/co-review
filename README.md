@@ -6,11 +6,12 @@
 
 **Review code and designs with Claude Code as your co-reviewer.**
 
-Works just as well with Pi, Codex, Cursor and any MCP agent.
+Works just as well with Pi, Oh My Pi, Codex, Cursor and any MCP agent.
 
 [![Built on Eclipse Theia](https://img.shields.io/badge/built%20on-Eclipse%20Theia-4F46E5?style=flat-square)](https://theia-ide.org)
 [![Made for Claude Code](https://img.shields.io/badge/made%20for-Claude%20Code-D97757?style=flat-square)](#made-for-claude-code)
-[![Pi package](https://img.shields.io/badge/Pi-package-059669?style=flat-square)](docs/agent-setup.md#pi)
+[![Pi package](https://img.shields.io/badge/Pi-package-059669?style=flat-square)](docs/agent-setup.md#pi-and-oh-my-pi)
+[![Oh My Pi package](https://img.shields.io/badge/Oh_My_Pi-package-059669?style=flat-square)](docs/agent-setup.md#pi-and-oh-my-pi)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-1E1B4B?style=flat-square)](#install)
 
 [Website](https://sdsvn.github.io/co-review/) · [Install](#install) · [Claude Code](#made-for-claude-code) · [Usage](#usage) · [Agents](#working-with-agents) · [Design docs](docs/design-docs.md) · [Contributing](#contributing)
@@ -96,21 +97,22 @@ One plugin install makes Claude Code a co-reviewer:
 Co-Review can also launch Claude Code itself for a quick question (**⋯ → Connect agent… → Claude Code**, then
 **Ask Agent** on any selection).
 
-### Pi and other agents
+### Pi, Oh My Pi and other agents
 
-**Pi** has a native package: extension, `/co-review`, `/co-review-design`, `/co-review-audit`, a `co-reviewer`
-subagent and the skills. It ships inside Co-Review; install it from there:
+**Pi** and **Oh My Pi** each have a native package with an extension, `/co-review`, `/co-review-design`,
+`/co-review-audit`, a `co-reviewer` agent and the skills. Both ship inside Co-Review, so you don't need a clone:
 
 ```bash
-# macOS app
-pi install /Applications/Co-Review.app/Contents/Resources/app/integrations/pi
-# Linux
-pi install ~/.local/share/co-review/resources/app/integrations/pi
-# a clone of this repository
-pi install ./integrations/pi
+co-review setup pi
 ```
 
-Or click **Connect an Agent** in the Review panel and pick **Pi: package**; Co-Review runs `pi install` for you.
+```bash
+co-review setup omp
+```
+
+Or click **Connect an Agent** in the Review panel and pick **Pi: package** or **Oh My Pi: package**. From a clone of
+this repository, run `pi install ./integrations/pi` or `omp install ./integrations/omp`. In omp, only the main
+session listens for your questions, not every task subagent. See [Pi and Oh My Pi](docs/agent-setup.md#pi-and-oh-my-pi).
 
 **Codex, Cursor, VS Code, Gemini CLI, Zed, OpenCode, Goose** and any other MCP client: add the MCP server
 ([config for each](docs/agent-setup.md#other-harnesses-mcp)) and, optionally, the skills with
@@ -314,7 +316,9 @@ extensions/review        the review extension
   src/electron-node      desktop-only backend bindings
   src/browser            review panel, inline editor UI, document and patch views, themes
 bin/                     co-review CLI, install-cli.sh, review server mode
-integrations/pi          Pi package: extension, /co-review-design and /co-review-audit prompts, co-reviewer subagent
+integrations/shared      the Pi / Oh My Pi extension, and the /co-review-design and /co-review-audit commands
+integrations/pi          Pi package: harness adapter, co-reviewer subagent
+integrations/omp         Oh My Pi package: harness adapter, co-reviewer task agent
 plugin/                  Claude Code plugin: MCP server + channel, skills, commands (review, design, audit), co-reviewer subagent, SessionStart hook
 .claude-plugin/          plugin marketplace manifest
 docs/                    guides and brand assets (the source of the website's guides)

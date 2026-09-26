@@ -18,13 +18,18 @@ files:
   - from: ../../bin
     to: bin
   # Agent integrations, installed from the app (Review: Add Co-Review to an Agent Harness / Install Agent Skills):
-  # the Claude Code plugin and its marketplace, and the Pi package (which reads ../../plugin/skills).
+  # the Claude Code plugin and its marketplace, and the Pi and Oh My Pi packages (which read ../../plugin/skills
+  # and share ../shared).
   - from: ../../plugin
     to: plugin
   - from: ../../.claude-plugin
     to: .claude-plugin
   - from: ../../integrations/pi
     to: integrations/pi
+  - from: ../../integrations/omp
+    to: integrations/omp
+  - from: ../../integrations/shared
+    to: integrations/shared
   # The app icon, for the Linux desktop entry written by install.sh.
   - from: resources
     to: icons
