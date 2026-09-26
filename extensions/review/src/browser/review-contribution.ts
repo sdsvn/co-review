@@ -16,7 +16,7 @@ import { EDITOR_CONTEXT_MENU } from '@theia/editor/lib/browser/editor-menu';
 import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
-import { NavigatorContextMenu } from '@theia/navigator/lib/browser/navigator-contribution';
+import { FileNavigatorContribution, NavigatorContextMenu } from '@theia/navigator/lib/browser/navigator-contribution';
 import * as monaco from '@theia/monaco-editor-core';
 import { AgentConfig, AgentSetting, CodeLocation, ReviewScope, ThreadIntent } from '../common/review-model';
 import { DOCUMENT_NAMES } from '../common/patch';
@@ -49,6 +49,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
     @inject(ReviewEditorDecorator) protected readonly decorator: ReviewEditorDecorator;
     @inject(ReviewNavigator) protected readonly navigator: ReviewNavigator;
     @inject(ClipboardService) protected readonly clipboard: ClipboardService;
+    @inject(FileNavigatorContribution) protected readonly fileNavigator: FileNavigatorContribution;
 
     constructor() {
         super({
@@ -124,8 +125,65 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
 
     /** After the layout is restored (opening earlier would be undone by the restore). */
     async onDidInitializeLayout(): Promise<void> {
-        await this.openBundleDocument();
+        await this.openStart();
         await this.welcome();
+        // A review opened or switched to later (an agent's open_review, the switcher) starts the same way.
+        let active = this.reviews.activeReview?.id;
+        this.reviews.onDidChange(() => {
+            const id = this.reviews.activeReview?.id;
+            if (id && id !== active) {
+                active = id;
+                this.openStart();
+            }
+        });
+    }
+
+    /**
+     * A review never starts on an empty window: the explorer shows, and with no editor open the review's
+     * document opens (a review directory), else the first open thread, the reviewed paths, the README or the
+     * first file of the repository.
+     */
+    protected async openStart(): Promise<void> {
+        await this.reviews.ready;
+        const root = this.reviews.root;
+        if (!root) {
+            return;
+        }
+        await this.fileNavigator.openView({ activate: false, reveal: true });
+        if (this.shell.getWidgets('main').length) {
+            return;
+        }
+        const review = this.reviews.activeReview;
+        if (review?.bundle) {
+            await this.openBundleDocument();
+            return;
+        }
+        const thread = review?.threads.find(t => t.status !== 'resolved' && t.location.uri && t.location.kind !== 'directory');
+        if (thread) {
+            await this.navigator.open(thread.location, thread.id);
+            return;
+        }
+        const candidates = review?.scope.kind === 'paths' ? review.scope.uris.map(u => new URI(u)) : [];
+        for (const uri of [...candidates, new URI(root)]) {
+            const file = await this.firstFile(uri);
+            if (file) {
+                await open(this.openerService, file);
+                return;
+            }
+        }
+    }
+
+    /** `uri` if it is a file; for a folder, its README or else its first file. */
+    protected async firstFile(uri: URI): Promise<URI | undefined> {
+        const stat = await this.fileService.resolve(uri, { resolveMetadata: false }).catch(() => undefined);
+        if (!stat) {
+            return undefined;
+        }
+        if (!stat.isDirectory) {
+            return stat.resource;
+        }
+        const files = (stat.children ?? []).filter(c => c.isFile && !c.name.startsWith('.')).sort((a, b) => a.name.localeCompare(b.name));
+        return (files.find(f => /^readme(\.(md|markdown|txt|rst))?$/i.test(f.name)) ?? files[0])?.resource;
     }
 
     /** The first time Co-Review runs, the Review panel opens, so a new user sees where to start. */
@@ -150,7 +208,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         await this.reviews.ready;
         const review = this.reviews.activeReview;
         const root = this.reviews.root;
-        if (!review?.bundle || !root || this.editorManager.all.length) {
+        if (!review?.bundle || !root || this.shell.getWidgets('main').length) {
             return;
         }
         const rootUri = new URI(root);

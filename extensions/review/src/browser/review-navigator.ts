@@ -11,6 +11,7 @@ import { OpenerService } from '@theia/core/lib/browser/opener-service';
 /** Id of the document review opener (kept here to avoid an import cycle with the document widget). */
 const DOCUMENT_OPENER_ID = 'co-review:document';
 const PATCH_OPENER_ID = 'co-review:patch';
+const HTML_OPENER_ID = 'co-review:html';
 
 /**
  * Opens review locations using Theia's regular editor and explorer, so review navigation
@@ -38,7 +39,7 @@ export class ReviewNavigator {
 
     async open(location: CodeLocation, threadId?: string): Promise<void> {
         if ((location.kind === 'document' || location.kind === 'patch') && location.uri) {
-            const openerId = location.kind === 'document' ? DOCUMENT_OPENER_ID : PATCH_OPENER_ID;
+            const openerId = location.kind === 'patch' ? PATCH_OPENER_ID : /\.html?$/i.test(location.uri) ? HTML_OPENER_ID : DOCUMENT_OPENER_ID;
             const opener = (await this.openers.getOpeners()).find(o => o.id === openerId);
             const widget = await opener?.open(new URI(location.uri), { mode: 'activate' }) as { reveal?(id: string): void } | undefined;
             if (threadId) {

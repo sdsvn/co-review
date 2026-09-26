@@ -56,7 +56,7 @@ export function anchorOf(thread: ReviewThread, root?: string): AnchorRecord {
 }
 
 function where(a: AnchorRecord): string {
-    return a.path ?? a.blockId ?? a.nodeId ?? 'document';
+    return a.path ?? a.blockId ?? a.nodeId ?? a.selector ?? 'document';
 }
 
 function line(a: AnchorRecord): number | undefined {
@@ -79,7 +79,8 @@ export function commentOf(thread: ReviewThread, root: string, extra: Record<stri
         labels: thread.labels ?? [],
         status: thread.status,
         body: last?.body ?? '',
-        source: anchor.source,
+        // What the comment is on: the quoted text for text anchors.
+        source: anchor.source ?? anchor.exact,
         origin: thread.origin,
         intent: thread.intent,
         ...(thread.proposal ? { suggestion: thread.proposal.after } : {}),

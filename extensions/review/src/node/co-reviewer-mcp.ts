@@ -320,8 +320,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             description: 'Add findings. Two shapes: {path, line?, endLine?, body, severity?, labels?, status?} creates threads on repository code '
                 + '(without `line`, on the file or folder; `labels` group them in the panel, e.g. the area of the repository; '
                 + '`status: "proposed"` lets the reviewer Accept or Dismiss each one, as for a first-pass audit); '
-                + 'anchored findings {id, target ("doc" | "patch:<slug>"), anchor, severity, labels, body, verdict?} are PROPOSED '
-                + '(the reviewer Accepts or Dismisses; only accepted ones come back in await_review).',
+                + 'anchored findings {id, target ("doc" | "doc:<path>" | "patch:<slug>"), anchor, severity, labels, body, verdict?} are PROPOSED '
+                + '(the reviewer Accepts or Dismisses; only accepted ones come back in await_review). A rendered page (HTML or Markdown) takes '
+                + 'target "doc:<path>" and anchor {type: "text", exact} | {type: "element", selector} | {type: "document"}.',
             inputSchema: {
                 reviewId: reviewArg,
                 findings: z.array(z.object({

@@ -12,6 +12,7 @@ import { ReviewDraft, ReviewManager } from '../review-manager';
 import { ReviewNavigator } from '../review-navigator';
 import { MermaidBlock, render } from './document-render';
 import { splitFrontmatter } from '../../common/design-format';
+import { markText, textAnchor, unmark } from './text-anchor';
 
 const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
@@ -20,12 +21,17 @@ export interface DocumentReviewWidgetOptions {
     uri: string;
 }
 
+/** Not part of the document text: inline threads and rendered diagrams. */
+const SKIP = '.co-review-slot, .co-review-dgm svg';
+
 type Anchored = { key: string; anchor: DocAnchor; element: (root: Root) => void };
 
 /** Which rendered element a document anchor belongs to (for highlighting and thread placement). */
 function locate(content: HTMLElement, anchor: DocAnchor): { target?: Element; marks?: HTMLElement[] } {
     switch (anchor.type) {
         case 'document':
+        case 'element':
+            // Element anchors belong to rendered HTML pages; in a Markdown document they show at the top.
             return { target: undefined };
         case 'mermaid-block':
         case 'mermaid-edge':
@@ -42,57 +48,10 @@ function locate(content: HTMLElement, anchor: DocAnchor): { target?: Element; ma
             return { target: step?.querySelector(':scope > .co-review-step-line, :scope > details > summary') ?? undefined };
         }
         case 'text': {
-            const marks = markText(content, anchor);
+            const marks = markText(content, anchor, SKIP);
             return { target: marks[marks.length - 1]?.closest('p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, table, .co-review-step-line') ?? undefined, marks };
         }
     }
-}
-
-/** Wraps the quoted text in <mark>s: prefix/suffix disambiguate, the offset hint breaks ties. */
-function markText(content: HTMLElement, anchor: DocAnchor): HTMLElement[] {
-    const exact = anchor.exact ?? '';
-    if (!exact) {
-        return [];
-    }
-    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, {
-        acceptNode: n => (n.parentElement?.closest('.co-review-slot, .co-review-dgm svg') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT)
-    });
-    const nodes: Text[] = [];
-    let full = '';
-    const starts: number[] = [];
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-        starts.push(full.length);
-        nodes.push(n as Text);
-        full += (n as Text).data;
-    }
-    const candidates: number[] = [];
-    for (let i = full.indexOf(exact); i >= 0; i = full.indexOf(exact, i + 1)) {
-        candidates.push(i);
-    }
-    if (!candidates.length) {
-        return [];
-    }
-    const score = (i: number) => (anchor.prefix && full.slice(Math.max(0, i - anchor.prefix.length), i) === anchor.prefix ? 2 : 0)
-        + (anchor.suffix && full.slice(i + exact.length, i + exact.length + anchor.suffix.length) === anchor.suffix ? 2 : 0)
-        - Math.abs(i - (anchor.startOffsetHint ?? i)) / 1e6;
-    const at = candidates.sort((a, b) => score(b) - score(a))[0];
-    const end = at + exact.length;
-    const marks: HTMLElement[] = [];
-    nodes.forEach((node, index) => {
-        const start = starts[index];
-        const stop = start + node.data.length;
-        if (stop <= at || start >= end) {
-            return;
-        }
-        const range = document.createRange();
-        range.setStart(node, Math.max(0, at - start));
-        range.setEnd(node, Math.min(node.data.length, end - start));
-        const mark = document.createElement('mark');
-        mark.className = 'co-review-mark';
-        range.surroundContents(mark);
-        marks.push(mark);
-    });
-    return marks;
 }
 
 /**
@@ -456,14 +415,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             this.hidePopup();
             return;
         }
-        const full = this.plainText();
-        const at = full.indexOf(exact);
-        const anchor: DocAnchor = {
-            type: 'text', exact,
-            prefix: at > 0 ? full.slice(Math.max(0, at - 40), at) : '',
-            suffix: at >= 0 ? full.slice(at + exact.length, at + exact.length + 40) : '',
-            startOffsetHint: at, endOffsetHint: at + exact.length
-        };
+        const anchor = textAnchor(this.content, SKIP, exact);
         const rect = range.getBoundingClientRect();
         const box = this.node.getBoundingClientRect();
         this.popup.innerHTML = '';
@@ -491,13 +443,6 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         this.popup.style.display = 'none';
     }
 
-    /** Document text without our inline threads, for text anchors. */
-    protected plainText(): string {
-        const clone = this.content.cloneNode(true) as HTMLElement;
-        clone.querySelectorAll('.co-review-slot, .co-review-dgm svg').forEach(n => n.remove());
-        return clone.textContent ?? '';
-    }
-
     protected addDraft(anchor: DocAnchor, intent: ThreadIntent, proposal?: { before: string; after: string }): void {
         if (!this.reviews.activeReview) {
             return;
@@ -517,10 +462,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         const roots = this.roots.splice(0);
         setTimeout(() => roots.forEach(r => r.unmount()));
         this.content.querySelectorAll('.co-review-slot').forEach(s => s.remove());
-        this.content.querySelectorAll('mark.co-review-mark').forEach(m => {
-            m.replaceWith(...Array.from(m.childNodes));
-        });
-        this.content.normalize();
+        unmark(this.content);
         this.content.querySelectorAll('.co-review-dgm-marked, .co-review-step-marked').forEach(e => e.classList.remove('co-review-dgm-marked', 'co-review-step-marked'));
 
         const items: Anchored[] = [];

@@ -40,6 +40,32 @@ add_findings({ findings: [{ path: "internal/orders/service.go", line: 31, endLin
 
 Only real risks and non-obvious decisions, at most 3–5. Don't list everything you changed.
 
+### Rendered pages (HTML and Markdown)
+
+HTML pages (`*.html`) and Markdown (`*.md`) open **rendered** in Co-Review, and the human comments on what they
+see: selected text, an element of an HTML page (an image, a chart, a section), or the page as a whole. Use this
+when the work is something people look at — a generated report, a dashboard, docs, a design page — not only code.
+
+To point at something on a page, anchor the finding to it with `target: "doc:<path>"` (the path relative to the
+repository, or to the review directory for `open_review({ dir })`):
+
+```
+add_findings({ findings: [
+  { target: "doc:site/report.html", anchor: { type: "text", exact: "grew by twelve percent" },
+    body: "…", severity: "medium" },
+  { target: "doc:site/report.html", anchor: { type: "element", selector: "#revenue-chart" }, body: "…" },
+  { target: "doc:docs/guide.md", anchor: { type: "document" }, body: "…" }] })
+```
+
+- `text`: `exact` is text as rendered (not markup); add `prefix` / `suffix` when it occurs more than once.
+- `element`: `selector` is a CSS selector in the page; prefer an `id` (`#revenue-chart`), else a path from
+  `body` (`body > main > section:nth-of-type(2)`). `source` is an optional label.
+- Anchored findings are **proposed**: the human accepts or dismisses each one.
+
+The human's comments on pages come back with `target: "doc:<path>"`, `kind` (`text`, `element`, `document`),
+`where` (the selector for elements) and `source` (the quoted text or the element). Pages render with their
+scripts off, so the text and elements you anchor to are the page's HTML as written, not what scripts add.
+
 ### Reviewing the whole repository (first-pass audit)
 
 When the human wants the **entire repository** reviewed rather than a change, do a first pass for them, so they

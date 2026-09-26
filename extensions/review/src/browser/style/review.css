@@ -178,6 +178,24 @@
 mark.co-review-mark { background: rgba(230, 170, 50, 0.28); color: inherit; border-bottom: 2px solid var(--theia-charts-yellow); cursor: pointer; padding: 0; }
 .co-review-doc-popup { position: absolute; margin-left: 0; }
 
+/* ---- HTML page review (rendered page + threads next to it) ---- */
+.co-review-html { display: flex; flex-direction: column; background: var(--theia-editor-background); }
+.co-review-html .action-label { cursor: pointer; padding: 2px; border-radius: 3px; }
+.co-review-html .action-label:hover { background: var(--theia-toolbar-hoverBackground); }
+.co-review-html .action-label.active { background: var(--theia-inputOption-activeBackground); outline: 1px solid var(--theia-inputOption-activeBorder, transparent); }
+.co-review-html-note { font-size: var(--theia-ui-font-size0); margin-right: 6px; }
+.co-review-html-body { flex: 1; display: flex; min-height: 0; position: relative; }
+/* Pages assume a white canvas unless they style their own. */
+.co-review-html-frame { flex: 1; min-width: 0; border: 0; background: #fff; }
+.co-review-html-side {
+    width: 360px; flex: none; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px;
+    border-left: 1px solid var(--theia-panel-border); font-size: var(--theia-ui-font-size1);
+}
+.co-review-html-empty { color: var(--theia-descriptionForeground); padding: 8px; line-height: 1.5; }
+.co-review-html-item.selected > .co-review-thread { outline: 1px solid var(--theia-focusBorder); }
+.co-review-html-collapsed { display: flex; gap: 6px; align-items: center; padding: 4px 6px; cursor: pointer; border-radius: 3px; color: var(--theia-descriptionForeground); overflow: hidden; white-space: nowrap; }
+.co-review-html-collapsed:hover { background: var(--theia-list-hoverBackground); }
+
 /* Mermaid */
 .co-review-dgm { border: 1px solid var(--theia-panel-border); border-radius: 6px; margin: 12px 0; overflow: hidden; }
 .co-review-dgm-head { display: flex; align-items: center; gap: 6px; padding: 3px 8px; font-size: 0.85em; color: var(--theia-descriptionForeground); border-bottom: 1px solid var(--theia-panel-border); font-family: var(--theia-code-font-family); }

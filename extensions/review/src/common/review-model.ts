@@ -16,7 +16,7 @@ export type LocationKind = 'repository' | 'directory' | 'file' | 'symbol' | 'lin
  * The documented anchor format (llms.txt), stored verbatim so agent payloads round-trip.
  */
 export interface DocAnchor {
-    type: 'document' | 'text' | 'mermaid-block' | 'mermaid-node' | 'mermaid-edge' | 'tree-node';
+    type: 'document' | 'text' | 'element' | 'mermaid-block' | 'mermaid-node' | 'mermaid-edge' | 'tree-node';
     exact?: string;
     prefix?: string;
     suffix?: string;
@@ -25,6 +25,8 @@ export interface DocAnchor {
     blockId?: string;
     nodeId?: string;
     edgeId?: string;
+    /** For `element` (rendered HTML pages): CSS selector of the element, from the page's <body>. */
+    selector?: string;
     /** Mermaid node source (`id[label]`) or the tree step text. */
     source?: string;
 }
@@ -57,6 +59,7 @@ export namespace DocAnchor {
         switch (anchor.type) {
             case 'document': return 'document';
             case 'text': return `“${(anchor.exact ?? '').slice(0, 60)}${(anchor.exact ?? '').length > 60 ? '…' : ''}”`;
+            case 'element': return `element ${(anchor.source || anchor.selector || '').slice(0, 60)}`;
             case 'mermaid-block': return `diagram ${anchor.blockId}`;
             case 'mermaid-node': return `diagram ${anchor.blockId} › ${anchor.nodeId}`;
             case 'mermaid-edge': return `diagram ${anchor.blockId} › ${anchor.edgeId}`;
