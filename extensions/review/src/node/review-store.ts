@@ -39,7 +39,8 @@ export class ReviewStore {
     /** Serializes mutations per review so concurrent writers never interleave. */
     protected readonly queues = new Map<string, Promise<unknown>>();
 
-    protected workspaceDir(workspaceRoot: string): string {
+    /** Where the reviews (and other state) of a workspace live, outside the repository. */
+    workspaceDir(workspaceRoot: string): string {
         const hash = createHash('sha256').update(workspaceRoot).digest('hex').slice(0, 16);
         return path.join(coReviewHome(), 'workspaces', hash);
     }
@@ -248,6 +249,21 @@ export class ReviewStore {
         return this.mutate(reviewId, (review, now) => {
             review.verdict = { decision, summary, submittedAt: now, count: (review.verdict?.count ?? 0) + 1 };
             this.record(review, { kind: 'review-submitted', actor, at: now });
+            return review;
+        });
+    }
+
+    /** Marks repository-relative files as viewed (or not). */
+    setViewed(reviewId: string, paths: string[], viewed: boolean): Promise<Review> {
+        return this.mutate(reviewId, (review, now) => {
+            const map = review.viewed ??= {};
+            for (const p of paths) {
+                if (viewed) {
+                    map[p] = now;
+                } else {
+                    delete map[p];
+                }
+            }
             return review;
         });
     }

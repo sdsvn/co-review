@@ -6,9 +6,11 @@ import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { Readable, Writable } from 'stream';
-import { AgentActivity, AgentConfig, MessageStatus, Participant, PermissionRequest, Review, ReviewThread } from '../common/review-model';
+import { AgentActivity, AgentConfig, AgentSetting, MessageStatus, Participant, PermissionRequest, Review, ReviewThread } from '../common/review-model';
 import { ReviewStore } from './review-store';
 import { HumanDecisions } from './agent-coordination';
+import { ANSWER_STYLE } from './answer-style';
+import { RepoIndex } from './repo-index';
 
 /**
  * Agents known to speak ACP over stdio. A preset is offered only when its command — and the
@@ -18,8 +20,16 @@ export const AGENT_PRESETS: (AgentConfig & { command: string; requires?: string 
     { id: 'claude', name: 'Claude Code', transport: 'acp', command: 'npx', args: ['-y', '@agentclientprotocol/claude-agent-acp'] },
     { id: 'gemini', name: 'Gemini CLI', transport: 'acp', command: 'gemini', args: ['--experimental-acp'] },
     { id: 'opencode', name: 'OpenCode', transport: 'acp', command: 'opencode', args: ['acp'] },
-    { id: 'goose', name: 'Goose', transport: 'acp', command: 'goose', args: ['acp'] }
+    { id: 'goose', name: 'Goose', transport: 'acp', command: 'goose', args: ['acp'] },
+    { id: 'omp', name: 'Oh My Pi', transport: 'acp', command: 'omp', args: ['acp'] },
+    { id: 'pi', name: 'Pi', transport: 'acp', command: 'npx', args: ['-y', 'pi-acp'], requires: 'pi' },
+    { id: 'codex', name: 'Codex', transport: 'acp', command: 'npx', args: ['-y', '@zed-industries/codex-acp'], requires: 'codex' }
 ];
+
+/** How long a first question waits for the repository map before it is sent without one. */
+const MAP_WAIT_MS = 2000;
+/** Budget for the map in the first prompt; the agent reads files for anything beyond it. */
+const MAP_CHARS = 8000;
 
 /** State of one prompt turn: the agent message being written into a thread. */
 interface Turn {
@@ -30,6 +40,8 @@ interface Turn {
     activity: AgentActivity[];
     permission?: PermissionRequest;
     flushTimer?: NodeJS.Timeout;
+    /** The agent message being streamed; a turn can hold several (e.g. "Let me look…", then the answer). */
+    agentMessageId?: string;
 }
 
 interface AgentConnection {
@@ -41,6 +53,13 @@ interface AgentConnection {
     sessions: Map<string, string>;
     /** sessionId -> running turn */
     turns: Map<string, Turn>;
+    /**
+     * A session opened ahead of the next question (and to learn the agent's settings), so a new thread
+     * does not wait for `session/new`.
+     */
+    spare?: Promise<acp.NewSessionResponse>;
+    /** sessionId -> the session's config options, as the agent last reported them */
+    options: Map<string, acp.SessionConfigOption[]>;
     stderr: string[];
 }
 
@@ -62,6 +81,7 @@ export class AcpAgentService {
 
     @inject(ReviewStore) protected readonly store: ReviewStore;
     @inject(HumanDecisions) protected readonly decisions: HumanDecisions;
+    @inject(RepoIndex) protected readonly index: RepoIndex;
 
     /** reviewId -> connection */
     protected readonly connections = new Map<string, AgentConnection>();
@@ -88,8 +108,17 @@ export class AcpAgentService {
                 this.disconnect(change.reviewId);
             } else {
                 const connection = this.connections.get(change.review.id);
-                if (connection && JSON.stringify(connection.config) !== JSON.stringify(change.review.agent)) {
+                if (connection && !AgentConfig.sameProcess(connection.config, change.review.agent)) {
                     this.disconnect(change.review.id);
+                } else if (connection && JSON.stringify(connection.config.settings) !== JSON.stringify(change.review.agent?.settings)) {
+                    // Only the settings changed (e.g. another model): apply them to the open sessions too.
+                    connection.config = change.review.agent!;
+                    for (const sessionId of connection.sessions.values()) {
+                        this.applySettings(connection, sessionId).catch(e => console.error('[co-review] agent settings failed', e));
+                    }
+                }
+                if (AgentConfig.isAcp(change.review.agent) && !this.connections.has(change.review.id)) {
+                    this.warm(change.review);
                 }
             }
         });
@@ -99,6 +128,70 @@ export class AcpAgentService {
     async getPresets(): Promise<AgentConfig[]> {
         const available = await Promise.all(AGENT_PRESETS.map(async p => await which(p.command) && (!p.requires || await which(p.requires))));
         return AGENT_PRESETS.filter((_, i) => available[i]).map(({ requires, ...config }) => config);
+    }
+
+    /**
+     * Starts the agent and the repository map as soon as an agent is connected, so the first question
+     * does not wait for the agent to launch (`npx` alone can take seconds) or the map to build.
+     */
+    protected warm(review: Review): void {
+        this.connect(review).then(connection => this.spareSession(connection, review)).catch(() => undefined);
+        this.index.warm(FileUri.fsPath(review.workspaceRoot));
+    }
+
+    /** The choices the review's agent offers for its sessions: its config options (model, effort, …) and modes. */
+    async getSettings(reviewId: string): Promise<AgentSetting[]> {
+        const review = await this.store.get(reviewId);
+        if (!AgentConfig.isAcp(review?.agent)) {
+            return [];
+        }
+        const connection = await this.connect(review);
+        const session = await this.spareSession(connection, review);
+        const settings: AgentSetting[] = (session.configOptions ?? [])
+            .filter((o): o is Extract<acp.SessionConfigOption, { type: 'select' }> => o.type === 'select').map(o => ({
+            id: o.id, name: o.name, category: o.category ?? undefined, current: String(o.currentValue),
+            options: (o.options as (acp.SessionConfigSelectOption | acp.SessionConfigSelectGroup)[])
+                .flatMap(g => 'options' in g ? g.options : [g])
+                .map(v => ({ value: v.value, name: v.name, description: v.description ?? undefined }))
+        }));
+        const modes = session.modes;
+        if (modes?.availableModes.length && !settings.some(s => s.category === 'mode')) {
+            settings.push({
+                id: AgentSetting.MODE, name: 'Mode', category: 'mode', current: modes.currentModeId,
+                options: modes.availableModes.map(m => ({ value: m.id, name: m.name, description: m.description ?? undefined }))
+            });
+        }
+        return settings;
+    }
+
+    /** The spare session, opened now if there is none. */
+    protected spareSession(connection: AgentConnection, review: Review): Promise<acp.NewSessionResponse> {
+        if (!connection.spare) {
+            const spare = connection.ready.then(() =>
+                connection.acp.newSession({ cwd: FileUri.fsPath(review.workspaceRoot), mcpServers: [] })).then(session => {
+                connection.options.set(session.sessionId, session.configOptions ?? []);
+                return session;
+            });
+            // A failed session/new is retried by the next caller.
+            spare.catch(() => connection.spare === spare && (connection.spare = undefined));
+            connection.spare = spare;
+        }
+        return connection.spare;
+    }
+
+    /** Applies the reviewer's chosen settings (model, effort, mode) to a session, where they differ. */
+    protected async applySettings(connection: AgentConnection, sessionId: string): Promise<void> {
+        for (const [id, value] of Object.entries(connection.config.settings ?? {})) {
+            if (id === AgentSetting.MODE) {
+                await connection.acp.setSessionMode({ sessionId, modeId: value });
+                continue;
+            }
+            const option = connection.options.get(sessionId)?.find(o => o.id === id);
+            if (option && String(option.currentValue) !== value) {
+                const response = await connection.acp.setSessionConfigOption({ sessionId, configId: id, value });
+                connection.options.set(sessionId, response.configOptions);
+            }
+        }
     }
 
     /** Queues a turn for the thread: the agent answers the latest human messages. */
@@ -139,12 +232,16 @@ export class AcpAgentService {
             let sessionId = connection.sessions.get(threadId);
             const fresh = !sessionId;
             if (!sessionId) {
-                sessionId = (await connection.acp.newSession({ cwd: FileUri.fsPath(review.workspaceRoot), mcpServers: [] })).sessionId;
+                // Take the spare session, and open the next one in the background.
+                sessionId = (await this.spareSession(connection, review)).sessionId;
+                connection.spare = undefined;
                 connection.sessions.set(threadId, sessionId);
+                this.spareSession(connection, review).catch(() => undefined);
+                await this.applySettings(connection, sessionId).catch(e => console.error('[co-review] agent settings failed', e));
             }
             connection.turns.set(sessionId, turn);
             try {
-                const response = await connection.acp.prompt({ sessionId, prompt: this.buildPrompt(review, thread, fresh) });
+                const response = await connection.acp.prompt({ sessionId, prompt: await this.buildPrompt(review, thread, fresh) });
                 status = response.stopReason === 'cancelled' ? 'cancelled' : 'done';
                 if (response.stopReason === 'refusal') {
                     turn.body += turn.body ? '\n\n_(The agent declined to continue.)_' : '_The agent declined to answer._';
@@ -168,7 +265,7 @@ export class AcpAgentService {
     }
 
     /** The thread as context: location, code, and the conversation (all of it for a new session). */
-    protected buildPrompt(review: Review, thread: ReviewThread, fresh: boolean): acp.ContentBlock[] {
+    protected async buildPrompt(review: Review, thread: ReviewThread, fresh: boolean): Promise<acp.ContentBlock[]> {
         const root = FileUri.fsPath(review.workspaceRoot);
         const location = thread.location;
         const file = location.uri ? FileUri.fsPath(location.uri) : undefined;
@@ -182,11 +279,16 @@ export class AcpAgentService {
             const intro = [
                 `You are a participant in a code review of the repository at ${root} ("${review.title}").`,
                 `A reviewer asked you about ${where} in review thread #${thread.number}.`,
-                'Investigate the repository as needed, then answer in the thread. Be concise.',
-                'Reference code as relative/path.ext:line (e.g. internal/orders/service.go:84) so the reviewer can click it.',
-                'Do not modify files unless the reviewer explicitly asks you to change code.'
+                'Look at the code you need, then answer in the thread. A map of the repository follows; use it to go straight to the right files.',
+                'Do not modify files unless the reviewer explicitly asks you to change code.',
+                '',
+                ANSWER_STYLE
             ];
             blocks.push({ type: 'text', text: intro.join('\n') });
+            const map = await this.repoMap(root, relative);
+            if (map) {
+                blocks.push({ type: 'text', text: map });
+            }
             if (location.anchor?.text && location.kind !== 'repository') {
                 blocks.push({ type: 'text', text: `The code in question${lines ? ` (lines ${lines})` : ''}:\n\`\`\`\n${location.anchor.text}\n\`\`\`` });
             }
@@ -203,6 +305,23 @@ export class AcpAgentService {
             blocks.push({ type: 'text', text: (since.length ? since : human.slice(-1)).map(m => m.body).join('\n\n') });
         }
         return blocks;
+    }
+
+    /** The repository map for a first prompt, files near the question first; skipped if it is not ready in time. */
+    protected async repoMap(root: string, focus: string | undefined): Promise<string | undefined> {
+        let timer: NodeJS.Timeout | undefined;
+        const timeout = new Promise<undefined>(resolve => {
+            timer = setTimeout(() => resolve(undefined), MAP_WAIT_MS);
+        });
+        const map = this.index.render(root, { focus, maxChars: MAP_CHARS }).catch(error => {
+            console.error('[co-review] repository map failed', error);
+            return undefined;
+        });
+        try {
+            return await Promise.race([map, timeout]);
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     protected async connect(review: Review): Promise<AgentConnection> {
@@ -226,7 +345,7 @@ export class AcpAgentService {
         const stream = sdk.ndJsonStream(Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>, Readable.toWeb(child.stdout as unknown as Parameters<typeof Readable.toWeb>[0]) as unknown as ReadableStream<Uint8Array>);
         const connection: AgentConnection = {
             config, process: child, stderr,
-            sessions: new Map(), turns: new Map(),
+            sessions: new Map(), turns: new Map(), options: new Map(),
             acp: undefined!, ready: undefined!
         };
         connection.acp = new sdk.ClientSideConnection(() => this.createClient(connection, root), stream);
@@ -235,6 +354,8 @@ export class AcpAgentService {
             clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } },
             clientInfo: { name: 'co-review', version: '0.1.0' }
         }));
+        // A command that could not start never exits; forget it so the next question tries again.
+        child.once('error', () => this.connections.get(review.id) === connection && this.connections.delete(review.id));
         child.once('exit', code => {
             if (this.connections.get(review.id) === connection) {
                 this.connections.delete(review.id);
@@ -270,8 +391,20 @@ export class AcpAgentService {
                 switch (update.sessionUpdate) {
                     case 'agent_message_chunk':
                         if (update.content.type === 'text') {
+                            // A new message in the same turn: the thread shows the last one as the answer, and
+                            // earlier ones ("Let me check…", a first draft) become steps, so answers stay short.
+                            const id = update.messageId ?? undefined;
+                            if (id && turn.agentMessageId && id !== turn.agentMessageId && turn.body.trim()) {
+                                const text = turn.body.trim().replace(/\s+/g, ' ');
+                                turn.activity.push({ id: `message:${turn.agentMessageId}`, title: text.length > 120 ? `${text.slice(0, 117)}…` : text, kind: 'think', status: 'completed' });
+                                turn.body = '';
+                            }
+                            turn.agentMessageId = id ?? turn.agentMessageId;
                             turn.body += update.content.text;
                         }
+                        break;
+                    case 'config_option_update':
+                        connection.options.set(sessionId, update.configOptions);
                         break;
                     case 'tool_call':
                         turn.activity.push({ id: update.toolCallId, title: update.title, kind: update.kind, status: update.status ?? 'pending' });

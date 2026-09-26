@@ -72,7 +72,12 @@ class CoReviewConnection {
 		if (result.isError) {
 			throw new Error(text);
 		}
-		return JSON.parse(text) as T;
+		// Most tools answer JSON; repo_map answers plain text.
+		try {
+			return JSON.parse(text) as T;
+		} catch {
+			return text as T;
+		}
 	}
 
 	/** Waits for reviewer questions; `undefined` when the wait timed out. */
@@ -242,7 +247,7 @@ export default function coReview(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "co_review_reply",
 		label: "Co-Review: reply",
-		description: "Answer the reviewer in a Co-Review thread (markdown; reference code as path:line).",
+		description: "Answer the reviewer in a Co-Review thread (markdown). Answer first, in plain language, in a few sentences; no line-number walkthroughs (at most one or two path:line links at the end).",
 		parameters: Type.Object({
 			threadId: Type.String(),
 			body: Type.String({ description: "Markdown answer" }),
@@ -255,16 +260,31 @@ export default function coReview(pi: ExtensionAPI) {
 	});
 
 	pi.registerTool({
+		name: "co_review_map",
+		label: "Co-Review: repository map",
+		description: "Outline of the repository: every source file with the classes, functions and methods it defines. Use it to find where something lives before reading or searching files.",
+		parameters: Type.Object({
+			path: Type.Optional(Type.String({ description: "Only files under this repository-relative folder (or this file)" })),
+			query: Type.Optional(Type.String({ description: "Only files whose path or symbol names contain this" }))
+		}),
+		async execute(_id, params) {
+			return text(await connection.call<string>("repo_map", params));
+		}
+	});
+
+	pi.registerTool({
 		name: "co_review_add_findings",
 		label: "Co-Review: add findings",
-		description: "Add review findings as threads on code (lines are 1-based).",
+		description: "Add review findings as threads on code (lines are 1-based; without a line, on the file or folder). labels group them in the panel (e.g. the area); status \"proposed\" lets the reviewer accept or dismiss each.",
 		parameters: Type.Object({
 			findings: Type.Array(Type.Object({
-				path: Type.String({ description: "File path relative to the repository" }),
-				line: Type.Number(),
+				path: Type.String({ description: "File or folder path relative to the repository (\".\" for the repository)" }),
+				line: Type.Optional(Type.Number()),
 				endLine: Type.Optional(Type.Number()),
 				body: Type.String({ description: "Markdown" }),
-				severity: Type.Optional(Type.Union([Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")]))
+				severity: Type.Optional(Type.Union([Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")])),
+				labels: Type.Optional(Type.Array(Type.String(), { description: "The first label is the area the panel groups by" })),
+				status: Type.Optional(Type.Union([Type.Literal("open"), Type.Literal("proposed")]))
 			}))
 		}),
 		async execute(_id, params) {

@@ -18,17 +18,13 @@ import { SyntaxServiceImpl } from './syntax-service-impl';
 import { BundleService } from './bundle-service';
 import { documentFormat, DocumentFormat } from '../common/design-format';
 import { acceptedSuggestions, commentOf, findThread, threadRef } from './review-payloads';
+import { ANSWER_STYLE, ANSWER_STYLE_SHORT } from './answer-style';
+import { LANGUAGE_BY_EXTENSION, RepoIndex } from './repo-index';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js') as typeof import('@modelcontextprotocol/sdk/server/mcp.js');
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js') as typeof import('@modelcontextprotocol/sdk/server/streamableHttp.js');
 const { isInitializeRequest } = require('@modelcontextprotocol/sdk/types.js') as typeof import('@modelcontextprotocol/sdk/types.js');
-
-const LANGUAGE_BY_EXTENSION: Record<string, string> = {
-    '.go': 'go', '.ts': 'typescript', '.tsx': 'typescriptreact', '.js': 'javascript', '.jsx': 'javascriptreact', '.mjs': 'javascript',
-    '.py': 'python', '.java': 'java', '.rs': 'rust', '.cs': 'csharp', '.cpp': 'cpp', '.cc': 'cpp', '.hpp': 'cpp', '.c': 'c', '.h': 'c',
-    '.rb': 'ruby', '.php': 'php', '.sh': 'shellscript', '.ps1': 'powershell'
-};
 
 interface Session {
     transport: TransportType;
@@ -66,6 +62,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     @inject(HumanDecisions) protected readonly decisions: HumanDecisions;
     @inject(AgentPresenceTracker) protected readonly presence: AgentPresenceTracker;
     @inject(BundleService) protected readonly bundles: BundleService;
+    @inject(RepoIndex) protected readonly index: RepoIndex;
 
     protected readonly sessions = new Map<string, Session>();
     /** Workspace the backend was started with; the default `root`. */
@@ -155,10 +152,14 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             capabilities: { experimental: { 'claude/channel': {} } },
             instructions: 'Co-Review is a repository review app. Call open_review, tell the reviewer the URL, then loop: '
                 + 'await_comment → investigate the repository → reply. Use add_findings for issues you find, '
-                + 'ask_reviewer when you need a decision. Reference code as path/to/file.ext:line. '
+                + 'ask_reviewer when you need a decision, and repo_map to find where things live before searching. '
+                + 'To review the whole repository: repo_map({ overview: true }) for where to start and how the code clusters, then '
+                + 'add_findings with the area as the first label and status "proposed" (a few per area); get_review returns `coverage`, '
+                + 'the files the reviewer has viewed per area. A knowledge bundle (e.g. OKF) opens with open_review({ dir }); '
+                + 'its pages come back as target "doc:<path>". '
                 + 'In Claude Code with channels on, the reviewer\'s questions and submissions also arrive as <channel source="co-review"> '
                 + 'messages (thread_id attribute): answer each with reply({ threadId: thread_id }) instead of looping await_comment, '
-                + 'and on a submission call await_review (it returns immediately).'
+                + 'and on a submission call await_review (it returns immediately).\n\n' + ANSWER_STYLE
         });
         const rootArg = z.string().optional().describe('Absolute path of the repository (defaults to the one Co-Review was started for)');
         const reviewArg = z.string().optional().describe('Review id (defaults to the review opened with open_review)');
@@ -176,7 +177,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         server.registerTool('open_review', {
             description: 'Open a review and join it as co-reviewer; returns the URL to give the reviewer. Either a repository (`root`, '
                 + 'default: the one Co-Review was started for) or a review directory / inline content: `dir` (index.markdown + assets + *.patch), '
-                + '`markdown` and/or `patch` strings. Then loop await_comment → reply, and/or await_review for the reviewer\'s Submit.\n\n'
+                + '`markdown` and/or `patch` strings. A `dir` can also be a knowledge bundle such as OKF (`<repo>/okf`): every Markdown page '
+                + 'is a review page, `/x.md` links resolve from the bundle root and `path:line` links open the code. '
+                + 'Then loop await_comment → reply, and/or await_review for the reviewer\'s Submit.\n\n'
                 + 'Design documents: start with frontmatter `---\\nco-review: design\\n---` to declare the structure (it is checked, and '
                 + 'departures come back in `format.warnings`): `# <title>`, then `## Context`, `## Design`, `## Diagrams`, `## Open Questions`, '
                 + 'in that order. `## Design` is one nested `- ` list, 2 spaces per level: L1 = what happens (business language), L2 = how, '
@@ -297,7 +300,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         });
 
         server.registerTool('reply', {
-            description: 'Answer in a review thread (markdown; reference code as path:line). threadId: the thread id or its short id ("t2").',
+            description: `Answer in a review thread (markdown). ${ANSWER_STYLE_SHORT} threadId: the thread id or its short id ("t2").`,
             inputSchema: { threadId: z.string(), body: z.string(), resolve: z.boolean().optional(), reviewId: reviewArg }
         }, async ({ threadId, body, resolve, reviewId }) => {
             const review = await resolveReview(reviewId);
@@ -316,7 +319,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         });
 
         server.registerTool('add_findings', {
-            description: 'Add findings. Two shapes: {path, line, endLine?, body, severity?} creates open threads on repository code; '
+            description: 'Add findings. Two shapes: {path, line?, endLine?, body, severity?, labels?, status?} creates threads on repository code '
+                + '(without `line`, on the file or folder; `labels` group them in the panel, e.g. the area of the repository; '
+                + '`status: "proposed"` lets the reviewer Accept or Dismiss each one, as for a first-pass audit); '
                 + 'anchored findings {id, target ("doc" | "patch:<slug>"), anchor, severity, labels, body, verdict?} are PROPOSED '
                 + '(the reviewer Accepts or Dismisses; only accepted ones come back in await_review).',
             inputSchema: {
@@ -332,6 +337,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     anchor: z.record(z.string(), z.any()).optional(),
                     labels: z.array(z.string()).optional(),
                     verdict: z.string().optional(),
+                    status: z.enum(['open', 'proposed']).optional().describe('Code findings: "proposed" to have the reviewer triage them (default "open")'),
                     proposal: z.object({ before: z.string(), after: z.string(), path: z.string().optional(), startLine: z.number().optional() }).passthrough().optional()
                 }).passthrough())
             }
@@ -349,11 +355,16 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                         id: finding.id ?? randomUUID(), target: finding.target, anchor: finding.anchor, body: finding.body,
                         severity: finding.severity as Severity | undefined, labels: finding.labels, verdict: finding.verdict, proposal: finding.proposal
                     }, agent);
-                } else if (finding.path && finding.line) {
-                    const location = await this.locationFor(review, finding.path, finding.line, finding.endLine);
-                    await this.store.createThread(review.id, location, finding.body, agent, { intent: 'comment', severity: finding.severity as Severity | undefined });
+                } else if (finding.path) {
+                    const location = finding.line
+                        ? await this.locationFor(review, finding.path, finding.line, finding.endLine)
+                        : await this.pathLocation(review, finding.path);
+                    await this.store.createThread(review.id, location, finding.body, agent, {
+                        intent: 'comment', severity: finding.severity as Severity | undefined, labels: finding.labels,
+                        origin: 'finding', status: finding.status
+                    });
                 } else {
-                    return fail('Each finding needs either `anchor` (with `target`) or `path` and `line`.');
+                    return fail('Each finding needs either `anchor` (with `target`) or `path`.');
                 }
                 const latest = await this.store.get(review.id);
                 ids.push(`t${latest!.nextThreadNumber - 1}`);
@@ -386,15 +397,45 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             return json(choice === undefined ? { status: 'pending' } : { status: 'answered', choice: options[Number(choice)] });
         });
 
+        server.registerTool('repo_map', {
+            description: 'Outline of the repository: every source file with the classes, functions and methods it defines (Tree-sitter). '
+                + 'Built on demand, cached, and refreshed for changed files. Use it to find where something lives before reading or '
+                + 'searching files; narrow it with `path` (a folder or file) or `query` (a name or word).',
+            inputSchema: {
+                root: rootArg,
+                path: z.string().optional().describe('Only files under this repository-relative folder (or this file)'),
+                query: z.string().optional().describe('Only files whose path or symbol names contain this (case-insensitive)'),
+                refresh: z.boolean().optional().describe('Re-check every file now instead of reusing a map from the last few seconds'),
+                overview: z.boolean().optional().describe('Instead of the file list: the repository overview (where to start, the areas of '
+                    + 'the code and how they connect; from graphify-out/graph.json when the repository has a Graphify graph)')
+            }
+        }, async ({ root, path: under, query, refresh, overview }) => {
+            const review = await resolveReview(undefined, root ? path.resolve(root) : undefined);
+            const workspace = root ? path.resolve(root) : review && !review.bundle ? FileUri.fsPath(review.workspaceRoot) : defaultRoot;
+            if (!workspace) {
+                return fail('No repository: pass `root` (absolute path).');
+            }
+            if (refresh) {
+                await this.index.get(workspace, true);
+            }
+            if (overview) {
+                return { content: [{ type: 'text', text: await this.index.overview(workspace, review && !review.bundle ? review.viewed : undefined) }] };
+            }
+            return { content: [{ type: 'text', text: await this.index.render(workspace, { path: under, query }) }] };
+        });
+
         server.registerTool('get_review', {
-            description: 'Non-blocking snapshot: the latest verdict, open comments (the await_review batch) and all threads with location and messages.',
+            description: 'Non-blocking snapshot: the latest verdict, open comments (the await_review batch), all threads with location and messages, '
+                + 'and `coverage` (repository reviews): source files the reviewer marked as viewed, overall and per area.',
             inputSchema: { reviewId: reviewArg, root: rootArg }
         }, async ({ reviewId, root }) => {
             const review = await resolveReview(reviewId, root ? path.resolve(root) : undefined);
             if (!review) {
                 return fail('No review found.');
             }
-            return json({ ...this.batch(review), threads: review.threads.map(t => this.describe(review, t)) });
+            // Which parts of the repository the reviewer has looked at, so the agent can point at what's left.
+            const coverage = review.bundle ? undefined : await this.index.coverage(FileUri.fsPath(review.workspaceRoot), review.viewed).catch(() => undefined);
+            return json({ ...this.batch(review), coverage, threads: review.threads.map(t => this.describe(review, t)) });
         });
 
         return server;
@@ -449,7 +490,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             `#${thread.number} on ${where}${l.symbol ? ` (${l.symbol})` : ''}${thread.intent === 'question' ? ', a question for you' : ''}`,
             t.code ? t.code.split('\n').map(line => `> ${line}`).join('\n') : '',
             ...t.messages.map(m => `${m.author}: ${m.body}`),
-            `Answer with reply({ threadId: "${threadRef(thread)}" }).`
+            `Answer with reply({ threadId: "${threadRef(thread)}" }). ${ANSWER_STYLE_SHORT}`
         ].filter(Boolean).join('\n\n');
     }
 
@@ -517,7 +558,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             openCount: open.length,
             needsReply: open.filter(needs).length,
             threads: waiting.map(t => this.describe(review, t)),
-            hint: 'reply(threadId, body) to answer (edit the reviewed files on disk if needed — the view live-reloads), then call await_comment again.'
+            hint: 'reply(threadId, body) to answer (edit the reviewed files on disk if needed — the view live-reloads), then call await_comment again.',
+            howToAnswer: ANSWER_STYLE_SHORT
         };
     }
 
@@ -531,6 +573,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             status: thread.status,
             intent: thread.intent,
             severity: thread.severity,
+            labels: thread.labels,
             anchor: location.docAnchor ?? location.patchAnchor,
             location: {
                 kind: location.kind,
@@ -542,6 +585,17 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             code: location.kind !== 'repository' ? location.anchor?.text : undefined,
             messages: thread.messages.filter(m => m.body.trim()).map(m => ({ author: m.author.name, role: m.author.kind, body: m.body }))
         };
+    }
+
+    /** A file or folder of the repository (`.` or `/`: the repository itself). */
+    protected async pathLocation(review: Review, relative: string): Promise<CodeLocation> {
+        const root = FileUri.fsPath(review.workspaceRoot);
+        const file = path.resolve(root, relative);
+        if (file === root) {
+            return { kind: 'repository' };
+        }
+        const stat = await fs.stat(file).catch(() => undefined);
+        return { kind: stat?.isDirectory() ? 'directory' : 'file', uri: FileUri.create(file).toString() };
     }
 
     /** Builds a semantic location (range, anchor, Tree-sitter tokens, symbol) from path + lines. */
