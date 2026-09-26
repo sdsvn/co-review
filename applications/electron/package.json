@@ -2,11 +2,11 @@
   "private": true,
   "name": "@co-review/electron-app",
   "productName": "Co-Review",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Agent-native repository review application",
   "main": "scripts/electron-main.js",
   "dependencies": {
-    "@co-review/review": "0.2.1",
+    "@co-review/review": "0.2.2",
     "@theia/core": "1.75.0",
     "@theia/editor": "1.75.0",
     "@theia/electron": "1.75.0",

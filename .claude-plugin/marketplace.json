@@ -8,7 +8,7 @@
       "name": "co-review",
       "source": "./plugin",
       "description": "Review code and designs with Claude Code as your co-reviewer: MCP tools, live channel, skills, commands, subagent and session hook.",
-      "version": "0.2.0",
+      "version": "0.2.2",
       "homepage": "https://github.com/sdsvn/co-review"
     }
   ],
