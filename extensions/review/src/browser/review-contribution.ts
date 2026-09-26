@@ -442,6 +442,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
     protected async reviewActions(): Promise<void> {
         const review = this.reviews.activeReview;
         if (!review) {
+            await this.showArchived();
             return;
         }
         const actions = [

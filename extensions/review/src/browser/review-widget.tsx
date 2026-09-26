@@ -133,7 +133,7 @@ export class ReviewWidget extends ReactWidget {
                 {options.map(r => <option key={r.id} value={r.id}>{r.archivedAt ? `${r.title} (archived)` : r.title}</option>)}
             </select>
             <span className={`${codicon('add')} action-label`} title='New review' onClick={() => this.commands.executeCommand(ReviewCommands.CREATE_REVIEW.id)} />
-            {review && <span className={`${codicon('ellipsis')} action-label`} title='More actions'
+            {(review || this.reviews.archivedReviews.length > 0) && <span className={`${codicon('ellipsis')} action-label`} title='More actions'
                 onClick={() => this.commands.executeCommand(ReviewCommands.REVIEW_ACTIONS.id)} />}
         </div>;
     }
