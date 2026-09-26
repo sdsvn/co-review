@@ -121,7 +121,7 @@ export class AgentSetup {
                 [['claude', 'plugin', 'marketplace', 'add', market], ['claude', 'plugin', 'install', 'co-review@co-review']])] : [],
             cli('Claude Code: MCP server only', 'claude-code', [['claude', ...claudeArgs]]),
             ...pi ? [cli('Pi: package (extension, /co-review, co-reviewer subagent, skills)', 'pi', [['pi', 'install', pi]])] : [],
-            ...omp ? [cli('Oh My Pi: package (extension, /co-review, co-reviewer task agent, skills)', 'omp', [['omp', 'install', omp]])] : [],
+            ...omp ? [cli('Oh My Pi: package (extension, /co-review, /co-review-design, skills)', 'omp', [['omp', 'install', omp]])] : [],
             { id: 'codex', label: 'Codex', kind: 'toml', file: path.join(home, '.codex', 'config.toml'),
                 snippet: [`[mcp_servers.${SERVER}]`, `command = ${JSON.stringify(l.command)}`, `args = ${JSON.stringify(l.args)}`,
                     ...hasEnv ? [`env = { ${Object.entries(env).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join(', ')} }`] : [],

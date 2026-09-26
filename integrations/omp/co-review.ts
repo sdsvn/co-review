@@ -16,6 +16,6 @@ export default function coReview(pi: ExtensionAPI) {
 		Type: pi.typebox.Type,
 		deliver: (ctx, prompt) => pi.sendUserMessage(prompt, { attribution: "agent", ...(ctx.isIdle() ? {} : { deliverAs: "followUp" }) }),
 		isMain: ctx => ctx.agent?.kind !== "sub",
-		subagentGuideline: "To keep co-reviewing while you work on something else, spawn the co-reviewer task agent; it loops co_review_wait and co_review_reply until the reviewer ends the review."
+		subagentGuideline: "To keep co-reviewing while you work on something else, spawn a task subagent that loops co_review_wait and co_review_reply until the reviewer ends the review; tell it to answer briefly and quickly."
 	});
 }

@@ -2,13 +2,19 @@
   "name": "co-review-omp",
   "version": "0.1.0",
   "private": true,
-  "description": "Co-Review for Oh My Pi: open a review, stay as co-reviewer, the co-reviewer task agent and the co-review / co-review-design skills",
+  "description": "Co-Review for Oh My Pi: open a review, stay as co-reviewer, plus the co-review / co-review-design skills and slash commands",
   "keywords": [
     "omp-package"
   ],
   "omp": {
     "extensions": [
       "./co-review.ts"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "commands": [
+      "./commands"
     ]
   }
 }

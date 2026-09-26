@@ -125,7 +125,7 @@ for one session without installing, run `omp -e ./integrations/omp`.
 | `/co-review-audit [focus]` | Reviews the whole repository with you: first-pass findings grouped by area |
 | `pi --co-review` / `omp --co-review` | Starts the session already listening to the review |
 | `co_review_start`, `co_review_wait`, `co_review_reply`, `co_review_add_findings`, `co_review_ask`, `co_review_verdict`, `co_review_map` | The tools, for the model and for subagents |
-| `co-reviewer` agent | Stays in the review as co-reviewer while the main session keeps working |
+| `co-reviewer` agent (Pi only) | Stays in the review as co-reviewer while the main session keeps working |
 
 Both packages also load the `co-review` and `co-review-design` skills. In an interactive session the agent waits for
 your questions without spending tokens: a background listener hands each one to the session.
@@ -135,8 +135,9 @@ How omp differs from Pi:
 - omp loads extensions into every task subagent. Only the main session listens for your questions and honors
   `omp --co-review`. A subagent opens a review only when it calls `co_review_start` itself.
 - Your questions reach the session attributed to the reviewer, not recorded as something you typed.
-- `co-reviewer` is an omp task agent, limited to read-only tools plus the Co-Review tools. Spawn it to keep answering
-  in the review while the main session works on something else.
+- omp ships no bundled co-reviewer agent — the main session answers directly, which keeps it feeling like one agent.
+  To keep answering while the main session works on something else, spawn a task subagent that loops `co_review_wait`
+  and `co_review_reply`; tell it to reply briefly and quickly.
 
 Co-Review can also launch either one as the agent for a question (ACP): **⋯ → Connect agent… → Pi** or
 **Oh My Pi**. See [agents.md](agents.md).
@@ -145,8 +146,8 @@ Co-Review can also launch either one as the agent for a question (ACP): **⋯ �
 extension: the connection to Co-Review, the `/co-review` command, the `--co-review` flag and the tools.
 [`integrations/pi`](../integrations/pi) and [`integrations/omp`](../integrations/omp) each add a few lines for their
 harness. Both packages use the same slash commands ([`integrations/shared/commands`](../integrations/shared/commands))
-and skills ([`plugin/skills`](../plugin/skills)). Only the `co-reviewer` agent file is separate, because Pi and omp
-use different agent frontmatter.
+and skills ([`plugin/skills`](../plugin/skills)). Only Pi adds a `co-reviewer` agent file; omp's main session (or any
+task subagent you spawn) co-reviews directly.
 
 ## Skills for other agents
 
