@@ -146,6 +146,15 @@ export class ReviewServiceImpl implements ReviewService {
         return FileUri.create(await this.index.writeOverview(FileUri.fsPath(review.workspaceRoot), review.viewed)).toString();
     }
 
+    async openInBrowser(uri: string): Promise<void> {
+        const file = FileUri.fsPath(uri);
+        if (!uri.startsWith('file:') || !/\.html?$/i.test(file)) {
+            throw new Error(`Not a local HTML page: ${uri}`);
+        }
+        const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
+        execFile(opener, [file], () => undefined);
+    }
+
     async getCoverage(reviewId: string): Promise<ReviewCoverage | undefined> {
         const review = await this.store.get(reviewId);
         // Review directories (designs, patches) are not repository reviews.

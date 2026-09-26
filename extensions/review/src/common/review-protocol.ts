@@ -88,6 +88,8 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     setViewed(reviewId: string, paths: string[], viewed: boolean): Promise<Review>;
     /** How much of the repository's source the reviewer has viewed, overall and per area. */
     getCoverage(reviewId: string): Promise<ReviewCoverage | undefined>;
+    /** Opens a local HTML page in the system's default browser (pages are not rendered inside Co-Review). */
+    openInBrowser(uri: string): Promise<void>;
     /** Writes the repository overview page (where to start, areas, how they connect) and returns its file URI. */
     writeOverview(reviewId: string): Promise<string | undefined>;
     /** Sends the thread to the review's agent (marks it as a question). */

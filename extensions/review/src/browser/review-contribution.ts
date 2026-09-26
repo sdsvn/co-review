@@ -292,6 +292,18 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             isEnabled: () => !!this.reviews.activeReview,
             execute: uri => this.toggleViewed(uri)
         }));
+        const html = (uri: URI | undefined) => !!uri && uri.scheme === 'file' && /\.html?$/i.test(uri.path.base);
+        const openInBrowser = (uri: URI) => this.service.openInBrowser(uri.toString()).catch(e => this.messages.error(String(e)));
+        registry.registerCommand(ReviewCommands.OPEN_IN_BROWSER, {
+            isEnabled: () => html(this.editorManager.currentEditor?.editor.uri),
+            isVisible: () => html(this.editorManager.currentEditor?.editor.uri),
+            execute: () => openInBrowser(this.editorManager.currentEditor!.editor.uri)
+        });
+        registry.registerCommand(ReviewCommands.OPEN_PATH_IN_BROWSER, UriAwareCommandHandler.MonoSelect(this.selectionService, {
+            isEnabled: uri => html(uri),
+            isVisible: uri => html(uri),
+            execute: uri => openInBrowser(uri)
+        }));
         registry.registerCommand(ReviewCommands.OPEN_OVERVIEW, {
             isEnabled: () => !!this.reviews.activeReview && !this.reviews.activeReview.bundle,
             execute: () => this.openOverview()
@@ -316,6 +328,8 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         menus.registerMenuAction(REVIEW_NAVIGATOR_GROUP, { commandId: ReviewCommands.COMMENT_PATH.id, order: 'a' });
         menus.registerMenuAction(REVIEW_NAVIGATOR_GROUP, { commandId: ReviewCommands.REVIEW_PATHS.id, order: 'b' });
         menus.registerMenuAction(REVIEW_NAVIGATOR_GROUP, { commandId: ReviewCommands.TOGGLE_VIEWED_PATH.id, order: 'c' });
+        menus.registerMenuAction(REVIEW_NAVIGATOR_GROUP, { commandId: ReviewCommands.OPEN_PATH_IN_BROWSER.id, order: 'd' });
+        menus.registerMenuAction(REVIEW_CONTEXT_MENU_GROUP, { commandId: ReviewCommands.OPEN_IN_BROWSER.id, order: 'd' });
         menus.registerMenuAction(REVIEW_CONTEXT_MENU_GROUP, { commandId: ReviewCommands.TOGGLE_VIEWED.id, label: 'Mark File as Viewed / Not Viewed', order: 'c' });
     }
 

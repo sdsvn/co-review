@@ -56,7 +56,7 @@ export function anchorOf(thread: ReviewThread, root?: string): AnchorRecord {
 }
 
 function where(a: AnchorRecord): string {
-    return a.path ?? a.blockId ?? a.nodeId ?? a.selector ?? 'document';
+    return a.path ?? a.blockId ?? a.nodeId ?? 'document';
 }
 
 function line(a: AnchorRecord): number | undefined {

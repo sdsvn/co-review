@@ -321,8 +321,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + '(without `line`, on the file or folder; `labels` group them in the panel, e.g. the area of the repository; '
                 + '`status: "proposed"` lets the reviewer Accept or Dismiss each one, as for a first-pass audit); '
                 + 'anchored findings {id, target ("doc" | "doc:<path>" | "patch:<slug>"), anchor, severity, labels, body, verdict?} are PROPOSED '
-                + '(the reviewer Accepts or Dismisses; only accepted ones come back in await_review). A rendered page (HTML or Markdown) takes '
-                + 'target "doc:<path>" and anchor {type: "text", exact} | {type: "element", selector} | {type: "document"}.',
+                + '(the reviewer Accepts or Dismisses; only accepted ones come back in await_review). A Markdown page takes '
+                + 'target "doc:<path>" and anchor {type: "text", exact} | {type: "document"}.',
             inputSchema: {
                 reviewId: reviewArg,
                 findings: z.array(z.object({
@@ -349,6 +349,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             const dir = review.bundle?.dir ?? FileUri.fsPath(review.workspaceRoot);
             const ids: string[] = [];
             for (const finding of findings) {
+                if (finding.anchor && finding.target?.startsWith('doc:') && !/\.(md|markdown)$/i.test(finding.target)) {
+                    return fail(`${finding.target}: only Markdown pages take a doc: target; comment on other files with path and line.`);
+                }
                 if (finding.anchor) {
                     await this.bundles.addFinding(review.id, dir, this.bundles.documentOf(dir), {
                         id: finding.id ?? randomUUID(), target: finding.target, anchor: finding.anchor, body: finding.body,

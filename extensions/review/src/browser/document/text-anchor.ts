@@ -1,7 +1,7 @@
 import { DocAnchor } from '../../common/review-model';
 
 /**
- * Text anchors in rendered content (Markdown pages, HTML pages): a quote with some context before and
+ * Text anchors in rendered content (Markdown pages): a quote with some context before and
  * after, located again by text rather than by position. `skip` excludes elements that are not part of
  * the reviewed content (inline threads, rendered diagrams, scripts).
  */

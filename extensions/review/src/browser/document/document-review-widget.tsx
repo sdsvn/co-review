@@ -30,8 +30,6 @@ type Anchored = { key: string; anchor: DocAnchor; element: (root: Root) => void 
 function locate(content: HTMLElement, anchor: DocAnchor): { target?: Element; marks?: HTMLElement[] } {
     switch (anchor.type) {
         case 'document':
-        case 'element':
-            // Element anchors belong to rendered HTML pages; in a Markdown document they show at the top.
             return { target: undefined };
         case 'mermaid-block':
         case 'mermaid-edge':

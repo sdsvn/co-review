@@ -23,8 +23,6 @@ import { DocumentReviewWidget, DocumentReviewWidgetOptions } from './document/do
 import { DocumentReviewOpenHandler } from './document/document-review-open-handler';
 import { PatchReviewWidget, PatchReviewWidgetOptions } from './patch/patch-review-widget';
 import { PatchReviewOpenHandler } from './patch/patch-review-open-handler';
-import { HtmlReviewWidget, HtmlReviewWidgetOptions } from './html/html-review-widget';
-import { HtmlReviewOpenHandler } from './html/html-review-open-handler';
 import { FilterContribution } from '@theia/core/lib/common/contribution-filter';
 import { ColorContribution } from '@theia/core/lib/browser/color-application-contribution';
 import { CoReviewThemeContribution } from './theme/co-review-theme';
@@ -77,20 +75,6 @@ export default new ContainerModule(bind => {
             child.bind(PatchReviewWidgetOptions).toConstantValue(options);
             child.bind(PatchReviewWidget).toSelf();
             const widget = child.get(PatchReviewWidget);
-            widget.init();
-            return widget;
-        }
-    })).inSingletonScope();
-
-    bind(HtmlReviewOpenHandler).toSelf().inSingletonScope();
-    bind(OpenHandler).toService(HtmlReviewOpenHandler);
-    bind(WidgetFactory).toDynamicValue(ctx => ({
-        id: HtmlReviewWidget.FACTORY_ID,
-        createWidget: (options: HtmlReviewWidgetOptions) => {
-            const child = ctx.container.createChild();
-            child.bind(HtmlReviewWidgetOptions).toConstantValue(options);
-            child.bind(HtmlReviewWidget).toSelf();
-            const widget = child.get(HtmlReviewWidget);
             widget.init();
             return widget;
         }

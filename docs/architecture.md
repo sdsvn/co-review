@@ -13,7 +13,7 @@ extensions/review      @co-review/review
                        ACP client, MCP endpoint
   src/electron-node    Desktop-only backend bindings
   src/browser          Frontend: review panel, inline editor
-                       UI, rendered pages, commands
+                       UI, rendered Markdown, commands
 bin/co-review.mjs      CLI: start the app, `mcp` stdio bridge
 bin/gen-prompts.mjs    copies prompts/ into skills, commands,
                        agents, app text and docs
@@ -52,7 +52,7 @@ The frontend renders the review UI in the Theia workbench.
 - **`ReviewEditorDecorator`** + **`InlineZone`** — GitHub-style inline review. Click **+** in the gutter (or drag over several lines) to start a thread. Threads and drafts render under the code as Monaco view zones with overlay widgets, plus gutter glyphs and hovers.
 - **`ReviewWidget`** — the Review panel: agent, drafts, and threads grouped by location.
 - **`ReviewLocations`** — creates and resolves semantic locations.
-- **`DocumentReviewWidget`** (`document/`) — rendered Markdown, pseudocode tree, and Mermaid with comments on text, diagrams, nodes, edges, and steps. **`PatchReviewWidget`** (`patch/`) renders patch pages with line, range, file, and patch comments. **`HtmlReviewWidget`** (`html/`) renders HTML pages in a sandboxed frame (scripts off by default, local CSS, scripts and images inlined) with comments on text, elements (a CSS `selector`) and the page, listed beside it. Their open handlers make Markdown and HTML files open rendered; opening at a line goes to the editor.
+- **`DocumentReviewWidget`** (`document/`) — rendered Markdown, pseudocode tree, and Mermaid with comments on text, diagrams, nodes, edges, and steps. **`PatchReviewWidget`** (`patch/`) renders patch pages with line, range, file, and patch comments. Markdown files open rendered through the document open handler; opening at a line goes to the editor. HTML is not rendered: **Open in Browser** hands the page to the system browser (`ReviewService.openInBrowser`).
 - **`SyntaxSymbols`** — Tree-sitter document symbols for Monaco (breadcrumbs, sticky scroll, Go to Symbol, outline) for languages with a grammar, when no language server provides symbols.
 - **`ReviewShellFilter`** — removes IDE-only workbench parts (debug, tests, tasks).
 - **`ReviewSelectionActions`** — the *Ask Agent / Comment* toolbar on selections.

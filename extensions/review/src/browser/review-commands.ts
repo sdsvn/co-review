@@ -15,6 +15,9 @@ export namespace ReviewCommands {
     export const TOGGLE_VIEWED: Command = { id: 'co-review.toggleViewed', category, label: 'Mark File as Viewed / Not Viewed' };
     /** The same for the file or folder selected in the explorer. */
     export const TOGGLE_VIEWED_PATH: Command = { id: 'co-review.toggleViewedPath', category, label: 'Mark as Viewed / Not Viewed' };
+    /** HTML pages open in the system browser: Co-Review does not render them. */
+    export const OPEN_IN_BROWSER: Command = { id: 'co-review.openInBrowser', category, label: 'Open in Browser' };
+    export const OPEN_PATH_IN_BROWSER: Command = { id: 'co-review.openPathInBrowser', category, label: 'Open in Browser' };
     export const OPEN_OVERVIEW: Command = { id: 'co-review.openOverview', category, label: 'Open Repository Overview' };
     export const REVIEW_ACTIONS: Command = { id: 'co-review.reviewActions', category, label: 'Review Actions…' };
     export const COLLAPSE_ALL: Command = { id: 'co-review.collapseAll', category, label: 'Collapse All Comments' };
