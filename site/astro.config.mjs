@@ -26,6 +26,9 @@ export default defineConfig({
 				// One theme for the light-only site: don't tie it to Starlight's dark-mode switch or UI colors.
 				useStarlightDarkModeSwitch: false,
 				useStarlightUiThemeColors: false,
+				// Inline the code-block styles in each page. The external ec.<hash>.css was linked under a different hash
+				// than the file the GitHub Pages build wrote, so every code block lost its frame and colors there.
+				emitExternalStylesheet: false,
 				styleOverrides: {
 					borderRadius: '10px',
 					borderColor: '#1e1b4b',
