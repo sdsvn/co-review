@@ -24,6 +24,21 @@ async function isRunning(url) {
     }
 }
 
+/** The base URL of a Co-Review server that is already running, or undefined; never starts one. */
+export async function findServer({ port }) {
+    if (!port) {
+        const url = registered();
+        if (url && await isRunning(url)) {
+            return url;
+        }
+    }
+    if (desktopApp) {
+        return undefined;
+    }
+    const base = `http://127.0.0.1:${port || 3000}`;
+    return await isRunning(base) ? base : undefined;
+}
+
 /**
  * Returns the base URL of a Co-Review server. Without an explicit port a running instance
  * (recorded in ~/.co-review/server.json) is reused; otherwise the browser app is started.
@@ -32,23 +47,14 @@ export async function ensureServer({ port, root, open }) {
     if (desktopApp && open) {
         return startDesktop(root);
     }
-    if (!port) {
-        try {
-            const { url } = JSON.parse(readFileSync(join(home, 'server.json'), 'utf8'));
-            if (url && await isRunning(url)) {
-                return url;
-            }
-        } catch {
-            /* none registered */
-        }
+    const running = await findServer({ port });
+    if (running) {
+        return running;
     }
     if (desktopApp) {
         return startDesktop(root);
     }
     const base = `http://127.0.0.1:${port || 3000}`;
-    if (await isRunning(base)) {
-        return base;
-    }
     mkdirSync(home, { recursive: true });
     const out = openSync(join(home, 'server.log'), 'a');
     log(`starting Co-Review on ${base} (log: ${join(home, 'server.log')})`);
