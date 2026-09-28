@@ -13,10 +13,11 @@ const out = join(site, 'src', 'content', 'docs', 'docs');
 
 /** Repository file → site page (slug under /docs/), with its sidebar order. */
 const pages = {
-	'docs/agent-setup.md': { slug: 'guides/connect-your-agent', order: 1, title: 'Connect your agent' },
-	'docs/agents.md': { slug: 'guides/agents', order: 2, title: 'How agents review with you' },
-	'docs/design-docs.md': { slug: 'guides/design-docs', order: 3, title: 'Design documents' },
-	'docs/running-and-packaging.md': { slug: 'guides/running-and-packaging', order: 4, title: 'Running and packaging' },
+	'docs/workflows.md': { slug: 'guides/workflows', order: 1, title: 'Review workflows' },
+	'docs/agent-setup.md': { slug: 'guides/connect-your-agent', order: 2, title: 'Connect your agent' },
+	'docs/agents.md': { slug: 'guides/agents', order: 3, title: 'How agents review with you' },
+	'docs/design-docs.md': { slug: 'guides/design-docs', order: 4, title: 'Design documents' },
+	'docs/running-and-packaging.md': { slug: 'guides/running-and-packaging', order: 5, title: 'Running and packaging' },
 	'llms.txt': { slug: 'reference/agent-contract', order: 1, title: 'Agent contract (llms.txt)' },
 	'docs/architecture.md': { slug: 'reference/architecture', order: 2, title: 'Architecture' }
 };

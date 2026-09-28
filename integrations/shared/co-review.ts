@@ -119,10 +119,11 @@ class CoReviewConnection {
 	}
 
 	/** Opens (or joins) the review of `root`, or of the review directory `dir`. */
-	async open(root: string, opts: { dir?: string; title?: string; open?: boolean }): Promise<Opened> {
+	async open(root: string, opts: { reviewId?: string; dir?: string; diff?: string; patchName?: string; title?: string; open?: boolean }): Promise<Opened> {
 		await this.connect(root);
 		return this.call<Opened>("open_review", {
-			root, ...(opts.dir ? { dir: resolve(root, opts.dir) } : {}), ...(opts.title ? { title: opts.title } : {}),
+			root, ...(opts.reviewId ? { reviewId: opts.reviewId } : {}), ...(opts.dir ? { dir: resolve(root, opts.dir) } : {}), ...(opts.title ? { title: opts.title } : {}),
+			...(opts.diff ? { diff: opts.diff } : {}), ...(opts.patchName ? { patchName: opts.patchName } : {}),
 			...(opts.open === false ? { open: false } : {})
 		});
 	}
@@ -212,7 +213,7 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 		);
 	};
 
-	const start = async (ctx: C, opts: { root?: string; dir?: string; title?: string; open?: boolean; listen: boolean }) => {
+	const start = async (ctx: C, opts: { root?: string; reviewId?: string; dir?: string; diff?: string; patchName?: string; title?: string; open?: boolean; listen: boolean }) => {
 		const opened = await connection.open(resolve(opts.root ?? ctx.cwd), opts);
 		if (opts.listen) {
 			startListening(ctx);
@@ -261,12 +262,15 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 			`In the main interactive session, reviewer questions arrive as [Co-Review] messages after co_review_start. ${harness.subagentGuideline}`
 		],
 		parameters: Type.Object({
+			reviewId: Type.Optional(Type.String({ description: "An existing review to join and show (e.g. one prepared with open: false); the other parameters are then ignored" })),
 			root: Type.Optional(Type.String({ description: "Absolute repository path; defaults to the working directory" })),
 			dir: Type.Optional(Type.String({ description: "Review directory with a design document (index.markdown) and/or *.patch files, relative to root or absolute" })),
+			diff: Type.Optional(Type.String({ description: "A git revision range to review as a pull-request page, diffed by Co-Review: \"HEAD\" (uncommitted, new files included) or \"main...HEAD\"; with dir, written into it next to a PR.md" })),
+			patchName: Type.Optional(Type.String({ description: "Slug of the diff's page (default \"change\"); findings on it use target \"patch:<slug>\"" })),
 			title: Type.Optional(Type.String({ description: "Title for a new review; omit to join the latest one" })),
 			open: Type.Optional(Type.Boolean({ description: "Show the review to the reviewer (default true); false prepares it without showing it, e.g. while you add first-pass findings — call again to show it" }))
 		}),
-		async execute(_id: string, params: { root?: string; dir?: string; title?: string; open?: boolean }, _signal: AbortSignal, _onUpdate: unknown, ctx: C) {
+		async execute(_id: string, params: { root?: string; reviewId?: string; dir?: string; diff?: string; patchName?: string; title?: string; open?: boolean }, _signal: AbortSignal, _onUpdate: unknown, ctx: C) {
 			const listen = ctx.hasUI && harness.isMain(ctx);
 			const opened = await start(ctx, { ...params, listen });
 			const warnings = opened.format?.warnings?.length ? `\nFix the design document, then call co_review_start again: ${opened.format.warnings.join(" ")}` : "";
@@ -323,10 +327,12 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 	pi.registerTool({
 		name: "co_review_add_findings",
 		label: "Co-Review: add findings",
-		description: "Add review findings as threads on code (lines are 1-based; without a line, on the file or folder). labels group them in the panel (e.g. the area); status \"proposed\" lets the reviewer accept or dismiss each.",
+		description: "Add review findings as threads. On repository code: path (lines are 1-based; without a line, on the file or folder). On a patch page or a Markdown page of a review directory: target (\"patch:<slug>\", \"doc\", \"doc:<path>\") and anchor (e.g. { type: \"code-line\", path, line, side: \"new\" } on a patch); those arrive proposed. labels group them in the panel (e.g. the area); status \"proposed\" lets the reviewer accept or dismiss each.",
 		parameters: Type.Object({
 			findings: Type.Array(Type.Object({
-				path: Type.String({ description: "File or folder path relative to the repository (\".\" for the repository)" }),
+				path: Type.Optional(Type.String({ description: "File or folder path relative to the repository (\".\" for the repository)" })),
+				target: Type.Optional(Type.String({ description: "\"patch:<slug>\", \"doc\" or \"doc:<path>\" (with anchor)" })),
+				anchor: Type.Optional(Type.Record(Type.String(), Type.Any(), { description: "Where on the page, e.g. { type: \"code-line\", path, line, side: \"new\" } or { type: \"text\", exact }" })),
 				line: Type.Optional(Type.Number()),
 				endLine: Type.Optional(Type.Number()),
 				body: Type.String({ description: "Markdown" }),

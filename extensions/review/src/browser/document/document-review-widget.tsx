@@ -6,7 +6,7 @@ import URI from '@theia/core/lib/common/uri';
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { OpenerService, open } from '@theia/core/lib/browser/opener-service';
-import { DocAnchor, ReviewThread, ThreadIntent } from '../../common/review-model';
+import { DocAnchor, isFindingsPage, ReviewThread, ThreadIntent } from '../../common/review-model';
 import { DraftEditor, ThreadView } from '../review-components';
 import { ReviewDraft, ReviewManager } from '../review-manager';
 import { ReviewNavigator } from '../review-navigator';
@@ -109,6 +109,14 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         this.node.append(this.header, this.content, this.popup);
         this.renderHeader();
         this.toDispose.push(this.fileService.onDidFilesChange(e => e.contains(this.uri) && this.load()));
+        // Pages Co-Review writes outside the repository (the findings page, the overview) aren't under the workspace's
+        // file watcher: watch them directly, so they reload when they change.
+        this.reviews.ready.then(() => {
+            const root = this.reviews.root;
+            if (!this.isDisposed && (!root || !new URI(root).isEqualOrParent(this.uri))) {
+                this.toDispose.push(this.fileService.watch(this.uri));
+            }
+        });
         this.toDispose.push(this.reviews.onDidChange(() => this.schedulePaint()));
         this.toDispose.push(this.reviews.onDidChangeDrafts(() => this.schedulePaint()));
         this.toDispose.push(this.reviews.onDidChangeCollapsed(() => this.schedulePaint()));
@@ -141,7 +149,9 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         spacer.className = 'co-review-spacer';
         const path = document.createElement('span');
         path.className = 'co-review-doc-path';
-        path.textContent = this.reviews.relativePath(this.options.uri);
+        path.textContent = isFindingsPage(this.options.uri)
+            ? `Findings of “${this.reviews.activeReview?.title ?? 'the review'}” — kept up to date; comment on any of it`
+            : this.reviews.relativePath(this.options.uri);
         this.header.append(path, spacer,
             button('comment', 'Comment on the document', () => this.addDraft({ type: 'document' }, 'comment')),
             button('go-to-file', 'Open the source', () => this.navigator.open({ kind: 'file', uri: this.options.uri })));
@@ -167,7 +177,8 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         this.source = source;
         this.revokeImages();
         const rendered = render(this.source, this.uri.path.base);
-        this.title.label = `Review: ${this.uri.path.base}`;
+        this.title.label = isFindingsPage(this.options.uri) ? 'Findings' : `Review: ${this.uri.path.base}`;
+        this.renderHeader();
         this.blocks = rendered.blocks;
         this.content.innerHTML = rendered.html;
         this.content.classList.toggle('pseudocode', rendered.pseudocode);

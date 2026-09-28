@@ -75,23 +75,28 @@ http://127.0.0.1:<port>/mcp?root=<repo>
 
 ### Starting a review
 
-In Claude Code run `/co-review:review`. In Pi or Oh My Pi run `/co-review`. In any other harness, say:
+Pick the [workflow](workflows.md): `/co-review:audit` (the whole repository), `/co-review:review` (the agent's
+change), `/co-review:pr <n>` (someone else's pull request) or `/co-review:design <task>` in Claude Code; the same with
+`/co-review-audit`, `/co-review-change`, `/co-review-pr` and `/co-review-design` in Pi or Oh My Pi. In any other
+harness, say what you want, e.g.:
 
-> Open a Co-Review review for this repository and be my co-reviewer: add findings for anything
-> risky in your change, then keep answering my questions in the review until I say we're done.
+> Review the change you just made with me in Co-Review: add findings for anything risky, then keep answering my
+> questions in the review until I submit.
 
 ### The agent loop
 
 ```
-open_review
-add_findings           (optional)
+open_review({ …, open: false })   prepare it, without showing it
+add_findings                      the first pass
+open_review({ reviewId })         show it
 loop:
-  await_comment        (blocks until a question arrives)
+  await_comment                   (blocks until a question arrives)
   … investigate …
   reply(threadId, body)
+await_review                      the verdict, then act on it
 ```
 
-While the agent is blocked in `await_comment` the panel shows **listening**. When it is busy elsewhere, your questions wait and are delivered on its next `await_comment`.
+While the agent is blocked in `await_comment`, the agent next to the review's scope in the panel is marked as listening (hover it for the status). When it is busy elsewhere, your questions wait and are delivered on its next `await_comment`.
 
 The full tool contract is in [`../llms.txt`](../llms.txt).
 
@@ -101,7 +106,7 @@ Skills, the Claude Code plugin and Pi: see [Connect your agent](agent-setup.md).
 
 ## Review directories
 
-An agent can hand over more than code: a directory with a design document and patches. Open it with `open_review({ dir })` (or `({ markdown, patch })` for inline content). The format is in [`../llms.txt`](../llms.txt).
+An agent can hand over more than code: a directory with a design document and patches. Open it with `open_review({ dir })` (or `({ markdown, patch })` for inline content, or `({ diff })` to have Co-Review diff the repository itself; `({ dir, diff })` writes that diff into the directory, next to a pull request's `PR.md`). The format is in [`../llms.txt`](../llms.txt).
 
 - **Rendering** — the document (Markdown, Mermaid, the L1/L2/L3 design tree; see [design-docs.md](design-docs.md)) and each `*.patch` as a review page with PR metadata. Findings in `<patch>.comments.json[l]` appear as *proposed* (Accept / Dismiss).
 - **Verdict** — the reviewer submits with **Submit review** (Approve / Request changes / Comment + a message). `await_review` returns it with the open comments.

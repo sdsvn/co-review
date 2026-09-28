@@ -26,8 +26,8 @@ Use the Co-Review tools from the co-review extension.
    describe it in words. No line numbers, no file:line links, no pasted code (Mermaid is fine). Think through
    compatibility, security, failure handling and migration, but write down only what changes the design. Size it
    to the change: about 10-30 lines if small, 30-80 medium, 80-150 large. Cut what doesn't help the reviewer decide.
-3. Open it with `co_review_start({ dir })`. Co-Review checks it and lists problems in `format.warnings`: fix every
-   one and open it again, then share the URL.
+3. Check it before I see it: `co_review_start({ dir, open: false })` lists problems in `format.warnings`. Fix every
+   one and call it again until there are none. Then show it with `co_review_start({ reviewId })` and share the URL.
 4. Answer comments in their threads and revise the design; keep the wording of commented steps stable.
 5. Implement only after approval (`co_review_verdict`). If the code must depart from the approved design, update the
    design and ask again.

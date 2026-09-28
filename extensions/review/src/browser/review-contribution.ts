@@ -98,6 +98,15 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         viewed();
     }
 
+    /** Opens the active review's findings page: every thread, grouped by area, as one rendered document. */
+    protected async openFindings(): Promise<boolean> {
+        const uri = await this.reviews.writeFindings();
+        if (uri) {
+            await this.navigator.open({ kind: 'document', uri });
+        }
+        return !!uri;
+    }
+
     /** Writes the repository overview (from Graphify's graph when there is one) and opens it as a rendered page. */
     protected async openOverview(): Promise<void> {
         const uri = await this.reviews.writeOverview();
@@ -162,14 +171,18 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         if (review?.threads.some(t => t.status !== 'resolved')) {
             await this.openView({ activate: false, reveal: true });
         }
-        const thread = review?.threads.find(t => t.status !== 'resolved' && t.location.uri && t.location.kind !== 'directory');
-        if (present && thread && !review?.bundle) {
-            await this.navigator.open(thread.location, thread.id);
+        // A repository review with findings opens on its findings page (a review directory on its document or patch).
+        const findings = !review?.bundle && review?.threads.some(t => t.location.kind !== 'document');
+        if (present && findings && await this.openFindings()) {
             return;
         }
         if (this.shell.getWidgets('main').length) {
             return;
         }
+        if (findings && await this.openFindings()) {
+            return;
+        }
+        const thread = review?.threads.find(t => t.status !== 'resolved' && t.location.uri && t.location.kind !== 'directory');
         if (review?.bundle) {
             await this.openBundleDocument();
             return;
@@ -319,6 +332,10 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             isVisible: uri => html(uri),
             execute: uri => openInBrowser(uri)
         }));
+        registry.registerCommand(ReviewCommands.OPEN_FINDINGS, {
+            isEnabled: () => !!this.reviews.activeReview && !this.reviews.activeReview.bundle,
+            execute: () => this.openFindings()
+        });
         registry.registerCommand(ReviewCommands.OPEN_OVERVIEW, {
             isEnabled: () => !!this.reviews.activeReview && !this.reviews.activeReview.bundle,
             execute: () => this.openOverview()
@@ -533,7 +550,8 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             return;
         }
         const actions = [
-            ...review.bundle ? [] : [{ label: '$(map) Repository overview', id: ReviewCommands.OPEN_OVERVIEW.id }],
+            ...review.bundle ? [] : [{ label: '$(checklist) Findings page', id: ReviewCommands.OPEN_FINDINGS.id },
+                { label: '$(map) Repository overview', id: ReviewCommands.OPEN_OVERVIEW.id }],
             { label: '$(list-selection) Go to comment…', id: ReviewCommands.GO_TO_COMMENT.id },
             { label: '$(fold) Collapse all comments', id: ReviewCommands.COLLAPSE_ALL.id },
             { label: '$(unfold) Expand all comments', id: ReviewCommands.EXPAND_ALL.id },

@@ -1,6 +1,6 @@
 import { FileUri } from '@theia/core/lib/common/file-uri';
 import * as path from 'path';
-import { CodeLocation, DocAnchor, PatchAnchor, Review, ReviewThread } from '../common/review-model';
+import { CodeLocation, DocAnchor, isFindingsPage, PatchAnchor, Review, ReviewThread } from '../common/review-model';
 import { DOCUMENT_NAMES } from '../common/patch';
 
 /**
@@ -25,6 +25,10 @@ export function findThread(review: Review, id: string): ReviewThread | undefined
  */
 export function targetOf(thread: ReviewThread, dir?: string): string {
     const l = thread.location;
+    if (l.kind === 'document' && isFindingsPage(l.uri)) {
+        // A comment on the findings page: `source` is the quoted text, from under the finding it is about.
+        return 'findings';
+    }
     if (l.kind === 'document') {
         const rel = dir && l.uri ? path.relative(dir, FileUri.fsPath(l.uri)).split(path.sep).join('/') : undefined;
         return rel && !rel.startsWith('..') && !DOCUMENT_NAMES.includes(rel) ? `doc:${rel}` : 'doc';

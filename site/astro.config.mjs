@@ -61,7 +61,7 @@ export default defineConfig({
 						'- Design documents declare `co-review: design` frontmatter; the Design documents page is the format.'
 					].join('\n'),
 					customSets: [
-						{ label: 'Agent integration', description: 'what an agent needs to run a review: setup, the tool contract and the design-document format', paths: ['docs/start/claude-code', 'docs/guides/connect-your-agent', 'docs/guides/agents', 'docs/guides/design-docs', 'docs/reference/agent-contract'] }
+						{ label: 'Agent integration', description: 'what an agent needs to run a review: setup, the tool contract and the design-document format', paths: ['docs/start/claude-code', 'docs/guides/workflows', 'docs/guides/connect-your-agent', 'docs/guides/agents', 'docs/guides/design-docs', 'docs/reference/agent-contract'] }
 					],
 					promote: ['docs/start/overview', 'docs/reference/agent-contract'],
 					demote: ['docs/reference/architecture', 'docs/guides/running-and-packaging'],

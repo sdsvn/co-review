@@ -24,11 +24,15 @@ the way you'd read a pull request. Comment on a line, a function, a file or a fo
 the thread, from the code. An overview shows where to start, the agent can take a first pass with findings grouped by
 area, and coverage tracks what you've read.
 
-But whole-repository review is only one of three jobs Co-Review does:
+Whole-repository review is one of four jobs, each one command away. In every one the agent sets up the review and takes
+a first pass before you see it, so it opens on what to look at ([how each workflow goes](docs/workflows.md)):
 
-- **A whole repository** — read the entire codebase with the agent (as above), to get it back in your head or to check your own work.
-- **A change or pull request** — a single change, a branch against its base, a commit, or a `.patch` / `.diff` file opened as a pull-request page, with line comments, suggested edits and one verdict.
-- **A design, before the code** — review the plan, not the source: a design written as an L1 · L2 · L3 tree with Mermaid diagrams, revised from your comments before anything is built.
+| Review | Claude Code | Pi / Oh My Pi |
+|---|---|---|
+| **The whole repository**: read the codebase with the agent, starting from its findings page | `/co-review:audit` | `/co-review-audit` |
+| **Your change**: the agent's diff as a pull-request page, with line comments, suggested edits and one verdict | `/co-review:review` | `/co-review-change` |
+| **Someone else's pull request**: the agent takes the first pass, you decide what goes back to the author | `/co-review:pr <n>` | `/co-review-pr <n>` |
+| **A design, before the code**: an L1 · L2 · L3 plan with Mermaid diagrams, revised from your comments before anything is built | `/co-review:design <task>` | `/co-review-design <task>` |
 
 Co-Review is a review tool with IDE features, not an IDE. It's built on [Eclipse Theia](https://theia-ide.org),
 so navigation, search, Git and language servers are the real thing; everything unrelated to reviewing is removed.
@@ -50,7 +54,8 @@ so navigation, search, Git and language servers are the real thing; everything u
 ## Features
 
 - **Whole-repository reviews** with an overview page, per-area coverage (`Cmd+Alt+V` marks a file viewed) and an
-  agent first pass whose findings arrive *proposed* for you to accept or dismiss.
+  agent first pass whose findings arrive *proposed* for you to accept or dismiss, collected on a findings page you
+  read like a report and comment on like any document.
 - **Inline threads** on a line, range, symbol, file, folder or the whole repository. Comments are anchored to their
   symbol and Tree-sitter tokens, so they follow the code through edits and are marked *outdated* instead of drifting.
 - **Agents as reviewers.** Select code and **Ask Agent**: the answer streams into the thread with the agent's steps,
@@ -97,7 +102,8 @@ Every integration launches Co-Review through the `co-review` command, so install
 | Command | What Claude does |
 |---|---|
 | `/co-review:audit [focus]` | Reviews the whole repository with you: a few proposed findings per area, then answers your questions |
-| `/co-review:review` | Opens a change in Co-Review, points out what deserves attention, answers your comments and acts on your verdict |
+| `/co-review:review [base]` | Opens its change (the diff) as a pull-request page, points out what deserves attention, answers your comments and acts on your verdict |
+| `/co-review:pr <n>` | Reviews someone else's pull request with you: its first pass, your verdict, a GitHub review only if you ask |
 | `/co-review:design <task>` | Writes a design doc, has you review it, implements what you approved |
 
 With Claude Code's [channels](docs/agent-setup.md#live-review-comments-channel) on, your questions reach the running
@@ -112,7 +118,8 @@ Both ship inside Co-Review, so there is nothing to clone:
 co-review setup pi     # or: co-review setup omp
 ```
 
-You get the same `co_review_*` tools and `/co-review`, `/co-review-design` and `/co-review-audit` commands in both,
+You get the same `co_review_*` tools and `/co-review-audit`, `/co-review-change`, `/co-review-pr` and `/co-review-design`
+commands in both (plus `/co-review` to join the review of the working directory),
 plus a `co-reviewer` agent and the skills. In Oh My Pi, only the main session listens for your questions, not every
 task subagent. Details: [Pi and Oh My Pi](docs/agent-setup.md#pi-and-oh-my-pi).
 
@@ -148,7 +155,8 @@ Once an agent is connected, **Ask Agent** appears next to commenting. Reply, res
 panel lists them by file (**Open / Proposed / Resolved / All**), and **⋯** has the rest.
 
 - **Whole repository:** the panel's **Coverage** shows what you've viewed, overall and per area. **Overview** says
-  where to start. `/co-review:audit` (or `/co-review-audit` in Pi and Oh My Pi) lets the agent go first.
+  where to start, and **Findings** opens every finding and comment as one page. `/co-review:audit` (or
+  `/co-review-audit` in Pi and Oh My Pi) lets the agent go first.
 - **Designs and pages:** Markdown files open rendered (the toolbar opens the source; opening at a line goes to the
   editor). Comment on text, diagram nodes and edges, or design steps. HTML files open as source; **Open in Browser**
   (editor or explorer context menu) shows the page in your browser. See [Design documents](docs/design-docs.md).
@@ -175,6 +183,7 @@ variables and themes are covered in [Running and packaging](docs/running-and-pac
 
 Published at **https://sdsvn.github.io/co-review/**.
 
+- [Review workflows](docs/workflows.md): the whole repository, your change, someone else's pull request, a design
 - [Connect your agent](docs/agent-setup.md): Claude Code plugin, Pi and Oh My Pi packages, skills, MCP config
 - [Agents](docs/agents.md): ACP vs MCP, the review loop, review directories
 - [Design documents](docs/design-docs.md): the design-doc format and how to instruct agents

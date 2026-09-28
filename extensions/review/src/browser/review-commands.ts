@@ -18,6 +18,7 @@ export namespace ReviewCommands {
     /** HTML pages open in the system browser: Co-Review does not render them. */
     export const OPEN_IN_BROWSER: Command = { id: 'co-review.openInBrowser', category, label: 'Open in Browser' };
     export const OPEN_PATH_IN_BROWSER: Command = { id: 'co-review.openPathInBrowser', category, label: 'Open in Browser' };
+    export const OPEN_FINDINGS: Command = { id: 'co-review.openFindings', category, label: 'Open Findings' };
     export const OPEN_OVERVIEW: Command = { id: 'co-review.openOverview', category, label: 'Open Repository Overview' };
     export const REVIEW_ACTIONS: Command = { id: 'co-review.reviewActions', category, label: 'Review Actions…' };
     export const COLLAPSE_ALL: Command = { id: 'co-review.collapseAll', category, label: 'Collapse All Comments' };

@@ -150,7 +150,11 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         const server = new McpServer({ name: 'co-review', version: '0.1.0' }, {
             // Claude Code channels: review events are pushed into the session (see startChannel).
             capabilities: { experimental: { 'claude/channel': {} } },
-            instructions: 'Co-Review is a repository review app. Call open_review, tell the reviewer the URL, then loop: '
+            instructions: 'Co-Review is a repository review app. Workflows: the whole repository (open_review with root), your change '
+                + '(its diff as a .patch in a review directory: open_review with dir), someone else\'s pull request (its patch and a PR.md in a '
+                + 'review directory), or a design document (open_review with dir). In each, prepare the review without showing it '
+                + '(open_review with open: false), add your first-pass findings, then show it with open_review({ reviewId }) and tell the '
+                + 'reviewer the URL. Then loop: '
                 + 'await_comment → investigate the repository → reply. Use add_findings for issues you find, '
                 + 'ask_reviewer when you need a decision, and repo_map to find where things live before searching. '
                 + 'To review the whole repository: repo_map({ overview: true }) for where to start and how the code clusters, then '
@@ -180,14 +184,21 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'default: the one Co-Review was started for) or a review directory / inline content: `dir` (index.markdown + assets + *.patch), '
                 + '`markdown` and/or `patch` strings. A `dir` can also be a knowledge bundle such as OKF (`<repo>/okf`): every Markdown page '
                 + 'is a review page, `/x.md` links resolve from the bundle root and `path:line` links open the code. '
+                + 'To have the reviewer start from your findings, prepare it first: open_review({ ..., open: false }), add_findings, '
+                + 'then open_review({ reviewId }) shows it. '
                 + 'Then loop await_comment → reply, and/or await_review for the reviewer\'s Submit.\n\n'
                 + 'Design documents: to have a design reviewed before implementing, write the smallest document that lets the reviewer '
                 + 'understand, challenge and approve the change:\n' + DESIGN_PROMPT,
             inputSchema: {
+                reviewId: z.string().optional().describe('An existing review to join and show (e.g. the one you prepared with open: false); '
+                    + 'the other arguments are then ignored'),
                 root: rootArg,
                 dir: z.string().optional().describe('Review directory (index.markdown or *.pseudocode.md, *.patch, PR.md, <patch>.comments.json)'),
                 markdown: z.string().optional().describe('Inline Markdown document (```mermaid fences render as diagrams)'),
                 patch: z.string().optional().describe('Inline unified diff / git patch'),
+                diff: z.string().optional().describe('Review a git diff of the repository (`root`), run by Co-Review: "HEAD" for uncommitted changes, '
+                    + '"main...HEAD" for a branch, any revision range. It becomes the patch page (named `patchName`, default "change"); '
+                    + 'with `dir`, it is written into that directory (e.g. next to a PR.md)'),
                 patchName: z.string().optional().describe('Slug for the inline patch page (default "change")'),
                 storePath: z.string().optional().describe('Where to write the review state file (default <dir>/review.json)'),
                 title: z.string().optional(),
@@ -196,12 +207,43 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 addr: z.string().optional().describe('Ignored'),
                 openspec: z.string().optional().describe('OpenSpec change directory (…/changes/<id>) shown with the document')
             }
-        }, async ({ root, dir, markdown, patch, patchName, storePath, title, open, openspec }) => {
+        }, async ({ reviewId, root, dir, markdown, patch: inlinePatch, diff, patchName, storePath, title, open, openspec }) => {
             const agent = this.agentOf(session);
+            let patch = inlinePatch;
+            if (diff && !reviewId) {
+                const repo = root ? path.resolve(root) : defaultRoot;
+                if (!repo) {
+                    return fail('`diff` needs the repository: pass `root`.');
+                }
+                const text = await this.gitDiff(repo, diff);
+                if (text === undefined) {
+                    return fail(`git diff ${diff} failed in ${repo}: is it a git repository, and is "${diff}" a valid revision range?`);
+                }
+                if (!text.trim()) {
+                    return fail(`git diff ${diff} is empty: there is nothing to review.`);
+                }
+                if (dir) {
+                    await fs.mkdir(path.resolve(dir), { recursive: true });
+                    await fs.writeFile(path.join(path.resolve(dir), `${patchName || 'change'}.patch`), text);
+                } else {
+                    patch = text;
+                }
+            }
             let review: Review;
             let workspace: string;
             let extra: Record<string, unknown> = {};
-            if (dir || markdown || patch) {
+            const existing = reviewId ? await this.store.get(reviewId) : undefined;
+            if (reviewId && !existing) {
+                return fail(`No review ${reviewId}.`);
+            }
+            if (existing) {
+                review = existing;
+                workspace = this.root(existing);
+                if (existing.bundle) {
+                    const docFile = this.bundles.documentOf(existing.bundle.dir);
+                    extra = { hasDoc: !!docFile, patches: this.bundles.patchesOf(existing.bundle.dir).length, dir: existing.bundle.dir, ...this.formatOf(docFile) };
+                }
+            } else if (dir || markdown || patch) {
                 const opened = await this.bundles.open({ dir, markdown, patch, patchName, title, storePath, openspec, author: agent });
                 review = opened.review;
                 workspace = opened.dir;
@@ -241,7 +283,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             return json({
                 reviewId: review.id, title: review.title, openThreads: review.threads.filter(t => t.status === 'open').length,
                 proposedFindings: review.threads.filter(t => t.status === 'proposed').length, ...extra,
-                ...(open === false ? { note: 'Not shown yet: call open_review again (without `title`) to show it to the reviewer.' }
+                ...(open === false ? { note: `Prepared, not shown to the reviewer yet. Add your first-pass findings, then call open_review({ reviewId: "${review.id}" }) to show it.` }
                     : url ? { url } : { note: 'Shown in the Co-Review desktop app.' }),
                 hint: 'Share the URL with the reviewer, then loop await_comment → reply, or call await_review to wait for their Submit.'
             });
@@ -530,6 +572,27 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         });
     }
 
+    /**
+     * `git diff <range>` in `repo`, as plain text (no pager, colours or external diff tools); undefined if git fails.
+     * For "HEAD" (the uncommitted work) new, untracked files are included too, without touching the index.
+     */
+    protected async gitDiff(repo: string, range: string): Promise<string | undefined> {
+        if (range.startsWith('-') || !/^[\w./~^@{}-]+$/.test(range)) {
+            return undefined;
+        }
+        const git = (args: string[], okCodes = [0]) => new Promise<string | undefined>(resolve =>
+            execFile('git', ['-C', repo, '--no-pager', ...args], { maxBuffer: 64 * 1024 * 1024 }, (error, stdout) =>
+                resolve(!error || okCodes.includes(Number((error as { code?: number }).code)) ? stdout : undefined)));
+        const tracked = await git(['diff', '--no-color', '--no-ext-diff', range, '--']);
+        if (tracked === undefined || range !== 'HEAD') {
+            return tracked;
+        }
+        const untracked = (await git(['ls-files', '--others', '--exclude-standard', '-z']))?.split('\0').filter(Boolean) ?? [];
+        // `diff --no-index` exits 1 when the files differ, which they always do here.
+        const added = await Promise.all(untracked.map(file => git(['diff', '--no-color', '--no-ext-diff', '--no-index', '--', '/dev/null', file], [0, 1])));
+        return tracked + added.filter(Boolean).join('');
+    }
+
     protected root(review: Review): string {
         return review.bundle?.dir ?? FileUri.fsPath(review.workspaceRoot);
     }
@@ -545,7 +608,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 format.warnings.push('Looks like a design document: add frontmatter `co-review: design` to declare (and check) the structure.');
             }
             return format.warnings.length
-                ? { format: { ...format, next: 'Fix each warning in the document, then call open_review again before giving the reviewer the URL.' } }
+                ? { format: { ...format, next: 'Fix each warning in the document and call open_review({ dir, open: false }) again; when there are none, show it with open_review({ reviewId }).' } }
                 : { format };
         } catch {
             return {};

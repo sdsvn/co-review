@@ -20,5 +20,7 @@ for that tool, and `{{> answer-style}}` includes another fragment.
 | `answer-style.md`, `answer-style-short.md` | every agent answering in a thread: ACP prompt, MCP instructions and tool results, the co-reviewer subagents |
 | `co-reviewer.md` | the Pi and Oh My Pi co-reviewer agents |
 | `design.md` | writing a design document: the design skill and commands, the `open_review` description, `llms.txt`, the docs |
-| `audit.md` | the whole-repository audit commands |
+| `audit.md` | the whole-repository audit: the commands and the `co-review` skill |
+| `review-change.md` | reviewing the agent's change (its diff): the commands and the `co-review` skill |
+| `review-pr.md` | reviewing someone else's pull request: the commands and the `co-review` skill |
 | `pi-tools.md` | the Pi / Oh My Pi tool names, in the skills |

@@ -12,6 +12,8 @@ extensions/review      @co-review/review
   src/node             Backend: persistence, Tree-sitter,
                        ACP client, MCP endpoint
   src/electron-node    Desktop-only backend bindings
+  src/electron-main    Desktop app windows (background start,
+                       one window per repository)
   src/browser          Frontend: review panel, inline editor
                        UI, rendered Markdown, commands
 bin/co-review.mjs      CLI: start the app, `mcp` stdio bridge
@@ -40,9 +42,14 @@ Each backend service handles one concern.
 - **`AcpAgentService`** — ACP client. Launches the review's agent, one session per thread. Streams answers and tool activity into threads, and routes permission requests to the reviewer.
 - **`CoReviewerMcp`** — the `/mcp` endpoint (Streamable HTTP) for agents in their own harness. Registers the running instance in `~/.co-review/server.json`. For Claude Code clients it also acts as a channel (`claude/channel`): questions and submissions are pushed into the session via `startChannel`.
 - **`BundleService`** — review directories: document, patches, `PR.md`, sidecar findings (proposed, idempotent), suggested edits (document rewrite / patch hand-off), OpenSpec detection, and the `review.json` state file. The companion module **`review-payloads`** maps threads to the agent-facing shapes (`t<N>` ids, targets, raw anchors).
+- **`FindingsPages`** (`findings-page.ts`) — a repository review's findings page: every thread grouped by area, written as Markdown under `~/.co-review/workspaces/<hash>/findings/<review>/` and rewritten when the review changes. It opens in the document view; comments on it reach agents as `target: "findings"`.
 - **`MobileReview`** — the phone view (`/m/`) and its small REST API (`/api/m`). Allowed hosts: localhost plus any listed in `CO_REVIEW_ALLOWED_HOSTS`.
 - **`AgentSetup`** — the in-app setup commands. Installs the bundled skills and writes (or hands out) each harness's MCP config, launching `co-review mcp` with this machine's paths.
 - **`HumanDecisions` / `AgentPresenceTracker`** — pending reviewer decisions (ACP permissions, `ask_reviewer`) and whether an MCP agent is currently listening.
+
+## Desktop windows (`src/electron-main`)
+
+**`ReviewElectronMainApplication`** replaces Theia's Electron main application. Started with `--background` (as `co-review mcp` does for an agent), it opens no window until a review is shown or the app is activated. `open_review` shows a review by launching the app again with the repository; the running instance gets it as a second instance and opens that repository's window, or focuses it if one is open, instead of opening a second one.
 
 ## Frontend (`src/browser`)
 

@@ -52,6 +52,11 @@ export namespace PatchAnchor {
     }
 }
 
+/** A review's findings page (written by Co-Review under its home directory): `…/findings/<reviewId>/findings.md`. */
+export function isFindingsPage(uri: string | undefined): boolean {
+    return !!uri && /\/findings\/[^/]+\/findings\.md$/.test(uri);
+}
+
 export namespace DocAnchor {
     export function describe(anchor: DocAnchor): string {
         switch (anchor.type) {

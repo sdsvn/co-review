@@ -10,6 +10,7 @@ import { AgentPresenceTracker, HumanDecisions } from './agent-coordination';
 import { AgentSetupInfo, CreateReviewParams, GitInfo, ReviewClient, ReviewService } from '../common/review-protocol';
 import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
+import { FindingsPages } from './findings-page';
 import { ReviewStore } from './review-store';
 
 function git(cwd: string, args: string[]): Promise<string | undefined> {
@@ -40,6 +41,9 @@ export class ReviewServiceImpl implements ReviewService {
 
     @inject(RepoIndex)
     protected readonly index: RepoIndex;
+
+    @inject(FindingsPages)
+    protected readonly findings: FindingsPages;
 
     protected client: ReviewClient | undefined;
     protected readonly toDispose = new DisposableCollection();
@@ -144,6 +148,10 @@ export class ReviewServiceImpl implements ReviewService {
             return undefined;
         }
         return FileUri.create(await this.index.writeOverview(FileUri.fsPath(review.workspaceRoot), review.viewed)).toString();
+    }
+
+    writeFindings(reviewId: string): Promise<string | undefined> {
+        return this.findings.write(reviewId);
     }
 
     async openInBrowser(uri: string): Promise<void> {

@@ -8,9 +8,10 @@ What an agent gets:
 
 - **The review tools** (MCP): `open_review`, `await_comment`, `reply`, `add_findings`, `ask_reviewer`, `await_review`,
   `get_review`.
-- **Two skills.** `co-review` hands a change to you, answers your comments in their threads and acts on your
-  verdict. `co-review-design` writes a design document, has you review it, and implements only after you approve.
-- **Slash commands** to start either workflow.
+- **Two skills.** `co-review` runs a review with you (the whole repository, its change, or someone else's pull
+  request): it prepares the review, takes a first pass, shows it, answers your comments in their threads and acts on
+  your verdict. `co-review-design` writes a design document, has you review it, and implements only after you approve.
+- **Slash commands** for each of the four [review workflows](workflows.md).
 
 **Before you start:** agents launch Co-Review through the `co-review` command, so it has to be on your `PATH`.
 Check with `which co-review`.
@@ -41,9 +42,10 @@ Either way, restart Claude Code afterwards so it loads the plugin.
 |---|---|
 | **MCP server** `plugin:co-review:co-review` | The review tools: `open_review`, `await_comment`, `reply`, `add_findings`, `ask_reviewer`, `await_review`, `get_review` |
 | **Skills** `co-review`, `co-review-design` | The workflows; they also trigger on requests like "review this with me" or "design this first" |
-| **`/co-review:review [focus]`** | Opens this change in Co-Review and stays as your co-reviewer until you submit |
+| **`/co-review:audit [focus]`** | Reviews the whole repository with you: first-pass findings grouped by area on a findings page, then answers your questions |
+| **`/co-review:review [base]`** | Opens its change (uncommitted, or the branch against `base`) as a pull-request page and stays as your co-reviewer until you submit |
+| **`/co-review:pr <n>`** | Reviews someone else's pull request with you, starting from its first-pass findings |
 | **`/co-review:design <task>`** | Writes a design doc, opens it for review, revises it, implements after approval |
-| **`/co-review:audit [focus]`** | Reviews the whole repository with you: first-pass findings grouped by area, then answers your questions |
 | **Subagent** `co-review:co-reviewer` | Runs in the background and answers your review while the main conversation keeps working ("keep answering my review while you fix the tests") |
 | **Live channel** | Your questions and your Submit arrive in the running session the moment you make them (below) |
 | **SessionStart hook** | Opening Claude Code in a repository with open reviews tells it which questions are waiting |
@@ -120,9 +122,11 @@ for one session without installing, run `omp -e ./integrations/omp`.
 
 | In Pi or omp | Does |
 |---|---|
-| `/co-review` | Opens a review of the working directory; your questions arrive in the session as you ask them |
-| `/co-review-design <task>` | Writes a design doc, opens it for review, implements after approval |
+| `/co-review` | Joins the review of the working directory; your questions arrive in the session as you ask them |
 | `/co-review-audit [focus]` | Reviews the whole repository with you: first-pass findings grouped by area |
+| `/co-review-change [base]` | Opens its change as a pull-request page and acts on your verdict |
+| `/co-review-pr <n>` | Reviews someone else's pull request with you, starting from its first-pass findings |
+| `/co-review-design <task>` | Writes a design doc, opens it for review, implements after approval |
 | `pi --co-review` / `omp --co-review` | Starts the session already listening to the review |
 | `co_review_start`, `co_review_wait`, `co_review_reply`, `co_review_add_findings`, `co_review_ask`, `co_review_verdict`, `co_review_map` | The tools, for the model and for subagents |
 | `co-reviewer` agent (Pi only) | Stays in the review as co-reviewer while the main session keeps working |
@@ -272,5 +276,6 @@ is in `~/.co-review/server.json`).
 
 For an agent that doesn't load skills, add to its `AGENTS.md` / `CLAUDE.md`:
 
-> When a change is ready, or a design needs review, open it in Co-Review with the `open_review` tool and stay as
-> co-reviewer: answer every comment in its thread, and wait for my verdict (`await_review`) before committing.
+> When a change is ready, or a design needs review, open it in Co-Review with the `open_review` tool (for a change:
+> `open_review({ diff: "HEAD", open: false })`, then `add_findings`, then `open_review({ reviewId })` to show it) and
+> stay as co-reviewer: answer every comment in its thread, and wait for my verdict (`await_review`) before committing.

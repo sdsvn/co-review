@@ -85,6 +85,8 @@ export class ReviewWidget extends ReactWidget {
                 <span className={codicon(this.coverageExpanded ? 'chevron-down' : 'chevron-right')} />
                 <span>Viewed {coverage.viewed} of {coverage.total} files</span>
                 {bar(coverage.viewed, coverage.total)}
+                <span className='co-review-link' title='Every finding and comment, grouped by area, as one page you can read and comment on'
+                    onClick={e => { e.stopPropagation(); this.commands.executeCommand(ReviewCommands.OPEN_FINDINGS.id); }}>Findings</span>
                 <span className='co-review-link' title='Where to start, the areas of the code and how they connect'
                     onClick={e => { e.stopPropagation(); this.commands.executeCommand(ReviewCommands.OPEN_OVERVIEW.id); }}>Overview</span>
             </div>

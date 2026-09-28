@@ -3,7 +3,7 @@ import URI from '@theia/core/lib/common/uri';
 import { StorageService } from '@theia/core/lib/browser/storage-service';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
-import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewCoverage, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus } from '../common/review-model';
+import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewCoverage, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus, isFindingsPage } from '../common/review-model';
 import { ReviewService } from '../common/review-protocol';
 import { ReviewClientImpl } from './review-client';
 import { AnchorState } from './review-locations';
@@ -374,6 +374,12 @@ export class ReviewManager {
         }
     }
 
+    /** Writes the active review's findings page (kept up to date by the backend); its file URI. */
+    writeFindings(): Promise<string | undefined> {
+        const review = this.activeReview;
+        return review ? this.service.writeFindings(review.id) : Promise.resolve(undefined);
+    }
+
     writeOverview(): Promise<string | undefined> {
         const review = this.activeReview;
         return review ? this.service.writeOverview(review.id) : Promise.resolve(undefined);
@@ -434,6 +440,9 @@ export class ReviewManager {
     }
 
     relativePath(uri: string): string {
+        if (isFindingsPage(uri)) {
+            return 'Findings page';
+        }
         if (!this._root) {
             return uri;
         }
