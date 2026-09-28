@@ -21,6 +21,10 @@ export interface PatchMeta {
     branch?: string;
     base?: string;
     commits?: number;
+    /** The GitHub repository of the pull request (`owner/name`), so the review can be posted to it. */
+    repo?: string;
+    /** The pull request's URL (`https://github.com/<owner>/<name>/pull/<n>`); gives `repo` and `number` too. */
+    url?: string;
     body: string;
 }
 
@@ -143,6 +147,13 @@ export function parsePatchMeta(text: string): PatchMeta {
         if (key === 'branch') { meta.branch = value; }
         if (key === 'base') { meta.base = value; }
         if (key === 'commits') { meta.commits = parseInt(value, 10) || undefined; }
+        if (key === 'repo') { meta.repo = value.trim(); }
+        if (key === 'url') { meta.url = value.trim(); }
+    }
+    const fromUrl = meta.url?.match(/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/);
+    if (fromUrl) {
+        meta.repo ??= fromUrl[1];
+        meta.number ??= Number(fromUrl[2]);
     }
     meta.body = lines.slice(i).join('\n').trim();
     return meta;

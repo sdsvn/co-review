@@ -135,15 +135,32 @@ the diff.
 **The agent:**
 
 1. Reads the pull request (`gh pr view`), fetches its branch, and writes a review directory outside the repository
-   with a `PR.md` (title, number, branch, base, commits and the description).
+   with a `PR.md` (title, number, URL, branch, base, commits and the description). The URL is what lets Co-Review
+   post your review back to the pull request.
 2. Prepares the review with `open_review({ dir, diff: "<base>...<branch>", patchName, title, open: false })`: the diff
    becomes the pull-request page, with the description above it.
 3. Reads the changed code in context and adds at most five proposed findings where it matters.
 4. Shows the review with a two-sentence summary: what the pull request does and its riskiest part.
 
 **You:** triage the findings, add your own comments, ask the agent about anything ("does this break the old API?"),
-and submit. The agent doesn't touch the pull request. After your verdict it drafts the GitHub review (your decision,
-your message, the accepted comments with file and line) and posts it with `gh pr review` only if you ask.
+and submit. The agent doesn't touch the pull request.
+
+**Post it to GitHub.** When you submit, tick **Also post to GitHub: owner/repo#42**. Co-Review posts your review to
+the pull request as one GitHub review, through the GitHub CLI (so `gh auth login` is the only setup):
+
+| In Co-Review | On GitHub |
+|---|---|
+| Your decision (Approve / Request changes / Comment) | The review's decision (on your own pull request GitHub only allows a comment; Co-Review posts it as one and says so) |
+| Your message | The review's summary |
+| Open threads on diff lines (your comments, findings you accepted) | Line comments, with the conversation |
+| Suggested edits you accepted | GitHub suggestions the author can commit with one click |
+| Comments on the pull request or its description | Listed in the summary |
+| Proposed findings you didn't accept, resolved threads, the agent's own questions | Not posted |
+
+If a line has left the diff since (the author pushed), its comment goes into the summary instead of failing the post.
+The panel then links to the posted review. You can also post later with **⋯ → Post review to GitHub…** (it asks for
+the decision and confirms first), or ask the agent to (`post_review_to_github`): Co-Review shows you what goes out and
+posts only when you click **Post to GitHub**.
 
 ## A design, before the code
 

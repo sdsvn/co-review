@@ -110,6 +110,7 @@ An agent can hand over more than code: a directory with a design document and pa
 
 - **Rendering** — the document (Markdown, Mermaid, the L1/L2/L3 design tree; see [design-docs.md](design-docs.md)) and each `*.patch` as a review page with PR metadata. Findings in `<patch>.comments.json[l]` appear as *proposed* (Accept / Dismiss).
 - **Verdict** — the reviewer submits with **Submit review** (Approve / Request changes / Comment + a message). `await_review` returns it with the open comments.
+- **GitHub** — when `PR.md` names the pull request (`repo: <owner>/<name>` and `pr: <n>`, or `url:`), the review can be posted to it as one GitHub review with its line comments and suggestions: **Also post to GitHub** in Submit review, **Review: Post Review to GitHub…**, or the agent's `post_review_to_github` (which asks the reviewer to confirm). It uses the GitHub CLI (`gh auth login`).
 - **Suggested edits** — findings may carry `proposal: { before, after, path?, startLine? }`, and the reviewer can propose edits on the document. Accepted document edits are written into the document (`doc.version` increments). Accepted patch suggestions come back in `acceptedSuggestions` for the agent to commit on the branch.
 - **OpenSpec** — `<dir>/openspec` (or `open_review({ openspec })`) renders as cards under the document.
 - **State file** — the review is also written to `<dir>/review.json` (or `storePath`), for tools that read it from disk.

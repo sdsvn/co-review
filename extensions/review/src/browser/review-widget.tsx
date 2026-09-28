@@ -5,6 +5,7 @@ import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { codicon } from '@theia/core/lib/browser/widgets/widget';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { AgentConfig, CodeLocation, Review, ReviewCoverage, ReviewDecision, ReviewScope, ReviewThread } from '../common/review-model';
+import { GitHubTarget } from '../common/review-protocol';
 import { ReviewManager } from './review-manager';
 import { ReviewCommands } from './review-commands';
 import { ReviewNavigator } from './review-navigator';
@@ -306,6 +307,15 @@ function SubmitReview({ review, manager }: { review: Review; manager: ReviewMana
     const [decision, setDecision] = React.useState<ReviewDecision>('comment');
     const [summary, setSummary] = React.useState('');
     const [busy, setBusy] = React.useState(false);
+    // A pull request's review can also be posted to GitHub; the reviewer opts in each time.
+    const [github, setGithub] = React.useState<GitHubTarget | undefined>();
+    const [post, setPost] = React.useState(false);
+    const [note, setNote] = React.useState<{ text: string; url?: string; error?: boolean } | undefined>();
+    React.useEffect(() => {
+        let live = true;
+        manager.getGitHubTarget().then(t => live && setGithub(t));
+        return () => { live = false; };
+    }, [review.id, review.bundle?.dir]);
     const verdict = review.verdict;
     const label: Record<ReviewDecision, string> = { approve: 'Approve', 'request-changes': 'Request changes', comment: 'Comment' };
     if (!open) {
@@ -315,6 +325,9 @@ function SubmitReview({ review, manager }: { review: Review; manager: ReviewMana
             </span>
             <span className='co-review-spacer' />
             <span className='co-review-link' onClick={() => setOpen(true)}>Submit review…</span>
+            {note && <span className={`co-review-github-note ${note.error ? 'error' : ''}`}>
+                {note.text} {note.url && <span className='co-review-link' onClick={() => window.open(note.url, '_blank', 'noopener')}>Open on GitHub</span>}
+            </span>}
         </div>;
     }
     const submit = async () => {
@@ -323,6 +336,20 @@ function SubmitReview({ review, manager }: { review: Review; manager: ReviewMana
             await manager.submitReview(decision, summary.trim());
             setSummary('');
             setOpen(false);
+            setNote(undefined);
+            if (post && github) {
+                setNote({ text: `Posting to ${github.repo}#${github.number}…` });
+                try {
+                    const posted = await manager.postToGitHub(decision, summary.trim());
+                    setNote({
+                        text: `Posted to GitHub: ${posted.comments} line comment${posted.comments === 1 ? '' : 's'}`
+                            + `${posted.inBody ? `, ${posted.inBody} in the body` : ''}.${posted.notes.length ? ` ${posted.notes.join(' ')}` : ''}`,
+                        url: posted.url
+                    });
+                } catch (e) {
+                    setNote({ text: String(e instanceof Error ? e.message : e).replace(/^Error: /, ''), error: true });
+                }
+            }
         } finally {
             setBusy(false);
         }
@@ -332,8 +359,13 @@ function SubmitReview({ review, manager }: { review: Review; manager: ReviewMana
             {(Object.keys(label) as ReviewDecision[]).map(d => <span key={d} className={`co-review-decision ${d} ${decision === d ? 'active' : ''}`}
                 onClick={() => setDecision(d)}>{label[d]}</span>)}
         </div>
-        <textarea className='theia-input' rows={3} value={summary} placeholder='Message to the agent (optional)'
+        <textarea className='theia-input' rows={3} value={summary} placeholder={post ? 'Message to the agent and on GitHub (optional)' : 'Message to the agent (optional)'}
             onChange={e => setSummary(e.currentTarget.value)} />
+        {github && <label className='co-review-github-post' title='Your open comments on diff lines become line comments; the rest goes into the review. Proposed findings you did not accept are left out.'>
+            <input type='checkbox' checked={post} onChange={e => setPost(e.currentTarget.checked)} />
+            Also post to GitHub: {github.repo}#{github.number}
+            {github.postedRound !== undefined && <span className='co-review-muted'> (round {github.postedRound} was posted)</span>}
+        </label>}
         <div className='co-review-composer-actions'>
             <span className='co-review-link' onClick={() => setOpen(false)}>Cancel</span>
             <button className='theia-button' disabled={busy} onClick={submit}>Submit review</button>

@@ -7,7 +7,7 @@ harness (Codex, Cursor, VS Code, Gemini CLI, Zed, …) works through the same MC
 What an agent gets:
 
 - **The review tools** (MCP): `open_review`, `await_comment`, `reply`, `add_findings`, `ask_reviewer`, `await_review`,
-  `get_review`.
+  `get_review`, and `post_review_to_github` for pull requests.
 - **Two skills.** `co-review` runs a review with you (the whole repository, its change, or someone else's pull
   request): it prepares the review, takes a first pass, shows it, answers your comments in their threads and acts on
   your verdict. `co-review-design` writes a design document, has you review it, and implements only after you approve.
@@ -40,7 +40,7 @@ Either way, restart Claude Code afterwards so it loads the plugin.
 
 | The plugin adds | What it does |
 |---|---|
-| **MCP server** `plugin:co-review:co-review` | The review tools: `open_review`, `await_comment`, `reply`, `add_findings`, `ask_reviewer`, `await_review`, `get_review` |
+| **MCP server** `plugin:co-review:co-review` | The review tools: `open_review`, `await_comment`, `reply`, `add_findings`, `ask_reviewer`, `await_review`, `get_review`, `post_review_to_github` |
 | **Skills** `co-review`, `co-review-design` | The workflows; they also trigger on requests like "review this with me" or "design this first" |
 | **`/co-review:audit [focus]`** | Reviews the whole repository with you: first-pass findings grouped by area on a findings page, then answers your questions |
 | **`/co-review:review [base]`** | Opens its change (uncommitted, or the branch against `base`) as a pull-request page and stays as your co-reviewer until you submit |

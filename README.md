@@ -31,7 +31,7 @@ a first pass before you see it, so it opens on what to look at ([how each workfl
 |---|---|---|
 | **The whole repository**: read the codebase with the agent, starting from its findings page | `/co-review:audit` | `/co-review-audit` |
 | **Your change**: the agent's diff as a pull-request page, with line comments, suggested edits and one verdict | `/co-review:review` | `/co-review-change` |
-| **Someone else's pull request**: the agent takes the first pass, you decide what goes back to the author | `/co-review:pr <n>` | `/co-review-pr <n>` |
+| **Someone else's pull request**: the agent takes the first pass, you decide what goes back to the author, and post it to GitHub as a review with line comments | `/co-review:pr <n>` | `/co-review-pr <n>` |
 | **A design, before the code**: an L1 · L2 · L3 plan with Mermaid diagrams, revised from your comments before anything is built | `/co-review:design <task>` | `/co-review-design <task>` |
 
 Co-Review is a review tool with IDE features, not an IDE. It's built on [Eclipse Theia](https://theia-ide.org),
@@ -68,7 +68,8 @@ so navigation, search, Git and language servers are the real thing; everything u
   whose structure is [declared and checked](docs/design-docs.md).
 - **Patches and knowledge bundles**: `.patch` / `.diff` files open as pull-request pages; OKF bundles open as
   commentable pages linked to the code.
-- **One verdict** — Approve, Request changes or Comment — and the agent gets every open comment in one batch.
+- **One verdict** — Approve, Request changes or Comment — and the agent gets every open comment in one batch. For a
+  GitHub pull request, the same verdict posts to it as a review with line comments and suggestions (`gh`).
 - **Phone view** to read, reply and submit away from your desk.
 
 ## Install
@@ -105,7 +106,7 @@ Every integration launches Co-Review through the `co-review` command, so install
 |---|---|
 | `/co-review:audit [focus]` | Reviews the whole repository with you: a few proposed findings per area, then answers your questions |
 | `/co-review:review [base]` | Opens its change (the diff) as a pull-request page, points out what deserves attention, answers your comments and acts on your verdict |
-| `/co-review:pr <n>` | Reviews someone else's pull request with you: its first pass, your verdict, a GitHub review only if you ask |
+| `/co-review:pr <n>` | Reviews someone else's pull request with you: its first pass, your verdict, then posted to the pull request (line comments, suggestions, your decision) when you choose to |
 | `/co-review:design <task>` | Writes a design doc, has you review it, implements what you approved |
 
 With Claude Code's [channels](docs/agent-setup.md#live-review-comments-channel) on, your questions reach the running

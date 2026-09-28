@@ -312,3 +312,9 @@ details[open] > summary.co-review-step-line::before { content: '▾'; }
     background: color-mix(in srgb, var(--theia-descriptionForeground) 25%, transparent); overflow: hidden; }
 .co-review-progress > span { display: block; height: 100%; background: var(--theia-progressBar-background); }
 .co-review-coverage-header .co-review-progress { margin-left: auto; }
+
+/* Posting a pull request's review to GitHub (Submit review) */
+.co-review-github-post { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: var(--theia-ui-font-size1); cursor: pointer; }
+.co-review-github-note { flex-basis: 100%; font-size: var(--theia-ui-font-size0); color: var(--theia-descriptionForeground); }
+.co-review-github-note.error { color: var(--theia-errorForeground); }
+.co-review-submit-bar { flex-wrap: wrap; }

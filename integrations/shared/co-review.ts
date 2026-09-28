@@ -348,6 +348,21 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 	});
 
 	pi.registerTool({
+		name: "co_review_post_github",
+		label: "Co-Review: post to GitHub",
+		description: "Post the review to its GitHub pull request (a review directory whose PR.md names it) as one GitHub review: line comments, suggestions, and the reviewer's verdict. Only when the reviewer asks: Co-Review shows them what will be posted and posts only if they confirm.",
+		parameters: Type.Object({
+			summary: Type.Optional(Type.String({ description: "The review's message on GitHub (default: the reviewer's summary)" }))
+		}),
+		async execute(_id: string, params: { summary?: string }) {
+			const r = await connection.call<{ status: string; url?: string; comments?: number; inBody?: number; notes?: string[] }>("post_review_to_github", params, 16 * 60_000);
+			return text(r.status === "posted"
+				? `Posted to GitHub: ${r.url} (${r.comments} line comments${r.inBody ? `, ${r.inBody} in the body` : ""}).${r.notes?.length ? ` ${r.notes.join(" ")}` : ""}`
+				: "The reviewer didn't confirm; nothing was posted.");
+		}
+	});
+
+	pi.registerTool({
 		name: "co_review_verdict",
 		label: "Co-Review: verdict",
 		description: "Wait for the reviewer to submit the review (Approve / Request changes / Comment). Returns the decision, their message, the open comments and accepted suggestions to apply.",

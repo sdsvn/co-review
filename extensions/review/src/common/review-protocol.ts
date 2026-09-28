@@ -60,6 +60,28 @@ export interface AgentSetupInfo {
     cliInstalled: boolean;
 }
 
+/** The GitHub pull request a review belongs to (from its review directory's `PR.md`). */
+export interface GitHubTarget {
+    repo: string;
+    number: number;
+    url: string;
+    /** The round last posted to GitHub, and where. */
+    postedRound?: number;
+    postedUrl?: string;
+}
+
+/** What posting a review to GitHub did. */
+export interface GitHubPost {
+    url: string;
+    /** Line comments posted on the diff. */
+    comments: number;
+    /** Comments that went into the review's body (not on a line of the diff). */
+    inBody: number;
+    event: string;
+    /** Fallbacks GitHub needed (e.g. a decision GitHub doesn't allow on your own pull request). */
+    notes: string[];
+}
+
 export interface ReviewService extends RpcServer<ReviewClient> {
     getCurrentUser(workspaceRoot: string): Promise<Participant>;
     getGitInfo(workspaceRoot: string): Promise<GitInfo>;
@@ -90,6 +112,10 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     getCoverage(reviewId: string): Promise<ReviewCoverage | undefined>;
     /** Writes the review's findings page (its threads as one Markdown document, kept up to date) and returns its file URI. */
     writeFindings(reviewId: string): Promise<string | undefined>;
+    /** The GitHub pull request the review belongs to, if any. */
+    getGitHubTarget(reviewId: string): Promise<GitHubTarget | undefined>;
+    /** Posts the review to its GitHub pull request (the latest verdict unless given). */
+    postToGitHub(reviewId: string, decision?: ReviewDecision, summary?: string): Promise<GitHubPost>;
     /** Opens a local HTML page in the system's default browser (pages are not rendered inside Co-Review). */
     openInBrowser(uri: string): Promise<void>;
     /** Writes the repository overview page (where to start, areas, how they connect) and returns its file URI. */

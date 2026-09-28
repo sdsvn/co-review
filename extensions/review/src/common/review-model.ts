@@ -311,6 +311,8 @@ export interface ReviewBundle {
     openspec?: string;
     /** Bumped each time an accepted edit rewrites the document. */
     docVersion?: number;
+    /** The last time the review was posted to its GitHub pull request. */
+    github?: { url: string; round: number; postedAt: number };
 }
 
 export type ReviewDecision = 'approve' | 'request-changes' | 'comment';

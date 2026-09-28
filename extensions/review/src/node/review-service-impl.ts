@@ -7,10 +7,11 @@ import { AcpAgentService } from './acp-agent-service';
 import { BundleService } from './bundle-service';
 import { currentUser } from './participants';
 import { AgentPresenceTracker, HumanDecisions } from './agent-coordination';
-import { AgentSetupInfo, CreateReviewParams, GitInfo, ReviewClient, ReviewService } from '../common/review-protocol';
+import { AgentSetupInfo, CreateReviewParams, GitHubPost, GitHubTarget, GitInfo, ReviewClient, ReviewService } from '../common/review-protocol';
 import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
 import { FindingsPages } from './findings-page';
+import { GitHubReviews } from './github';
 import { ReviewStore } from './review-store';
 
 function git(cwd: string, args: string[]): Promise<string | undefined> {
@@ -44,6 +45,9 @@ export class ReviewServiceImpl implements ReviewService {
 
     @inject(FindingsPages)
     protected readonly findings: FindingsPages;
+
+    @inject(GitHubReviews)
+    protected readonly github: GitHubReviews;
 
     protected client: ReviewClient | undefined;
     protected readonly toDispose = new DisposableCollection();
@@ -148,6 +152,14 @@ export class ReviewServiceImpl implements ReviewService {
             return undefined;
         }
         return FileUri.create(await this.index.writeOverview(FileUri.fsPath(review.workspaceRoot), review.viewed)).toString();
+    }
+
+    async getGitHubTarget(reviewId: string): Promise<GitHubTarget | undefined> {
+        return this.github.target(await this.store.get(reviewId));
+    }
+
+    postToGitHub(reviewId: string, decision?: ReviewDecision, summary?: string): Promise<GitHubPost> {
+        return this.github.publish(reviewId, decision, summary);
     }
 
     writeFindings(reviewId: string): Promise<string | undefined> {

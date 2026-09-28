@@ -14,6 +14,7 @@ import { AcpAgentService } from './acp-agent-service';
 import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
 import { FindingsPages } from './findings-page';
+import { GitHubReviews } from './github';
 
 export default new ContainerModule(bind => {
     bind(ReviewStore).toSelf().inSingletonScope();
@@ -24,6 +25,7 @@ export default new ContainerModule(bind => {
     bind(RepoIndex).toSelf().inSingletonScope();
     bind(AgentPresenceTracker).toSelf().inSingletonScope();
     bind(FindingsPages).toSelf().inSingletonScope();
+    bind(GitHubReviews).toSelf().inSingletonScope();
     bind(CoReviewerMcp).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(CoReviewerMcp);
     bind(MobileReview).toSelf().inSingletonScope();

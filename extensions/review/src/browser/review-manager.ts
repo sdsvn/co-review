@@ -4,7 +4,7 @@ import { StorageService } from '@theia/core/lib/browser/storage-service';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewCoverage, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus, isFindingsPage } from '../common/review-model';
-import { ReviewService } from '../common/review-protocol';
+import { GitHubPost, GitHubTarget, ReviewService } from '../common/review-protocol';
 import { ReviewClientImpl } from './review-client';
 import { AnchorState } from './review-locations';
 
@@ -344,6 +344,18 @@ export class ReviewManager {
         if (review) {
             await this.service.submitReview(review.id, decision, summary, this._user);
         }
+    }
+
+    /** The GitHub pull request of the active review (a review directory with a PR.md naming it), if any. */
+    getGitHubTarget(): Promise<GitHubTarget | undefined> {
+        const review = this.activeReview;
+        return review?.bundle ? this.service.getGitHubTarget(review.id).catch(() => undefined) : Promise.resolve(undefined);
+    }
+
+    /** Posts the active review to its GitHub pull request (the latest verdict unless given). */
+    postToGitHub(decision?: ReviewDecision, summary?: string): Promise<GitHubPost> {
+        const review = this.activeReview;
+        return review ? this.service.postToGitHub(review.id, decision, summary) : Promise.reject(new Error('No review.'));
     }
 
     /** Pulls in pre-seeded findings of the review directory (idempotent). */

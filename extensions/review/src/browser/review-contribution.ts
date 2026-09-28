@@ -98,6 +98,44 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         viewed();
     }
 
+    /** Posts the review to its GitHub pull request, after the reviewer confirms what goes out and as what. */
+    protected async postToGitHub(): Promise<void> {
+        const review = this.reviews.activeReview;
+        const github = await this.reviews.getGitHubTarget();
+        if (!review || !github) {
+            this.messages.warn('This review is not a GitHub pull request: its review directory needs a PR.md with `repo: <owner>/<name>` and `pr: <number>`.');
+            return;
+        }
+        const label = { approve: 'Approve', 'request-changes': 'Request changes', comment: 'Comment' } as const;
+        const picked = await this.quickInput.pick((Object.keys(label) as (keyof typeof label)[]).map(d => ({
+            label: label[d], id: d, description: d === (review.verdict?.decision ?? 'comment') ? 'your verdict' : undefined
+        })), { placeHolder: `Post to ${github.repo}#${github.number} as…` });
+        if (!picked) {
+            return;
+        }
+        const open = review.threads.filter(t => t.status === 'open').length;
+        const again = github.postedRound !== undefined ? `\n\nRound ${github.postedRound} was already posted (${github.postedUrl}).` : '';
+        const ok = await new ConfirmDialog({
+            title: 'Post to GitHub',
+            msg: `Post this review to ${github.url} as "${picked.label}", with its ${open} open comment${open === 1 ? '' : 's'}`
+                + ` and your summary? Proposed findings you didn't accept and resolved threads are left out.${again}`,
+            ok: 'Post to GitHub'
+        }).open();
+        if (!ok) {
+            return;
+        }
+        try {
+            const posted = await this.reviews.postToGitHub(picked.id as keyof typeof label, review.verdict?.summary);
+            const action = await this.messages.info(`Posted to GitHub: ${posted.comments} line comment${posted.comments === 1 ? '' : 's'}`
+                + `${posted.inBody ? `, ${posted.inBody} in the body` : ''}.${posted.notes.length ? ` ${posted.notes.join(' ')}` : ''}`, 'Open on GitHub');
+            if (action) {
+                window.open(posted.url, '_blank', 'noopener');
+            }
+        } catch (e) {
+            this.messages.error(String(e instanceof Error ? e.message : e));
+        }
+    }
+
     /** Opens the active review's findings page: every thread, grouped by area, as one rendered document. */
     protected async openFindings(): Promise<boolean> {
         const uri = await this.reviews.writeFindings();
@@ -332,6 +370,10 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             isVisible: uri => html(uri),
             execute: uri => openInBrowser(uri)
         }));
+        registry.registerCommand(ReviewCommands.POST_TO_GITHUB, {
+            isEnabled: () => !!this.reviews.activeReview?.bundle,
+            execute: () => this.postToGitHub()
+        });
         registry.registerCommand(ReviewCommands.OPEN_FINDINGS, {
             isEnabled: () => !!this.reviews.activeReview && !this.reviews.activeReview.bundle,
             execute: () => this.openFindings()
@@ -549,7 +591,9 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             await this.showArchived();
             return;
         }
+        const github = await this.reviews.getGitHubTarget();
         const actions = [
+            ...github ? [{ label: `$(github) Post review to GitHub (${github.repo}#${github.number})…`, id: ReviewCommands.POST_TO_GITHUB.id }] : [],
             ...review.bundle ? [] : [{ label: '$(checklist) Findings page', id: ReviewCommands.OPEN_FINDINGS.id },
                 { label: '$(map) Repository overview', id: ReviewCommands.OPEN_OVERVIEW.id }],
             { label: '$(list-selection) Go to comment…', id: ReviewCommands.GO_TO_COMMENT.id },

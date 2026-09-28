@@ -16,6 +16,7 @@ import { AgentPresenceTracker, HumanDecisions } from './agent-coordination';
 import { coReviewHome, ReviewStore } from './review-store';
 import { SyntaxServiceImpl } from './syntax-service-impl';
 import { BundleService } from './bundle-service';
+import { GitHubReviews } from './github';
 import { documentFormat, DocumentFormat } from '../common/design-format';
 import { acceptedSuggestions, commentOf, findThread, threadRef } from './review-payloads';
 import { ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT } from './prompts.gen';
@@ -62,6 +63,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     @inject(HumanDecisions) protected readonly decisions: HumanDecisions;
     @inject(AgentPresenceTracker) protected readonly presence: AgentPresenceTracker;
     @inject(BundleService) protected readonly bundles: BundleService;
+    @inject(GitHubReviews) protected readonly github: GitHubReviews;
     @inject(RepoIndex) protected readonly index: RepoIndex;
 
     protected readonly sessions = new Map<string, Session>();
@@ -456,6 +458,50 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             await this.store.updateMessage(review.id, id, messageId, { permission: { ...request, outcome: choice ?? 'cancelled' } });
             await this.store.setAgentState(review.id, id, 'idle');
             return json(choice === undefined ? { status: 'pending' } : { status: 'answered', choice: options[Number(choice)] });
+        });
+
+        server.registerTool('post_review_to_github', {
+            description: 'Post the review to its GitHub pull request (a review directory whose PR.md has `repo: <owner>/<name>` and '
+                + '`pr: <number>`), as one GitHub review: open threads on diff lines become line comments (suggested edits become '
+                + 'GitHub suggestions), the rest goes into the review\'s body, and the reviewer\'s latest verdict is the review\'s decision. '
+                + 'Only when the reviewer asks for it: Co-Review first shows them what will be posted and posts only if they confirm.',
+            inputSchema: {
+                reviewId: reviewArg,
+                summary: z.string().optional().describe('The review\'s message on GitHub (default: the reviewer\'s summary from Submit review)')
+            }
+        }, async ({ reviewId, summary }) => {
+            const review = await resolveReview(reviewId);
+            const target = await this.github.target(review);
+            if (!review || !target) {
+                return fail('This review is not a GitHub pull request: its review directory needs a PR.md with `repo: <owner>/<name>` and `pr: <number>`.');
+            }
+            const decision = review.verdict?.decision ?? 'comment';
+            const composed = this.github.compose(review, decision, summary ?? review.verdict?.summary ?? '');
+            const again = target.postedRound !== undefined && target.postedRound === (review.verdict?.count ?? 0)
+                ? ` This round was already posted (${target.postedUrl}).` : '';
+            const question = `Post this review to GitHub, ${target.repo}#${target.number}? As "${decision}", with ${composed.comments.length} line `
+                + `comment${composed.comments.length === 1 ? '' : 's'}${composed.elsewhere ? ` and ${composed.elsewhere} in the review's body` : ''}.${again}`;
+            const agent = this.agentOf(session);
+            const thread = await this.store.createThread(review.id, { kind: 'repository' }, question, agent);
+            const request = { id: randomUUID(), title: question, options: [{ id: 'post', name: 'Post to GitHub', kind: 'allow_once' }, { id: 'skip', name: 'Don\'t post', kind: 'reject_once' }] };
+            const messageId = await this.store.startMessage(review.id, thread.id, agent, { body: '', permission: request, status: 'done' });
+            await this.store.setAgentState(review.id, thread.id, 'waiting_for_human');
+            const choice = await this.decisions.wait(request.id, 15 * 60 * 1000);
+            await this.store.updateMessage(review.id, thread.id, messageId, { permission: { ...request, outcome: choice ?? 'cancelled' } });
+            await this.store.setAgentState(review.id, thread.id, 'idle');
+            if (choice !== 'post') {
+                await this.store.setThreadStatus(review.id, thread.id, 'resolved', agent).catch(() => undefined);
+                return json({ status: choice === undefined ? 'pending' : 'declined', hint: 'Nothing was posted. Don\'t post unless the reviewer asks again.' });
+            }
+            try {
+                const posted = await this.github.publish(review.id, decision, summary);
+                await this.store.addMessage(review.id, thread.id, `Posted to GitHub: ${posted.url}`, agent);
+                await this.store.setThreadStatus(review.id, thread.id, 'resolved', agent).catch(() => undefined);
+                return json({ status: 'posted', ...posted });
+            } catch (e) {
+                await this.store.addMessage(review.id, thread.id, `Posting to GitHub failed: ${e instanceof Error ? e.message : e}`, agent);
+                return fail(e instanceof Error ? e.message : String(e));
+            }
         });
 
         server.registerTool('repo_map', {
