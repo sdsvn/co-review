@@ -6,6 +6,7 @@ import * as path from 'path';
 import { ReviewCoverage } from '../common/review-model';
 import { ReviewStore } from './review-store';
 import { repositoryOverview } from './repo-overview';
+import { buildGraph } from './graphify';
 import { SyntaxServiceImpl } from './syntax-service-impl';
 
 export const LANGUAGE_BY_EXTENSION: Record<string, string> = {
@@ -138,9 +139,10 @@ export class RepoIndex {
 
     /** The repository overview page (Markdown): where to start, the areas and how they connect. See repo-overview.ts. */
     async overview(root: string, viewed: Record<string, number> = {}): Promise<string> {
-        const map = await this.get(root);
+        // The Graphify graph (calls, imports, clusters) is built or refreshed first when the command is installed.
+        const [map, graph] = await Promise.all([this.get(root), buildGraph(root).catch(() => 'failed' as const)]);
         const outlines = new Map(Object.entries(map.files).map(([file, entry]) => [file, outline(entry)]));
-        return repositoryOverview({ root, coverage: await this.coverage(root, viewed), outlines });
+        return repositoryOverview({ root, coverage: await this.coverage(root, viewed), outlines, graph });
     }
 
     /** Writes the overview next to the workspace's reviews (outside the repository); returns the file's path. */

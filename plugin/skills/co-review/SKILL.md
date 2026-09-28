@@ -49,8 +49,11 @@ instead of 5,000 files:
 <!-- prompt: audit -->
 1. Prepare the review without showing it: `open_review({ title: "Repository review", open: false })`. Keep the
    `reviewId` it returns. Don't give me a URL yet.
-2. Call `repo_map({ overview: true })` and `repo_map`, split the repository into 4–10 areas, and read the
-   riskiest code in each (entry points, input handling, money, auth, concurrency, persistence).
+2. Call `repo_map({ overview: true })` and `repo_map`. With [Graphify](https://graphify.net) installed, the
+   overview is built from its code graph (Co-Review builds it: calls, imports, clusters, the most connected code), and
+   `graphify-out/GRAPH_REPORT.md` lists import cycles and surprising connections between distant parts of the code:
+   good leads. Split the repository into 4–10 areas and read the riskiest code in each (entry points, input handling,
+   money, auth, concurrency, persistence).
 3. Add findings with `add_findings`: the area as the first label, `status: "proposed"`, at most three per area,
    each with what's wrong, why it matters and what to do. Say so when an area looks fine.
 4. Show it: `open_review({ reviewId })`. It opens on the findings page: every finding, grouped by area, as one
@@ -60,8 +63,10 @@ instead of 5,000 files:
    Don't edit files while I review unless I ask in a thread.
 <!-- /prompt -->
 
-`repo_map({ overview: true })` says where to start and how the code clusters (from a Graphify graph when the
-repository has one). A finding about a whole area goes on its folder (`path` without `line`), one about the
+`repo_map({ overview: true })` says where to start and how the code clusters. When the `graphify` command is
+installed, Co-Review builds a [Graphify](https://graphify.net) graph of the code first (Tree-sitter, no LLM, seconds;
+in `graphify-out/`, kept out of `git status`), and while answering, `graphify query "<question>"`, `graphify path "A"
+"B"` and `graphify explain "X"` answer how parts of the code connect without searching. A finding about a whole area goes on its folder (`path` without `line`), one about the
 repository on `path: "."`; the findings page and the panel's **By area** view group findings by their first label, so
 make that label the area.
 

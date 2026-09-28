@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { ReviewCoverage } from '../common/review-model';
+import { GraphState } from './graphify';
 
 /** A Graphify `graph.json` (networkx node-link): what the overview reads from it. */
 interface GraphifyGraph {
@@ -24,6 +25,8 @@ export interface OverviewInput {
     coverage: ReviewCoverage;
     /** Repository-relative file → its outline line (see RepoIndex). */
     outlines: Map<string, string>;
+    /** Whether Co-Review could build the Graphify graph (see graphify.ts). */
+    graph?: GraphState;
 }
 
 /**
@@ -66,9 +69,14 @@ export async function repositoryOverview(input: OverviewInput): Promise<string> 
             .sort(([, a], [, b]) => b.nodes.length - a.nodes.length).slice(0, 12);
         const lines = [title, '',
             `Built from the Graphify graph of this repository (\`graphify-out/graph.json\`: ${g.nodes.length} definitions, `
-            + `${communities.size} areas). ${inputs.coverage.viewed} of ${inputs.coverage.total} source files viewed so far.`, '',
+            + `${communities.size} areas). ${inputs.coverage.viewed} of ${inputs.coverage.total} source files viewed so far. `
+            + 'Graphify\'s own report, [GRAPH_REPORT.md](graphify-out/GRAPH_REPORT.md), adds the import cycles and the surprising '
+            + 'connections between distant parts of the code.', '',
             '## Start here', '',
             'The most connected code: what the rest of the repository calls, imports or implements.', ''];
+        if (!degree.size) {
+            lines.push('- No calls, imports or references between definitions yet: start with the areas below.');
+        }
         for (const [id, count] of [...degree].sort((a, b) => b[1] - a[1]).slice(0, 8)) {
             const node = nodes.get(id);
             if (node) {
@@ -107,7 +115,10 @@ export async function repositoryOverview(input: OverviewInput): Promise<string> 
         const rich = [...inputs.outlines].sort((a, b) => b[1].split(',').length - a[1].split(',').length).slice(0, 4).map(([f]) => f);
         const lines = [title, '',
             `Built from the Tree-sitter repo map: ${files.length} source files. ${inputs.coverage.viewed} of ${inputs.coverage.total} viewed so far.`,
-            'For calls, imports and clusters of related code, build a Graphify graph (`graphify update .`) and reopen this page.', '',
+            inputs.graph === 'failed'
+                ? 'Building the Graphify graph failed (see the Co-Review log); `graphify update .` in the repository shows why.'
+                : 'For calls, imports and clusters of related code, install [Graphify](https://graphify.net) (`uv tool install graphifyy` or '
+                + '`pipx install graphifyy`) and reopen this page: Co-Review builds the graph itself (code only, no LLM, seconds).', '',
             '## Start here', ''];
         for (const readme of ['README.md', 'readme.md', 'README']) {
             if (require('fs').existsSync(path.join(inputs.root, readme))) {

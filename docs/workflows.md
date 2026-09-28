@@ -83,12 +83,15 @@ isn't yours. The agent reads it first and splits it into areas, so you start fro
 
 1. Prepares a review of the repository without showing it.
 2. Reads the repository map and the overview, splits the code into 4–10 areas, and reads the riskiest code in each.
+   With [Graphify](https://graphify.net) installed, Co-Review builds a code graph first (seconds, no LLM), so the
+   overview knows the calls, imports and clusters, and the agent gets Graphify's import cycles and surprising
+   connections as leads ([details](agents.md#repository-map)).
 3. Adds at most three proposed findings per area, labelled with the area, and says when an area looks fine.
 4. Shows the review and tells you the areas and how many findings each has.
 
 **You:** the review opens on the [findings page](#the-findings-page), with the panel on **Proposed**. Read it top to
 bottom, follow a finding's link to its code, and accept or dismiss each one in the panel (**By area** groups them the
-same way); reply in a finding's thread to ask the agent why. Beyond the findings, **Overview** says where to start, **Viewed** (`Cmd+Alt+V`)
+same way); reply in a finding's thread to ask the agent why. Beyond the findings, **Overview** says where to start (from the Graphify graph when it's installed), **Viewed** (`Cmd+Alt+V`)
 marks a file as read, and **Coverage** shows how much of each area you've read. Comment on any line, symbol, file or
 folder as you go.
 

@@ -61,7 +61,9 @@ so navigation, search, Git and language servers are the real thing; everything u
 - **Agents as reviewers.** Select code and **Ask Agent**: the answer streams into the thread with the agent's steps,
   and permission requests become buttons.
 - **A repository map** (Tree-sitter, built on demand, stored outside the repo) that takes agents straight to the
-  right code, enriched by a [Graphify](https://pypi.org/project/graphifyy/) graph when there is one.
+  right code. With [Graphify](https://graphify.net) installed (`uv tool install graphifyy`), Co-Review also builds a
+  code graph of the repository (Tree-sitter, no LLM, seconds), so the overview shows the most connected code, the
+  clusters and how they connect.
 - **Design review**: rendered Markdown, Mermaid diagrams with per-node comments, and an L1 · L2 · L3 design tree
   whose structure is [declared and checked](docs/design-docs.md).
 - **Patches and knowledge bundles**: `.patch` / `.diff` files open as pull-request pages; OKF bundles open as

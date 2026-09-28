@@ -34,7 +34,7 @@ The map is:
 - Stored next to the reviews in `~/.co-review`.
 - Refreshed for files that changed since the last build.
 
-An ACP agent gets the part of the map nearest the question in its first prompt. MCP agents call `repo_map` (Pi: `co_review_map`). If the repository has a Graphify graph in `graphify-out/`, the map points agents to it, and the repository overview (**Review: Open Repository Overview**, or `repo_map({ overview: true })` for agents) is built from it: the most connected code, its clusters, and a diagram of how they connect.
+An ACP agent gets the part of the map nearest the question in its first prompt. MCP agents call `repo_map` (Pi: `co_review_map`). **Graphify.** When the `graphify` command ([Graphify](https://graphify.net), `uv tool install graphifyy` or `pipx install graphifyy`) is installed, opening the repository overview (**Review: Open Repository Overview**, or `repo_map({ overview: true })` for agents) first builds or refreshes the repository's Graphify graph with `graphify update`. For code that is Tree-sitter only (no LLM, no API key) and takes seconds. The overview is then built from the graph: the most connected code, its clusters, and a diagram of how they connect, with Graphify's `GRAPH_REPORT.md` (import cycles, surprising connections) linked from it. The graph lives in `graphify-out/` in the repository; if Co-Review created that folder, it adds it to the clone's `.git/info/exclude`, so it never shows up as a change. Agents can also ask the graph directly: `graphify query`, `graphify path`, `graphify explain`.
 
 ## ACP: connect an agent from Co-Review
 
