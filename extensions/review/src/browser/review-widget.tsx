@@ -24,6 +24,8 @@ export class ReviewWidget extends ReactWidget {
     @inject(CommandService) protected readonly commands: CommandService;
 
     protected filter: Filter = 'open';
+    /** Until the reviewer picks a filter, a review with only proposed findings (an agent's first pass) shows those. */
+    protected filterChosen = false;
     /** Threads grouped by file (default) or by area: their first label, e.g. the part of the repository a finding is about. */
     protected grouping: 'file' | 'area' = 'file';
     protected selectedThreadId: string | undefined;
@@ -152,6 +154,9 @@ export class ReviewWidget extends ReactWidget {
         const open = review.threads.filter(t => t.status === 'open').length;
         const proposed = review.threads.filter(t => t.status === 'proposed').length;
         const resolved = review.threads.filter(t => t.status === 'resolved').length;
+        if (!this.filterChosen && this.filter === 'open' && !open && proposed) {
+            this.filter = 'proposed';
+        }
         const threads = review.threads
             .filter(t => this.filter === 'all' || t.status === this.filter)
             .sort((a, b) => this.sortKey(a).localeCompare(this.sortKey(b)) || a.number - b.number);
@@ -266,7 +271,7 @@ export class ReviewWidget extends ReactWidget {
 
     protected renderFilter(filter: Filter, label: string): React.ReactNode {
         return <span className={`co-review-filter ${this.filter === filter ? 'active' : ''}`}
-            onClick={() => { this.filter = filter; this.update(); }}>{label}</span>;
+            onClick={() => { this.filter = filter; this.filterChosen = true; this.update(); }}>{label}</span>;
     }
 
     protected groupKey(location: CodeLocation): string {

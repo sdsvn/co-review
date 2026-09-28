@@ -128,12 +128,18 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         await this.openStart();
         await this.welcome();
         // A review opened or switched to later (an agent's open_review, the switcher) starts the same way.
+        // So does a review whose first findings just arrived (an agent's first pass, with the window already open).
+        const unresolved = () => this.reviews.activeReview?.threads.filter(t => t.status !== 'resolved').length ?? 0;
         let active = this.reviews.activeReview?.id;
+        let count = unresolved();
         this.reviews.onDidChange(() => {
             const id = this.reviews.activeReview?.id;
-            if (id && id !== active) {
+            const now = unresolved();
+            const firstFindings = id === active && count === 0 && now > 0;
+            count = now;
+            if (id && (id !== active || firstFindings)) {
                 active = id;
-                this.openStart();
+                this.openStart(true);
             }
         });
     }
@@ -141,24 +147,33 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
     /**
      * A review never starts on an empty window: the explorer shows, and with no editor open the review's
      * document opens (a review directory), else the first open thread, the reviewed paths, the README or the
-     * first file of the repository.
+     * first file of the repository. `present` (a review just switched to, or its first findings just in): its first
+     * thread opens even beside other editors.
      */
-    protected async openStart(): Promise<void> {
+    protected async openStart(present = false): Promise<void> {
         await this.reviews.ready;
         const root = this.reviews.root;
         if (!root) {
             return;
         }
         await this.fileNavigator.openView({ activate: false, reveal: true });
+        const review = this.reviews.activeReview;
+        // A review that starts with findings (an agent's first pass) opens on them: the panel lists them all.
+        if (review?.threads.some(t => t.status !== 'resolved')) {
+            await this.openView({ activate: false, reveal: true });
+        }
+        const thread = review?.threads.find(t => t.status !== 'resolved' && t.location.uri && t.location.kind !== 'directory');
+        if (present && thread && !review?.bundle) {
+            await this.navigator.open(thread.location, thread.id);
+            return;
+        }
         if (this.shell.getWidgets('main').length) {
             return;
         }
-        const review = this.reviews.activeReview;
         if (review?.bundle) {
             await this.openBundleDocument();
             return;
         }
-        const thread = review?.threads.find(t => t.status !== 'resolved' && t.location.uri && t.location.kind !== 'directory');
         if (thread) {
             await this.navigator.open(thread.location, thread.id);
             return;

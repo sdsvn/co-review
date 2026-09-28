@@ -52,7 +52,8 @@ export async function ensureServer({ port, root, open }) {
         return running;
     }
     if (desktopApp) {
-        return startDesktop(root);
+        // For an agent: in the background, without a window; the window opens when a review is shown.
+        return startDesktop(undefined);
     }
     const base = `http://127.0.0.1:${port || 3000}`;
     mkdirSync(home, { recursive: true });
@@ -80,12 +81,15 @@ function registered() {
     }
 }
 
-/** Opens `root` in the desktop app (a running instance picks it up) and waits for its backend to register. */
+/**
+ * Opens `root` in the desktop app (a running instance picks it up), or with no `root` starts it in the background
+ * (no window), and waits for its backend to register.
+ */
 async function startDesktop(root) {
     const env = { ...process.env };
     delete env.ELECTRON_RUN_AS_NODE;
-    log(`starting the Co-Review desktop app for ${root}`);
-    spawn(desktopApp, [root], { detached: true, stdio: 'ignore', env }).unref();
+    log(root ? `starting the Co-Review desktop app for ${root}` : 'starting the Co-Review desktop app in the background');
+    spawn(desktopApp, root ? [root] : ['--background'], { detached: true, stdio: 'ignore', env }).unref();
     for (let i = 0; i < 120; i++) {
         const url = registered();
         if (url && await isRunning(url)) {

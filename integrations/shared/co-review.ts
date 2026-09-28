@@ -119,10 +119,11 @@ class CoReviewConnection {
 	}
 
 	/** Opens (or joins) the review of `root`, or of the review directory `dir`. */
-	async open(root: string, opts: { dir?: string; title?: string }): Promise<Opened> {
+	async open(root: string, opts: { dir?: string; title?: string; open?: boolean }): Promise<Opened> {
 		await this.connect(root);
 		return this.call<Opened>("open_review", {
-			root, ...(opts.dir ? { dir: resolve(root, opts.dir) } : {}), ...(opts.title ? { title: opts.title } : {})
+			root, ...(opts.dir ? { dir: resolve(root, opts.dir) } : {}), ...(opts.title ? { title: opts.title } : {}),
+			...(opts.open === false ? { open: false } : {})
 		});
 	}
 
@@ -211,7 +212,7 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 		);
 	};
 
-	const start = async (ctx: C, opts: { root?: string; dir?: string; title?: string; listen: boolean }) => {
+	const start = async (ctx: C, opts: { root?: string; dir?: string; title?: string; open?: boolean; listen: boolean }) => {
 		const opened = await connection.open(resolve(opts.root ?? ctx.cwd), opts);
 		if (opts.listen) {
 			startListening(ctx);
@@ -262,9 +263,10 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 		parameters: Type.Object({
 			root: Type.Optional(Type.String({ description: "Absolute repository path; defaults to the working directory" })),
 			dir: Type.Optional(Type.String({ description: "Review directory with a design document (index.markdown) and/or *.patch files, relative to root or absolute" })),
-			title: Type.Optional(Type.String({ description: "Title for a new review; omit to join the latest one" }))
+			title: Type.Optional(Type.String({ description: "Title for a new review; omit to join the latest one" })),
+			open: Type.Optional(Type.Boolean({ description: "Show the review to the reviewer (default true); false prepares it without showing it, e.g. while you add first-pass findings — call again to show it" }))
 		}),
-		async execute(_id: string, params: { root?: string; dir?: string; title?: string }, _signal: AbortSignal, _onUpdate: unknown, ctx: C) {
+		async execute(_id: string, params: { root?: string; dir?: string; title?: string; open?: boolean }, _signal: AbortSignal, _onUpdate: unknown, ctx: C) {
 			const listen = ctx.hasUI && harness.isMain(ctx);
 			const opened = await start(ctx, { ...params, listen });
 			const warnings = opened.format?.warnings?.length ? `\nFix the design document, then call co_review_start again: ${opened.format.warnings.join(" ")}` : "";

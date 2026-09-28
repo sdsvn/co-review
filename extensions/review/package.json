@@ -45,7 +45,8 @@
       "backend": "lib/node/review-backend-module"
     },
     {
-      "backendElectron": "lib/electron-node/review-electron-backend-module"
+      "backendElectron": "lib/electron-node/review-electron-backend-module",
+      "electronMain": "lib/electron-main/review-electron-main-module"
     }
   ]
 }

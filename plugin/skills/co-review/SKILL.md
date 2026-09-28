@@ -62,8 +62,11 @@ browser. Comment on HTML as code (`path` + `line`).
 ### Reviewing the whole repository (first-pass audit)
 
 When the human wants the **entire repository** reviewed rather than a change, do a first pass for them, so they
-start from a map of what matters instead of 5,000 files:
+start from a map of what matters instead of 5,000 files. Do the first pass **before** showing the review, so it
+opens on your findings rather than an empty review:
 
+0. `open_review({ root, title: "Repository review", open: false })` creates the review without showing it. Don't give
+   the human a URL yet.
 1. Call `repo_map({ overview: true })` for where to start and how the code clusters (it uses a Graphify graph when
    the repository has one), and `repo_map` for every file and what it defines. Split the repository into **areas**: 4–10 parts a person
    would review separately (e.g. `api`, `storage`, `auth`, `build`), usually top-level folders or packages.
@@ -79,8 +82,10 @@ start from a map of what matters instead of 5,000 files:
 
    A finding about a whole area goes on its folder (`path` without `line`); one about the repository on `path: "."`.
 4. At most 3 findings per area, and only ones you'd defend in a review. Say plainly when an area looks fine.
-5. Tell the human the areas and counts in one short message, then answer their questions as usual. The panel's
-   **By area** view groups the findings by their first label.
+5. When the findings are in, show the review: `open_review({ root })` again (no `title`, so it's the same review). It
+   opens on the first finding, with the Review panel. Give the human the URL (if one is returned) and the areas and
+   counts in one short message, then answer their questions as usual. The panel's **By area** view groups the
+   findings by their first label.
 
 ## 3. Answer in a loop
 

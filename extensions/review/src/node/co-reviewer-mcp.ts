@@ -4,7 +4,7 @@ import * as express from '@theia/core/shared/express';
 import { inject, injectable } from '@theia/core/shared/inversify';
 import type { McpServer as McpServerType } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { StreamableHTTPServerTransport as TransportType } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import * as http from 'http';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
@@ -191,7 +191,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 patchName: z.string().optional().describe('Slug for the inline patch page (default "change")'),
                 storePath: z.string().optional().describe('Where to write the review state file (default <dir>/review.json)'),
                 title: z.string().optional(),
-                open: z.boolean().optional().describe('Open the review in the browser (default true)'),
+                open: z.boolean().optional().describe('Show the review to the reviewer: the browser, or the desktop app\'s window (default true). '
+                    + 'false prepares it without showing it (e.g. while you add first-pass findings); call again to show it'),
                 addr: z.string().optional().describe('Ignored'),
                 openspec: z.string().optional().describe('OpenSpec change directory (…/changes/<id>) shown with the document')
             }
@@ -211,7 +212,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     return fail('No repository: pass `root` (absolute path), or `dir` / `markdown` / `patch`.');
                 }
                 const workspaceRoot = FileUri.create(workspace).toString();
-                review = (await this.store.list(workspaceRoot))[0];
+                // Called again without a title (e.g. to show the review once findings are in): the same review.
+                const current = currentReviewId ? await this.store.get(currentReviewId) : undefined;
+                review = !title && current?.workspaceRoot === workspaceRoot ? current : (await this.store.list(workspaceRoot))[0];
                 if (!review || title) {
                     review = await this.store.create({ workspaceRoot, title: title ?? `Review with ${agent.name}`, scope: { kind: 'repository' }, author: agent });
                 }
@@ -221,16 +224,25 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             this.startChannel(session, review, agent);
             session.consumedSubmit = review.verdict?.count ?? 0;
             this.presence.seen(review.id);
-            // The desktop app shows the review itself (its frontend switches to it); a browser
-            // cannot attach to the Electron backend.
+            // The desktop app shows the review in the repository's window (opened, or focused, by launching the app
+            // with it; its frontend switches to the review); a browser cannot attach to the Electron backend.
             const desktop = !!process.versions.electron;
             const url = desktop ? undefined : `${baseUrl}/?review=${review.id}#${workspace}`;
-            if (url && open !== false) {
-                execFile(process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open', [url], () => undefined);
+            if (open !== false) {
+                if (url) {
+                    execFile(process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open', [url], () => undefined);
+                } else if (process.env.CO_REVIEW_APP_LAUNCH) {
+                    const [exe, ...args] = JSON.parse(process.env.CO_REVIEW_APP_LAUNCH) as string[];
+                    const env = { ...process.env };
+                    delete env.ELECTRON_RUN_AS_NODE;
+                    spawn(exe, [...args, workspace], { detached: true, stdio: 'ignore', env }).on('error', () => undefined).unref();
+                }
             }
             return json({
-                reviewId: review.id, title: review.title, openThreads: review.threads.filter(t => t.status === 'open').length, ...extra,
-                ...(url ? { url } : { note: 'Shown in the Co-Review desktop app (open the repository there if it is not open).' }),
+                reviewId: review.id, title: review.title, openThreads: review.threads.filter(t => t.status === 'open').length,
+                proposedFindings: review.threads.filter(t => t.status === 'proposed').length, ...extra,
+                ...(open === false ? { note: 'Not shown yet: call open_review again (without `title`) to show it to the reviewer.' }
+                    : url ? { url } : { note: 'Shown in the Co-Review desktop app.' }),
                 hint: 'Share the URL with the reviewer, then loop await_comment → reply, or call await_review to wait for their Submit.'
             });
         });
@@ -265,7 +277,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
 
         server.registerTool('await_comment', {
             description: 'Block until the reviewer asks you something or replies in a thread you are part of (in a review directory: any '
-                + 'comment). Returns {status:"comment", comments[] (open threads, needsReply), needsReply, threads[] (the ones to answer, with code '
+                + 'comment, including on proposed findings). Returns {status:"comment", comments[] (unresolved threads, needsReply), needsReply, threads[] (the ones to answer, with code '
                 + 'and conversation)}; on timeout {status:"pending"} — call again.',
             inputSchema: { reviewId: reviewArg, timeoutSec: z.number().int().min(1).max(3600).optional() }
         }, async ({ reviewId, timeoutSec }, extra) => {
@@ -501,11 +513,14 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         ].filter(Boolean).join('\n\n');
     }
 
-    /** Open threads whose latest message is from the reviewer and addressed to this agent. */
+    /**
+     * Unresolved threads whose latest message is from the reviewer and addressed to this agent. Proposed findings
+     * count: the reviewer often asks about a finding before accepting or dismissing it.
+     */
     protected waitingThreads(review: Review, agent: Participant, session: Session): ReviewThread[] {
         return review.threads.filter(thread => {
             const last = thread.messages[thread.messages.length - 1];
-            if (thread.status !== 'open' || !last || last.author.kind !== 'human' || session.delivered.has(last.id)) {
+            if (thread.status === 'resolved' || !last || last.author.kind !== 'human' || session.delivered.has(last.id)) {
                 return false;
             }
             // Questions go to whoever holds the review's agent seat; follow-ups to the agents in the thread.
@@ -558,14 +573,15 @@ export class CoReviewerMcp implements BackendApplicationContribution {
 
     /** The await_comment batch, plus the threads to answer with full context. */
     protected commentBatch(review: Review, waiting: ReviewThread[]): Record<string, unknown> {
-        const open = review.threads.filter(t => t.status === 'open');
+        // Proposed findings are part of the conversation too (the reviewer asks before accepting or dismissing).
+        const unresolved = review.threads.filter(t => t.status !== 'resolved');
         const needs = (t: ReviewThread) => t.messages[t.messages.length - 1]?.author.kind === 'human';
         return {
             status: 'comment',
             reviewId: review.id,
-            comments: open.map(t => commentOf(t, this.root(review), { lastRole: t.messages[t.messages.length - 1]?.author.kind, needsReply: needs(t) })),
-            openCount: open.length,
-            needsReply: open.filter(needs).length,
+            comments: unresolved.map(t => commentOf(t, this.root(review), { lastRole: t.messages[t.messages.length - 1]?.author.kind, needsReply: needs(t) })),
+            openCount: unresolved.filter(t => t.status === 'open').length,
+            needsReply: unresolved.filter(needs).length,
             threads: waiting.map(t => this.describe(review, t)),
             hint: 'reply(threadId, body) to answer (edit the reviewed files on disk if needed — the view live-reloads), then call await_comment again.',
             howToAnswer: ANSWER_STYLE_SHORT
