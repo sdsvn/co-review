@@ -52,9 +52,12 @@ export namespace PatchAnchor {
     }
 }
 
-/** A review's findings page (written by Co-Review under its home directory): `…/findings/<reviewId>/findings.md`. */
-export function isFindingsPage(uri: string | undefined): boolean {
-    return !!uri && /\/findings\/[^/]+\/findings\.md$/.test(uri);
+/**
+ * A review's overview page, its front page (written by Co-Review under its home directory):
+ * `…/pages/<reviewId>/overview.md`, or `…/findings/<reviewId>/findings.md` as it was called before.
+ */
+export function isOverviewPage(uri: string | undefined): boolean {
+    return !!uri && /\/(pages\/[^/]+\/overview|findings\/[^/]+\/findings)\.md$/.test(uri);
 }
 
 export namespace DocAnchor {
@@ -299,6 +302,8 @@ export interface Review {
     agent?: AgentConfig;
     /** A review directory (document + patches) an agent handed over. */
     bundle?: ReviewBundle;
+    /** The agent's overview of the change or repository (Markdown), shown on the review's overview page. */
+    overview?: string;
     /** The reviewer's latest submission (Submit review). */
     verdict?: ReviewVerdict;
     /**

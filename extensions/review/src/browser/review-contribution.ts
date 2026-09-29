@@ -136,21 +136,16 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         }
     }
 
-    /** Opens the active review's findings page: every thread, grouped by area, as one rendered document. */
-    protected async openFindings(): Promise<boolean> {
-        const uri = await this.reviews.writeFindings();
-        if (uri) {
-            await this.navigator.open({ kind: 'document', uri });
-        }
-        return !!uri;
-    }
-
-    /** Writes the repository overview (from Graphify's graph when there is one) and opens it as a rendered page. */
-    protected async openOverview(): Promise<void> {
+    /**
+     * Opens the active review's overview page, its front page: the change or repository, the agent's overview, every
+     * finding and comment. False for a review directory without patches (its document is its front page).
+     */
+    protected async openOverview(): Promise<boolean> {
         const uri = await this.reviews.writeOverview();
         if (uri) {
             await this.navigator.open({ kind: 'document', uri });
         }
+        return !!uri;
     }
 
     /** Toggles "viewed" for a file or folder (all of its files), or the file in the editor. */
@@ -209,15 +204,14 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         if (review?.threads.some(t => t.status !== 'resolved')) {
             await this.openView({ activate: false, reveal: true });
         }
-        // A repository review with findings opens on its findings page (a review directory on its document or patch).
-        const findings = !review?.bundle && review?.threads.some(t => t.location.kind !== 'document');
-        if (present && findings && await this.openFindings()) {
+        // Every review opens on its overview page, except a design or knowledge bundle, which opens on its document.
+        if (present && review && await this.openOverview()) {
             return;
         }
         if (this.shell.getWidgets('main').length) {
             return;
         }
-        if (findings && await this.openFindings()) {
+        if (review && await this.openOverview()) {
             return;
         }
         const thread = review?.threads.find(t => t.status !== 'resolved' && t.location.uri && t.location.kind !== 'directory');
@@ -374,12 +368,8 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             isEnabled: () => !!this.reviews.activeReview?.bundle,
             execute: () => this.postToGitHub()
         });
-        registry.registerCommand(ReviewCommands.OPEN_FINDINGS, {
-            isEnabled: () => !!this.reviews.activeReview && !this.reviews.activeReview.bundle,
-            execute: () => this.openFindings()
-        });
         registry.registerCommand(ReviewCommands.OPEN_OVERVIEW, {
-            isEnabled: () => !!this.reviews.activeReview && !this.reviews.activeReview.bundle,
+            isEnabled: () => !!this.reviews.activeReview,
             execute: () => this.openOverview()
         });
         registry.registerCommand(ReviewCommands.AGENT_SETTINGS, {
@@ -594,8 +584,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         const github = await this.reviews.getGitHubTarget();
         const actions = [
             ...github ? [{ label: `$(github) Post review to GitHub (${github.repo}#${github.number})…`, id: ReviewCommands.POST_TO_GITHUB.id }] : [],
-            ...review.bundle ? [] : [{ label: '$(checklist) Findings page', id: ReviewCommands.OPEN_FINDINGS.id },
-                { label: '$(map) Repository overview', id: ReviewCommands.OPEN_OVERVIEW.id }],
+            { label: '$(map) Overview: the change or repository, and every finding', id: ReviewCommands.OPEN_OVERVIEW.id },
             { label: '$(list-selection) Go to comment…', id: ReviewCommands.GO_TO_COMMENT.id },
             { label: '$(fold) Collapse all comments', id: ReviewCommands.COLLAPSE_ALL.id },
             { label: '$(unfold) Expand all comments', id: ReviewCommands.EXPAND_ALL.id },

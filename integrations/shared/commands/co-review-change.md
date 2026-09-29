@@ -13,8 +13,14 @@ Co-Review tools from the co-review extension.
 2. Add findings only for real risks and non-obvious decisions, at most five, on the changed lines:
    `co_review_add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line, side: "new" },
    body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines).
-3. Show it: `co_review_start({ reviewId })`. Give me the URL (if there is one) and, in one sentence, what to look at first.
-4. Loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit or says I closed the review, then act on my verdict:
+   Then write my overview of it for the review's front page and add it with `co_review_start({ reviewId, overview,
+   open: false })`: what it does and why (a few sentences), how it works as a ```mermaid flowchart (the path a request
+   or the data takes, 5–12 nodes), what else it affects (the blast radius: callers, data, configuration, other
+   services), and where to start reading. Plain language; no line-by-line walkthrough.
+3. Show it: `co_review_start({ reviewId })`. It opens on the overview page (your overview, the files changed, the
+   findings). Give me the URL (if there is one) and, in one sentence, what to look at first.
+4. Loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit or says I closed the review, then
+   act on my verdict:
    approve → go ahead; request changes → address every comment and apply the accepted suggestions as new commits
    (don't rewrite the reviewed diff), then reply in each thread with what changed. Don't edit files while I review
    unless I ask in a thread.

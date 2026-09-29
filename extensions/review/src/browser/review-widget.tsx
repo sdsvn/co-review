@@ -86,10 +86,7 @@ export class ReviewWidget extends ReactWidget {
                 <span className={codicon(this.coverageExpanded ? 'chevron-down' : 'chevron-right')} />
                 <span>Viewed {coverage.viewed} of {coverage.total} files</span>
                 {bar(coverage.viewed, coverage.total)}
-                <span className='co-review-link' title='Every finding and comment, grouped by area, as one page you can read and comment on'
-                    onClick={e => { e.stopPropagation(); this.commands.executeCommand(ReviewCommands.OPEN_FINDINGS.id); }}>Findings</span>
-                <span className='co-review-link' title='Where to start, the areas of the code and how they connect'
-                    onClick={e => { e.stopPropagation(); this.commands.executeCommand(ReviewCommands.OPEN_OVERVIEW.id); }}>Overview</span>
+
             </div>
             {this.coverageExpanded && coverage.areas.length > 1 && <div className='co-review-coverage-areas'>
                 {coverage.areas.map(area => <div key={area.path} className={`co-review-coverage-area ${area.next ? '' : 'done'}`}
@@ -249,6 +246,8 @@ export class ReviewWidget extends ReactWidget {
         return <div className='co-review-summary'>
             <span className={codicon(this.scopeIcon(review.scope))} />
             <span className='co-review-summary-scope'>{ReviewScope.label(review.scope, uri => this.reviews.relativePath(uri))}</span>
+            <span className='co-review-link' title='The front page: what this is, how it works, every finding and comment'
+                onClick={() => this.commands.executeCommand(ReviewCommands.OPEN_OVERVIEW.id)}>Overview</span>
             <span className='co-review-spacer' />
             <span className={`co-review-summary-agent ${listening ? 'listening' : ''} ${agent ? '' : 'none'}`} title={agentTitle}
                 onClick={() => this.commands.executeCommand(ReviewCommands.CONFIGURE_AGENT.id)}>

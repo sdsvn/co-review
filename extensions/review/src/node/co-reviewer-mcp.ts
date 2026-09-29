@@ -241,7 +241,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'understand, challenge and approve the change:\n' + DESIGN_PROMPT,
             inputSchema: {
                 reviewId: z.string().optional().describe('An existing review to join and show (e.g. the one you prepared with open: false); '
-                    + 'the other arguments are then ignored'),
+                    + 'the other arguments except open and overview are then ignored'),
                 root: rootArg,
                 dir: z.string().optional().describe('Review directory (index.markdown or *.pseudocode.md, *.patch, PR.md, <patch>.comments.json)'),
                 markdown: z.string().optional().describe('Inline Markdown document (```mermaid fences render as diagrams)'),
@@ -254,9 +254,13 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 title: z.string().optional(),
                 open: z.boolean().optional().describe('Show the review to the reviewer: the browser, or the desktop app\'s window (default true). '
                     + 'false prepares it without showing it (e.g. while you add first-pass findings); call again to show it'),
-                openspec: z.string().optional().describe('OpenSpec change directory (…/changes/<id>) shown with the document')
+                openspec: z.string().optional().describe('OpenSpec change directory (…/changes/<id>) shown with the document'),
+                overview: z.string().optional().describe('Your overview for the review\'s front page (Markdown), which the reviewer reads first: '
+                    + 'what the change (or repository) does and why, how it works as a ```mermaid flowchart, what else it affects (the blast '
+                    + 'radius: callers, data, config, other services), and where to start. Written in the prepare step; pass it again '
+                    + '(with reviewId) to update it. Not for a design document, which is its own front page')
             }
-        }, async ({ reviewId, root, dir, markdown, patch: inlinePatch, diff, patchName, storePath, title, open, openspec }) => {
+        }, async ({ reviewId, root, dir, markdown, patch: inlinePatch, diff, patchName, storePath, title, open, openspec, overview }) => {
             const agent = this.agentOf(session);
             let patch = inlinePatch;
             if (diff && !reviewId) {
@@ -311,6 +315,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 }
             }
             review = await this.store.setAgent(review.id, { id: agent.id, name: agent.name, transport: 'mcp' });
+            if (overview?.trim()) {
+                review = await this.store.setOverview(review.id, overview.trim());
+            }
             currentReviewId = review.id;
             this.startChannel(session, review, agent);
             // A round no agent has picked up yet (submitted while none was connected) is still delivered.

@@ -14,12 +14,15 @@ Review this entire repository with me in Co-Review, following the `co-review` sk
    money, auth, concurrency, persistence).
 3. Add findings with `add_findings`: the area as the first label, `status: "proposed"`, at most three per area,
    each with what's wrong, why it matters and what to do. Say so when an area looks fine.
-4. Show it: `open_review({ reviewId })`. It opens on the findings page: every finding, grouped by area, as one
-   page I can read and comment on. Give me the URL (if there is one) and the areas with their finding counts, in one
-   short message.
-5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit (act on my verdict) or says I closed the review (tell me
-   what's still open).
-   Don't edit files while I review unless I ask in a thread.
+   Then write my overview of it for the review's front page and add it with `open_review({ reviewId, overview,
+   open: false })`: what it does and why (a few sentences), how it works as a ```mermaid flowchart (the path a request
+   or the data takes, 5–12 nodes), what else it affects (the blast radius: callers, data, configuration, other
+   services), and where to start reading. Plain language; no line-by-line walkthrough.
+4. Show it: `open_review({ reviewId })`. It opens on the overview page: your overview, every finding grouped by
+   area, and the repository's areas, as one page I can read and comment on. Give me the URL (if there is one) and the
+   areas with their finding counts, in one short message.
+5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit (act on my verdict) or says I
+   closed the review (tell me what's still open). Don't edit files while I review unless I ask in a thread.
 <!-- /prompt -->
 
 Focus: ${ARGUMENTS:-the whole repository}

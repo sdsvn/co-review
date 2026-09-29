@@ -13,7 +13,7 @@ import { ReviewStore } from './review-store';
 import { AcpAgentService } from './acp-agent-service';
 import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
-import { FindingsPages } from './findings-page';
+import { OverviewPages } from './overview-page';
 import { GitHubReviews } from './github';
 
 export default new ContainerModule(bind => {
@@ -25,7 +25,7 @@ export default new ContainerModule(bind => {
     bind(RepoIndex).toSelf().inSingletonScope();
     bind(AgentPresenceTracker).toSelf().inSingletonScope();
     bind(ReviewWindows).toSelf().inSingletonScope();
-    bind(FindingsPages).toSelf().inSingletonScope();
+    bind(OverviewPages).toSelf().inSingletonScope();
     bind(GitHubReviews).toSelf().inSingletonScope();
     bind(CoReviewerMcp).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(CoReviewerMcp);

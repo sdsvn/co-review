@@ -32,11 +32,14 @@ Every workflow has the same shape: **prepare the review without showing it, do y
 the human starts from your findings instead of an empty review, and never sees a half-built one:
 
 1. `open_review({ ..., open: false })` creates (or joins) the review and returns its `reviewId`. Nothing is shown.
-2. Your first pass: `add_findings`, and for a design, fix every `format.warnings` entry.
+2. Your first pass: `add_findings`, and your overview for the review's front page (`open_review({ reviewId,
+   overview, open: false })`: what it does and why, how it works as a Mermaid flowchart, the blast radius, where to
+   start); for a design, fix every `format.warnings` entry instead (the document is its own front page).
 3. `open_review({ reviewId })` shows it, with the Review panel (in the browser, or the repository's window in the
-   desktop app): a repository review opens on its **findings page** (every thread, grouped by area, as one rendered
-   page the human reads and comments on; comments there come back with `target: "findings"` and the quoted text as
-   `source`), a patch or design on its page with your findings inline. Give the human the returned `url`, or say it is open in the desktop app
+   desktop app). A repository, diff or pull-request review opens on its **overview page**: the pull request, your
+   overview, the files changed, then every thread grouped by area, and for a repository its areas, as one rendered
+   page the human reads and comments on (comments there come back with `target: "overview"` and the quoted text as
+   `source`). A design opens on its document, with your findings inline. Give the human the returned `url`, or say it is open in the desktop app
    if there is a `note` instead, with a short summary.
 
 Pass `title` to start a new review instead of joining the latest one.
@@ -56,19 +59,22 @@ instead of 5,000 files:
    money, auth, concurrency, persistence).
 3. Add findings with `add_findings`: the area as the first label, `status: "proposed"`, at most three per area,
    each with what's wrong, why it matters and what to do. Say so when an area looks fine.
-4. Show it: `open_review({ reviewId })`. It opens on the findings page: every finding, grouped by area, as one
-   page I can read and comment on. Give me the URL (if there is one) and the areas with their finding counts, in one
-   short message.
-5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit (act on my verdict) or says I closed the review (tell me
-   what's still open).
-   Don't edit files while I review unless I ask in a thread.
+   Then write my overview of it for the review's front page and add it with `open_review({ reviewId, overview,
+   open: false })`: what it does and why (a few sentences), how it works as a ```mermaid flowchart (the path a request
+   or the data takes, 5–12 nodes), what else it affects (the blast radius: callers, data, configuration, other
+   services), and where to start reading. Plain language; no line-by-line walkthrough.
+4. Show it: `open_review({ reviewId })`. It opens on the overview page: your overview, every finding grouped by
+   area, and the repository's areas, as one page I can read and comment on. Give me the URL (if there is one) and the
+   areas with their finding counts, in one short message.
+5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit (act on my verdict) or says I
+   closed the review (tell me what's still open). Don't edit files while I review unless I ask in a thread.
 <!-- /prompt -->
 
 `repo_map({ overview: true })` says where to start and how the code clusters. When the `graphify` command is
 installed, Co-Review builds a [Graphify](https://graphify.net) graph of the code first (Tree-sitter, no LLM, seconds;
 in `graphify-out/`, kept out of `git status`), and while answering, `graphify query "<question>"`, `graphify path "A"
 "B"` and `graphify explain "X"` answer how parts of the code connect without searching. A finding about a whole area goes on its folder (`path` without `line`), one about the
-repository on `path: "."`; the findings page and the panel's **By area** view group findings by their first label, so
+repository on `path: "."`; the overview page and the panel's **By area** view group findings by their first label, so
 make that label the area.
 
 ### Your change
@@ -84,8 +90,14 @@ on lines, suggests edits and submits one verdict:
 2. Add findings only for real risks and non-obvious decisions, at most five, on the changed lines:
    `add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line, side: "new" },
    body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines).
-3. Show it: `open_review({ reviewId })`. Give me the URL (if there is one) and, in one sentence, what to look at first.
-4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review, then act on my verdict:
+   Then write my overview of it for the review's front page and add it with `open_review({ reviewId, overview,
+   open: false })`: what it does and why (a few sentences), how it works as a ```mermaid flowchart (the path a request
+   or the data takes, 5–12 nodes), what else it affects (the blast radius: callers, data, configuration, other
+   services), and where to start reading. Plain language; no line-by-line walkthrough.
+3. Show it: `open_review({ reviewId })`. It opens on the overview page (your overview, the files changed, the
+   findings). Give me the URL (if there is one) and, in one sentence, what to look at first.
+4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review, then
+   act on my verdict:
    approve → go ahead; request changes → address every comment and apply the accepted suggestions as new commits
    (don't rewrite the reviewed diff), then reply in each thread with what changed. Don't edit files while I review
    unless I ask in a thread.
@@ -107,7 +119,12 @@ For a pull request you didn't write. You take the first pass; the human decides 
 4. First pass: read the changed code in context (`git show co-review/pr-<n>:<path>` for whole files) and add at most
    five findings where it matters: `add_findings({ findings: [{ target: "patch:pr-<n>", anchor: { type:
    "code-line", path, line, side: "new" }, body, severity }] })`. They arrive proposed: I accept or dismiss each one.
-5. Show it: `open_review({ reviewId })`. Give me the URL (if there is one) and two sentences: what the pull request
+   Then write my overview of it for the review's front page and add it with `open_review({ reviewId, overview,
+   open: false })`: what it does and why (a few sentences), how it works as a ```mermaid flowchart (the path a request
+   or the data takes, 5–12 nodes), what else it affects (the blast radius: callers, data, configuration, other
+   services), and where to start reading. Plain language; no line-by-line walkthrough.
+5. Show it: `open_review({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
+   changed, the findings). Give me the URL (if there is one) and two sentences: what the pull request
    does and its riskiest part.
 6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit, or says I closed the review. It's someone else's change: don't edit it.
    I can post the review to the pull request myself (**Also post to GitHub** when submitting). If I ask you to post

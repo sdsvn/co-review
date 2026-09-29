@@ -145,14 +145,6 @@ export class RepoIndex {
         return repositoryOverview({ root, coverage: await this.coverage(root, viewed), outlines, graph });
     }
 
-    /** Writes the overview next to the workspace's reviews (outside the repository); returns the file's path. */
-    async writeOverview(root: string, viewed: Record<string, number> = {}): Promise<string> {
-        const file = path.join(this.store.workspaceDir(FileUri.create(root).toString()), 'overview.md');
-        await fs.mkdir(path.dirname(file), { recursive: true });
-        await fs.writeFile(file, await this.overview(root, viewed));
-        return file;
-    }
-
     /** The map as text for an agent: one line per file, `path: Symbol { member, … }, function, …`. */
     async render(root: string, options: RenderOptions = {}): Promise<string> {
         const map = await this.get(root);

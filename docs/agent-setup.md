@@ -42,7 +42,7 @@ Either way, restart Claude Code afterwards so it loads the plugin.
 |---|---|
 | **MCP server** `plugin:co-review:co-review` | The review tools: `open_review`, `await_reviewer`, `reply`, `add_findings`, `ask_reviewer`, `get_review`, `post_review_to_github` |
 | **Skills** `co-review`, `co-review-design` | The workflows; they also trigger on requests like "review this with me" or "design this first" |
-| **`/co-review:audit [focus]`** | Reviews the whole repository with you: first-pass findings grouped by area on a findings page, then answers your questions |
+| **`/co-review:audit [focus]`** | Reviews the whole repository with you: first-pass findings grouped by area on its overview page, then answers your questions |
 | **`/co-review:review [base]`** | Opens its change (uncommitted, or the branch against `base`) as a pull-request page and stays as your co-reviewer until you submit |
 | **`/co-review:pr <n>`** | Reviews someone else's pull request with you, starting from its first-pass findings |
 | **`/co-review:design <task>`** | Writes a design doc, opens it for review, revises it, implements after approval |

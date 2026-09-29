@@ -5,7 +5,7 @@ import { ConnectionStatus, ConnectionStatusService } from '@theia/core/lib/brows
 import { MessageService } from '@theia/core/lib/common/message-service';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
-import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewCoverage, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus, isFindingsPage } from '../common/review-model';
+import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewCoverage, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus, isOverviewPage } from '../common/review-model';
 import { GitHubPost, GitHubTarget, ReviewService } from '../common/review-protocol';
 import { ReviewClientImpl } from './review-client';
 import { AnchorState } from './review-locations';
@@ -410,12 +410,7 @@ export class ReviewManager {
         }
     }
 
-    /** Writes the active review's findings page (kept up to date by the backend); its file URI. */
-    writeFindings(): Promise<string | undefined> {
-        const review = this.activeReview;
-        return review ? this.service.writeFindings(review.id) : Promise.resolve(undefined);
-    }
-
+    /** Writes the active review's overview page (kept up to date by the backend); its file URI. */
     writeOverview(): Promise<string | undefined> {
         const review = this.activeReview;
         return review ? this.service.writeOverview(review.id) : Promise.resolve(undefined);
@@ -476,8 +471,8 @@ export class ReviewManager {
     }
 
     relativePath(uri: string): string {
-        if (isFindingsPage(uri)) {
-            return 'Findings page';
+        if (isOverviewPage(uri)) {
+            return 'Overview page';
         }
         if (!this._root) {
             return uri;

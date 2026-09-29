@@ -10,7 +10,7 @@ import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coo
 import { AgentSetupInfo, CreateReviewParams, GitHubPost, GitHubTarget, GitInfo, ReviewClient, ReviewService } from '../common/review-protocol';
 import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
-import { FindingsPages } from './findings-page';
+import { OverviewPages } from './overview-page';
 import { GitHubReviews } from './github';
 import { ReviewStore } from './review-store';
 
@@ -46,8 +46,8 @@ export class ReviewServiceImpl implements ReviewService {
     @inject(RepoIndex)
     protected readonly index: RepoIndex;
 
-    @inject(FindingsPages)
-    protected readonly findings: FindingsPages;
+    @inject(OverviewPages)
+    protected readonly pages: OverviewPages;
 
     @inject(GitHubReviews)
     protected readonly github: GitHubReviews;
@@ -155,12 +155,8 @@ export class ReviewServiceImpl implements ReviewService {
         return this.store.setViewed(reviewId, paths, viewed);
     }
 
-    async writeOverview(reviewId: string): Promise<string | undefined> {
-        const review = await this.store.get(reviewId);
-        if (!review || review.bundle) {
-            return undefined;
-        }
-        return FileUri.create(await this.index.writeOverview(FileUri.fsPath(review.workspaceRoot), review.viewed)).toString();
+    writeOverview(reviewId: string): Promise<string | undefined> {
+        return this.pages.write(reviewId);
     }
 
     async getGitHubTarget(reviewId: string): Promise<GitHubTarget | undefined> {
@@ -171,9 +167,6 @@ export class ReviewServiceImpl implements ReviewService {
         return this.github.publish(reviewId, decision, summary);
     }
 
-    writeFindings(reviewId: string): Promise<string | undefined> {
-        return this.findings.write(reviewId);
-    }
 
     async openInBrowser(uri: string): Promise<void> {
         const file = FileUri.fsPath(uri);

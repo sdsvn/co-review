@@ -29,7 +29,7 @@ a first pass before you see it, so it opens on what to look at ([how each workfl
 
 | Review | Claude Code | Pi / Oh My Pi |
 |---|---|---|
-| **The whole repository**: read the codebase with the agent, starting from its findings page | `/co-review:audit` | `/co-review-audit` |
+| **The whole repository**: read the codebase with the agent, starting from its overview page | `/co-review:audit` | `/co-review-audit` |
 | **Your change**: the agent's diff as a pull-request page, with line comments, suggested edits and one verdict | `/co-review:review` | `/co-review-change` |
 | **Someone else's pull request**: the agent takes the first pass, you decide what goes back to the author, and post it to GitHub as a review with line comments | `/co-review:pr <n>` | `/co-review-pr <n>` |
 | **A design, before the code**: an L1 · L2 · L3 plan with Mermaid diagrams, revised from your comments before anything is built | `/co-review:design <task>` | `/co-review-design <task>` |
@@ -54,7 +54,7 @@ so navigation, search, Git and language servers are the real thing; everything u
 ## Features
 
 - **Whole-repository reviews** with an overview page, per-area coverage (`Cmd+Alt+V` marks a file viewed) and an
-  agent first pass whose findings arrive *proposed* for you to accept or dismiss, collected on a findings page you
+  agent first pass whose findings arrive *proposed* for you to accept or dismiss, collected on an overview page you
   read like a report and comment on like any document.
 - **Inline threads** on a line, range, symbol, file, folder or the whole repository. Comments are anchored to their
   symbol and Tree-sitter tokens, so they follow the code through edits and are marked *outdated* instead of drifting.

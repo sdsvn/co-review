@@ -17,7 +17,12 @@ Use the Co-Review tools from the co-review extension: $ARGUMENTS
 4. First pass: read the changed code in context (`git show co-review/pr-<n>:<path>` for whole files) and add at most
    five findings where it matters: `co_review_add_findings({ findings: [{ target: "patch:pr-<n>", anchor: { type:
    "code-line", path, line, side: "new" }, body, severity }] })`. They arrive proposed: I accept or dismiss each one.
-5. Show it: `co_review_start({ reviewId })`. Give me the URL (if there is one) and two sentences: what the pull request
+   Then write my overview of it for the review's front page and add it with `co_review_start({ reviewId, overview,
+   open: false })`: what it does and why (a few sentences), how it works as a ```mermaid flowchart (the path a request
+   or the data takes, 5–12 nodes), what else it affects (the blast radius: callers, data, configuration, other
+   services), and where to start reading. Plain language; no line-by-line walkthrough.
+5. Show it: `co_review_start({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
+   changed, the findings). Give me the URL (if there is one) and two sentences: what the pull request
    does and its riskiest part.
 6. Loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit, or says I closed the review. It's someone else's change: don't edit it.
    I can post the review to the pull request myself (**Also post to GitHub** when submitting). If I ask you to post

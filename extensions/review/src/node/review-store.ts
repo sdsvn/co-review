@@ -273,6 +273,13 @@ export class ReviewStore {
         });
     }
 
+    setOverview(reviewId: string, overview: string): Promise<Review> {
+        return this.mutate(reviewId, review => {
+            review.overview = overview;
+            return review;
+        });
+    }
+
     /** The reviewer closed the review's window (`at`), an agent was told (`reported`), or it is shown again (undefined). */
     setClosed(reviewId: string, closed: Review['closed']): Promise<Review> {
         return this.mutate(reviewId, review => {

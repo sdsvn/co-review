@@ -112,15 +112,16 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     setViewed(reviewId: string, paths: string[], viewed: boolean): Promise<Review>;
     /** How much of the repository's source the reviewer has viewed, overall and per area. */
     getCoverage(reviewId: string): Promise<ReviewCoverage | undefined>;
-    /** Writes the review's findings page (its threads as one Markdown document, kept up to date) and returns its file URI. */
-    writeFindings(reviewId: string): Promise<string | undefined>;
     /** The GitHub pull request the review belongs to, if any. */
     getGitHubTarget(reviewId: string): Promise<GitHubTarget | undefined>;
     /** Posts the review to its GitHub pull request (the latest verdict unless given). */
     postToGitHub(reviewId: string, decision?: ReviewDecision, summary?: string): Promise<GitHubPost>;
     /** Opens a local HTML page in the system's default browser (pages are not rendered inside Co-Review). */
     openInBrowser(uri: string): Promise<void>;
-    /** Writes the repository overview page (where to start, areas, how they connect) and returns its file URI. */
+    /**
+     * Writes the review's overview page, its front page, kept up to date (see OverviewPages), and returns its file URI;
+     * undefined for a review directory without patches, whose document is its front page.
+     */
     writeOverview(reviewId: string): Promise<string | undefined>;
     /** Sends the thread to the review's agent (marks it as a question). */
     askAgent(reviewId: string, threadId: string): Promise<void>;

@@ -5,7 +5,7 @@ agent does the setup and a first pass before you see anything.
 
 | You want to review | Claude Code | Pi / Oh My Pi | What opens |
 |---|---|---|---|
-| [The whole repository](#the-whole-repository) | `/co-review:audit [focus]` | `/co-review-audit [focus]` | The repository, on its findings page |
+| [The whole repository](#the-whole-repository) | `/co-review:audit [focus]` | `/co-review-audit [focus]` | The repository, on its overview page |
 | [Your change](#your-change) | `/co-review:review [base]` | `/co-review-change [base]` | The diff, as a pull-request page |
 | [Someone else's pull request](#someone-elses-pull-request) | `/co-review:pr <number>` | `/co-review-pr <number>` | The pull request, with its description |
 | [A design, before the code](#a-design-before-the-code) | `/co-review:design <task>` | `/co-review-design <task>` | The design document, rendered |
@@ -26,7 +26,7 @@ sequenceDiagram
     Note over CR: prepared, not shown
     Agent->>CR: first pass: add_findings (a design: fix format warnings)
     Agent->>CR: open_review({ reviewId })
-    CR-->>You: opens on the findings (a findings page, or inline on the diff or design)
+    CR-->>You: opens on the overview page (a design on its document)
     loop until you submit
         You->>CR: comment, ask, accept or dismiss a finding
         CR-->>Agent: your question (await_reviewer, or live in Claude Code)
@@ -42,8 +42,8 @@ sequenceDiagram
 2. **First pass.** The agent adds findings: the risks and non-obvious decisions it wants you to look at. They arrive
    *proposed*: you accept or dismiss each one.
 3. **Shown.** `open_review({ reviewId })` opens the review with the Review panel: a browser tab, or the repository's
-   window in the desktop app (focused if it's already open). A repository review opens on its
-   [findings page](#the-findings-page); a diff, pull request or design on its own page, with the findings inline. The
+   window in the desktop app (focused if it's already open). A repository, diff or pull-request review
+   opens on its [overview page](#the-overview-page); a design on its document, with the findings inline. The
    agent tells you what it found.
 4. **Questions and answers.** Comment anywhere, or reply to a finding: the agent answers in the same thread. In Claude
    Code with the [live channel](agent-setup.md#live-review-comments-channel), questions reach the session the moment
@@ -89,20 +89,24 @@ isn't yours. The agent reads it first and splits it into areas, so you start fro
 3. Adds at most three proposed findings per area, labelled with the area, and says when an area looks fine.
 4. Shows the review and tells you the areas and how many findings each has.
 
-**You:** the review opens on the [findings page](#the-findings-page), with the panel on **Proposed**. Read it top to
+**You:** the review opens on the [overview page](#the-overview-page), with the panel on **Proposed**. Read it top to
 bottom, follow a finding's link to its code, and accept or dismiss each one in the panel (**By area** groups them the
-same way); reply in a finding's thread to ask the agent why. Beyond the findings, **Overview** says where to start (from the Graphify graph when it's installed), **Viewed** (`Cmd+Alt+V`)
+same way); reply in a finding's thread to ask the agent why. At the end, the page says where to start in the repository and how its areas connect (from the Graphify graph when it's installed), **Viewed** (`Cmd+Alt+V`)
 marks a file as read, and **Coverage** shows how much of each area you've read. Comment on any line, symbol, file or
 folder as you go.
 
-### The findings page
+### The overview page
 
-A repository review opens on one page that holds all of it: every finding and comment, grouped by area, each with its
-severity, whether it's proposed, open or resolved, a link to the code, the code it's about and the conversation so far.
-It's a rendered document, so you read it like a report and comment on it like any page: select text and **Comment**
-(or **Ask Agent**). A comment there reaches the agent with the text you selected, so it knows which finding you mean.
-The page keeps itself up to date as findings arrive or change; **Findings** in the Review panel (or **Review: Open
-Findings**) opens it again.
+A repository, diff or pull-request review opens on one page that holds all of it, top to bottom: the pull request
+(its link, branches and description), the agent's overview (what the change or repository does and why, how it works
+as a flow chart, what else it affects, where to start), the files the change touches with the lines added and
+removed, then every finding and comment grouped by area, each with its severity, whether it's proposed, open or
+resolved, a link to the code, the code it's about and the conversation so far. A repository review ends with the
+repository's areas and how they connect. It's a rendered document, so you read it like a report and comment on it
+like any page: select text and **Comment** (or **Ask Agent**). A comment there reaches the agent with the text you
+selected, so it knows which part you mean. The page keeps itself up to date as findings arrive or change;
+**Overview** in the Review panel (or **Review: Open Review Overview**) opens it again. A design opens on its document
+instead: that is its front page.
 
 ## Your change
 
