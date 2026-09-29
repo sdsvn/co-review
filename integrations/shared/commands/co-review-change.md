@@ -14,7 +14,7 @@ Co-Review tools from the co-review extension.
    `co_review_add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line, side: "new" },
    body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines).
 3. Show it: `co_review_start({ reviewId })`. Give me the URL (if there is one) and, in one sentence, what to look at first.
-4. Loop `co_review_wait` → investigate → `co_review_reply` until I submit, then act on my verdict (`co_review_verdict`):
+4. Loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit, then act on my verdict:
    approve → go ahead; request changes → address every comment and apply the accepted suggestions as new commits
    (don't rewrite the reviewed diff), then reply in each thread with what changed. Don't edit files while I review
    unless I ask in a thread.

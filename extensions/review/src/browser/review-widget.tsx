@@ -322,6 +322,8 @@ function SubmitReview({ review, manager }: { review: Review; manager: ReviewMana
         return <div className='co-review-submit-bar'>
             <span className='co-review-muted'>
                 {verdict ? `Round ${verdict.count}: ${label[verdict.decision]}` : 'Not submitted yet'}
+                {verdict?.toAgent === 'waiting' && ` · waiting for ${review.agent?.name ?? 'the agent'} to pick it up`}
+                {verdict?.toAgent === 'delivered' && ` · ${review.agent?.name ?? 'the agent'} has it`}
             </span>
             <span className='co-review-spacer' />
             <span className='co-review-link' onClick={() => setOpen(true)}>Submit review…</span>

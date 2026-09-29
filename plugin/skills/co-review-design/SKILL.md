@@ -11,8 +11,8 @@ open questions, and nothing else. Full method and examples: Co-Review's `docs/de
 
 <!-- prompt: pi-tools -->
 > **In Pi or Oh My Pi** (the Co-Review package) the tools are named `co_review_start` (open_review; `dir` for a
-> review directory), `co_review_wait` (await_comment), `co_review_reply`, `co_review_add_findings`, `co_review_ask`,
-> `co_review_verdict` (await_review), `co_review_map` (repo_map) and `co_review_post_github` (post_review_to_github). In an interactive session, the reviewer's
+> review directory), `co_review_wait` (await_reviewer: questions, answers and the Submit), `co_review_reply`,
+> `co_review_add_findings`, `co_review_ask`, `co_review_map` (repo_map) and `co_review_post_github` (post_review_to_github). In an interactive session, the reviewer's
 > questions also arrive on their own as `[Co-Review]` messages.
 <!-- /prompt -->
 
@@ -41,15 +41,15 @@ open questions, and nothing else. Full method and examples: Co-Review's `docs/de
 3. Check it before I see it: `open_review({ dir, open: false })` lists problems in `format.warnings`. Fix every
    one and call it again until there are none. Then show it with `open_review({ reviewId })` and share the URL.
 4. Answer comments in their threads and revise the design; keep the wording of commented steps stable.
-5. Implement only after approval (`await_review`). If the code must depart from the approved design, update the
-   design and ask again.
+5. Implement only after approval: keep calling `await_reviewer` (answering comments with `reply`) until it
+   returns my Submit. If the code must depart from the approved design, update the design and ask again.
 <!-- /prompt -->
 
 Put the directory in a scratch location instead if the user doesn't want design documents committed.
 
 ## Answering review comments
 
-Follow the `co-review` skill's loop (`await_comment` → investigate → `reply`). For each comment:
+Follow the `co-review` skill's loop (`await_reviewer` → investigate → `reply`). For each comment:
 
 - Check the code if needed, then decide what the comment points at: missing information, a wrong assumption, an
   architectural problem, an open decision, or a detail that doesn't belong. Update the document and reply saying
@@ -61,7 +61,7 @@ Follow the `co-review` skill's loop (`await_comment` → investigate → `reply`
 
 ## After the verdict
 
-`await_review` returns the decision:
+`await_reviewer` returns the decision (`status: "submitted"`):
 
 - **approve**: implement the approved design, then check the code against it. If implementation shows the design is
   wrong or incomplete, stop that part, update the design, and get it approved again before continuing. Don't

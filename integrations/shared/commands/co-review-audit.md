@@ -17,7 +17,7 @@ Review this entire repository with me in Co-Review, following the `co-review` sk
 4. Show it: `co_review_start({ reviewId })`. It opens on the findings page: every finding, grouped by area, as one
    page I can read and comment on. Give me the URL (if there is one) and the areas with their finding counts, in one
    short message.
-5. Then loop `co_review_wait` → investigate → `co_review_reply` until I submit, and act on my verdict (`co_review_verdict`).
+5. Then loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit, and act on my verdict.
    Don't edit files while I review unless I ask in a thread.
 <!-- /prompt -->
 

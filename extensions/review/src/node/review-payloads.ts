@@ -67,7 +67,7 @@ function line(a: AnchorRecord): number | undefined {
     return typeof a.line === 'number' ? a.line : typeof a.startLine === 'number' ? a.startLine : undefined;
 }
 
-/** One entry of `comments[]` (await_review / get_review / await_comment). */
+/** One entry of `comments[]` (await_reviewer / get_review). */
 export function commentOf(thread: ReviewThread, root: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
     const anchor = anchorOf(thread, root);
     const last = thread.messages[thread.messages.length - 1];

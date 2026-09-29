@@ -29,7 +29,7 @@ sequenceDiagram
     CR-->>You: opens on the findings (a findings page, or inline on the diff or design)
     loop until you submit
         You->>CR: comment, ask, accept or dismiss a finding
-        CR-->>Agent: your question (await_comment, or live in Claude Code)
+        CR-->>Agent: your question (await_reviewer, or live in Claude Code)
         Agent->>CR: reply in the thread
     end
     You->>CR: Submit review: Approve / Request changes / Comment
@@ -47,7 +47,7 @@ sequenceDiagram
    agent tells you what it found.
 4. **Questions and answers.** Comment anywhere, or reply to a finding: the agent answers in the same thread. In Claude
    Code with the [live channel](agent-setup.md#live-review-comments-channel), questions reach the session the moment
-   you ask; otherwise the agent picks them up from `await_comment` (the agent next to the review's scope in the panel shows whether it is listening; hover it).
+   you ask; otherwise the agent picks them up from `await_reviewer` (each thread shows whether it has; the agent next to the review's scope in the panel shows whether it is listening; hover it).
 5. **One verdict.** **Submit review…** sends the agent your decision, your message and every open comment at once.
 
 ### In Co-Review, whatever you review

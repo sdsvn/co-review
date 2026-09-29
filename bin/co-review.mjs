@@ -106,6 +106,8 @@ async function mcp() {
     /** The connection being made or made: every message to Co-Review waits for it. Reset when Co-Review is lost. */
     let connection;
     let init;
+    /** The review the agent last opened: a new Co-Review session rejoins it, so waits and replies stay on it. */
+    let reviewId;
     /** Agent requests forwarded to Co-Review and not answered yet. */
     const inflight = new Set();
     const watched = new Map();
@@ -164,10 +166,17 @@ async function mcp() {
             if ('id' in message && !('method' in message)) {
                 inflight.delete(message.id);
             }
-            // Keep the handshake fresh for the next session.
             const key = watched.get(message.id);
-            if (key && message.result) {
-                watched.delete(message.id);
+            watched.delete(message.id);
+            // The review the agent opened: a reconnect rejoins it (see connect).
+            if (key === 'review') {
+                try {
+                    reviewId = JSON.parse(message.result?.content?.[0]?.text).reviewId ?? reviewId;
+                } catch {
+                    /* not opened */
+                }
+            } else if (key && message.result) {
+                // Keep the handshake fresh, so the next session can be answered without starting Co-Review.
                 remember(key, message.result);
             }
             stdio.send(message);
@@ -187,6 +196,9 @@ async function mcp() {
             if (JSON.stringify(tools) !== JSON.stringify(cached?.tools)) {
                 remember('tools', tools);
                 stdio.send({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' });
+            }
+            if (reviewId) {
+                await request('tools/call', { name: 'open_review', arguments: { reviewId, open: false } });
             }
         }
     };
@@ -227,6 +239,8 @@ async function mcp() {
         }
         if (handshake || message.method === 'tools/list') {
             watched.set(message.id, handshake ? 'initialize' : 'tools');
+        } else if (message.method === 'tools/call' && message.params?.name === 'open_review') {
+            watched.set(message.id, 'review');
         }
         connection.then(() => http.send(message)).catch(e => {
             if (http) {

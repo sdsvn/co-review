@@ -19,7 +19,7 @@ Use the Co-Review tools from the co-review extension: $ARGUMENTS
    "code-line", path, line, side: "new" }, body, severity }] })`. They arrive proposed: I accept or dismiss each one.
 5. Show it: `co_review_start({ reviewId })`. Give me the URL (if there is one) and two sentences: what the pull request
    does and its riskiest part.
-6. Loop `co_review_wait` → investigate → `co_review_reply` until I submit. It's someone else's change: don't edit it.
+6. Loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit. It's someone else's change: don't edit it.
    I can post the review to the pull request myself (**Also post to GitHub** when submitting). If I ask you to post
    it, call `co_review_post_github`: Co-Review shows me what goes out and posts only when I confirm.
 <!-- /prompt -->

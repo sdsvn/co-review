@@ -7,7 +7,7 @@ asks the reviewer to decide. There are two ways for an agent to join, depending 
 |---|---|---|
 | Who initiates | The reviewer, from the Review panel (*Connect agent*) | The agent: Claude Code or Pi working on a task |
 | Transport | [Agent Client Protocol](https://agentclientprotocol.com) over stdio | [Model Context Protocol](https://modelcontextprotocol.io) tools (Streamable HTTP, or stdio via `co-review mcp`) |
-| Latency | Immediate: every question starts a turn; the answer **streams** | The agent answers when it calls `await_comment`; answers arrive whole |
+| Latency | Immediate: every question starts a turn; the answer **streams** | The agent answers when it calls `await_reviewer`; answers arrive whole |
 | Agent's context | A fresh session per thread (knows only the repo + thread) | The agent's own session — it knows what it just built and why |
 | Agent activity | Tool calls shown live; permission requests as buttons | `ask_reviewer` for decisions; the rest happens in the harness |
 | Agents | Claude Code (`claude-agent-acp`), Gemini CLI, OpenCode, Goose, any ACP agent | Claude Code (plugin), Pi and Oh My Pi (native packages), Codex, Cursor, VS Code, Zed, any MCP client |
@@ -90,13 +90,13 @@ open_review({ …, open: false })   prepare it, without showing it
 add_findings                      the first pass
 open_review({ reviewId })         show it
 loop:
-  await_comment                   (blocks until a question arrives)
-  … investigate …
-  reply(threadId, body)
-await_review                      the verdict, then act on it
+  await_reviewer                  (the one call that waits: returns your
+                                   questions, answers, or the Submit)
+  comment → … investigate … reply(threadId, body)
+  submitted → act on the verdict
 ```
 
-While the agent is blocked in `await_comment`, the agent next to the review's scope in the panel is marked as listening (hover it for the status). When it is busy elsewhere, your questions wait and are delivered on its next `await_comment`.
+While the agent is blocked in `await_reviewer` (or `ask_reviewer`), the agent next to the review's scope in the panel is marked as listening (hover it for the status). When it is busy elsewhere, your questions wait and are delivered on its next call. Each thread says where your latest message is: **waiting for** the agent until it picks it up, then **… is on it** until it replies; the submit bar says whether the agent has your verdict yet. A Submit made while no agent is connected is delivered to the next one that joins.
 
 The full tool contract is in [`../llms.txt`](../llms.txt).
 
@@ -109,7 +109,7 @@ Skills, the Claude Code plugin and Pi: see [Connect your agent](agent-setup.md).
 An agent can hand over more than code: a directory with a design document and patches. Open it with `open_review({ dir })` (or `({ markdown, patch })` for inline content, or `({ diff })` to have Co-Review diff the repository itself; `({ dir, diff })` writes that diff into the directory, next to a pull request's `PR.md`). The format is in [`../llms.txt`](../llms.txt).
 
 - **Rendering** — the document (Markdown, Mermaid, the L1/L2/L3 design tree; see [design-docs.md](design-docs.md)) and each `*.patch` as a review page with PR metadata. Findings in `<patch>.comments.json[l]` appear as *proposed* (Accept / Dismiss).
-- **Verdict** — the reviewer submits with **Submit review** (Approve / Request changes / Comment + a message). `await_review` returns it with the open comments.
+- **Verdict** — the reviewer submits with **Submit review** (Approve / Request changes / Comment + a message). `await_reviewer` returns it with the open comments (after any comments still waiting for the agent).
 - **GitHub** — when `PR.md` names the pull request (`repo: <owner>/<name>` and `pr: <n>`, or `url:`), the review can be posted to it as one GitHub review with its line comments and suggestions: **Also post to GitHub** in Submit review, **Review: Post Review to GitHub…**, or the agent's `post_review_to_github` (which asks the reviewer to confirm). It uses the GitHub CLI (`gh auth login`).
 - **Suggested edits** — findings may carry `proposal: { before, after, path?, startLine? }`, and the reviewer can propose edits on the document. Accepted document edits are written into the document (`doc.version` increments). Accepted patch suggestions come back in `acceptedSuggestions` for the agent to commit on the branch.
 - **OpenSpec** — `<dir>/openspec` (or `open_review({ openspec })`) renders as cards under the document.

@@ -64,6 +64,8 @@ interface Opened {
 
 interface Verdict {
 	status: string;
+	/** With status "comment": reviewer comments that came before the Submit. */
+	threads?: Thread[];
 	decision?: string;
 	summary?: string;
 	round?: number;
@@ -128,13 +130,13 @@ class CoReviewConnection {
 		});
 	}
 
-	/** Waits for reviewer questions; `undefined` when the wait timed out. */
-	async next(timeoutSec: number, signal?: AbortSignal): Promise<Thread[] | undefined> {
-		const r = await this.call<{ status: string; threads?: Thread[] }>("await_comment", { timeoutSec }, (timeoutSec + 60) * 1000, signal);
-		return r.status === "comment" ? r.threads : undefined;
+	/** Waits for the reviewer: their questions, or their Submit (the verdict); `undefined` when the wait timed out. */
+	async next(timeoutSec: number, signal?: AbortSignal): Promise<Verdict | undefined> {
+		const r = await this.call<Verdict>("await_reviewer", { timeoutSec }, (timeoutSec + 60) * 1000, signal);
+		return r.status === "comment" || r.status === "submitted" ? r : undefined;
 	}
 
-	async listen(onThreads: (threads: Thread[]) => void, onError: (e: Error) => void): Promise<void> {
+	async listen(onThreads: (threads: Thread[]) => void, onVerdict: (verdict: Verdict) => void, onError: (e: Error) => void): Promise<void> {
 		if (this.listening) {
 			return;
 		}
@@ -142,9 +144,13 @@ class CoReviewConnection {
 		this.stopped = false;
 		while (!this.stopped) {
 			try {
-				const threads = await this.next(240);
-				if (threads?.length && !this.stopped) {
-					onThreads(threads);
+				const r = await this.next(240);
+				if (r && !this.stopped) {
+					if (r.status === "submitted") {
+						onVerdict(r);
+					} else if (r.threads?.length) {
+						onThreads(r.threads);
+					}
 				}
 			} catch (e) {
 				if (this.stopped) {
@@ -184,8 +190,12 @@ function formatThread(t: Thread): string {
 }
 
 function formatVerdict(r: Verdict): string {
+	// The reviewer commented before submitting: those comments come first.
+	if (r.status === "comment" && r.threads?.length) {
+		return r.threads.map(formatThread).join("\n\n---\n\n");
+	}
 	if (r.status !== "submitted") {
-		return "Not submitted yet. Keep answering with co_review_wait, or call co_review_verdict again.";
+		return "Nothing from the reviewer yet. Call co_review_wait again to keep co-reviewing.";
 	}
 	const comments = (r.comments ?? []).map(c => `- ${c.id} ${c.where}${c.line ? `:${c.line}` : ""}: ${c.body}`).join("\n");
 	const suggestions = (r.acceptedSuggestions ?? []).map(s => `- ${s.path}:${s.startLine}\n  - ${s.before}\n  + ${s.after}`).join("\n");
@@ -209,6 +219,7 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 		ctx.ui.setStatus("co-review", "Co-Review: listening");
 		void connection.listen(
 			threads => threads.forEach(thread => harness.deliver(ctx, formatThread(thread))),
+			verdict => harness.deliver(ctx, `[Co-Review] The reviewer submitted the review. Act on it:\n\n${formatVerdict(verdict)}`),
 			error => ctx.ui.setStatus("co-review", `Co-Review: reconnecting (${error.message.slice(0, 60)})`)
 		);
 	};
@@ -284,15 +295,13 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 	pi.registerTool({
 		name: "co_review_wait",
 		label: "Co-Review: wait",
-		description: "Block until the reviewer asks a question or replies in a thread you are part of. Returns the questions to answer.",
+		description: "Wait for the reviewer's next move (the only call to wait on): their questions and answers to reply to, or their Submit (the decision, open comments and accepted suggestions) to act on.",
 		parameters: Type.Object({
 			timeoutSec: Type.Optional(Type.Number({ description: "Seconds to wait (default 600)" }))
 		}),
 		async execute(_id: string, params: { timeoutSec?: number }, signal: AbortSignal) {
-			const threads = await connection.next(params.timeoutSec ?? 600, signal);
-			return text(threads?.length
-				? threads.map(formatThread).join("\n\n---\n\n")
-				: "No questions yet. Call co_review_wait again to keep co-reviewing.");
+			const r = await connection.next(params.timeoutSec ?? 600, signal);
+			return text(r?.status === "submitted" ? `The reviewer submitted the review. Act on it:\n\n${formatVerdict(r)}` : formatVerdict(r ?? { status: "pending" }));
 		}
 	});
 
@@ -363,30 +372,19 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 	});
 
 	pi.registerTool({
-		name: "co_review_verdict",
-		label: "Co-Review: verdict",
-		description: "Wait for the reviewer to submit the review (Approve / Request changes / Comment). Returns the decision, their message, the open comments and accepted suggestions to apply.",
-		parameters: Type.Object({
-			timeoutSec: Type.Optional(Type.Number({ description: "Seconds to wait (default 300)" }))
-		}),
-		async execute(_id: string, params: { timeoutSec?: number }, signal: AbortSignal) {
-			const timeoutSec = params.timeoutSec ?? 300;
-			return text(formatVerdict(await connection.call<Verdict>("await_review", { timeoutSec }, (timeoutSec + 30) * 1000, signal)));
-		}
-	});
-
-	pi.registerTool({
 		name: "co_review_ask",
 		label: "Co-Review: ask reviewer",
-		description: "Ask the reviewer to choose between options (shown as buttons in the review). Blocks until answered.",
+		description: "Ask the reviewer to choose between options (shown as buttons in the review), then wait like co_review_wait: returns their choice, or whatever they did first (the choice then comes from co_review_wait).",
 		parameters: Type.Object({
 			question: Type.String(),
 			options: Type.Array(Type.String(), { minItems: 1, maxItems: 6 }),
 			threadId: Type.Optional(Type.String())
 		}),
 		async execute(_id: string, params: Record<string, unknown>, signal: AbortSignal) {
-			const r = await connection.call<{ status: string; choice?: string }>("ask_reviewer", params, 960_000, signal);
-			return text(r.status === "answered" ? `The reviewer chose: ${r.choice}` : "The reviewer has not answered yet.");
+			const r = await connection.call<Verdict & { question: { threadId: string; choice?: string } }>("ask_reviewer", params, 960_000, signal);
+			const answer = r.question.choice !== undefined ? `The reviewer chose: ${r.question.choice}`
+				: `The reviewer has not chosen yet (thread ${r.question.threadId}); their choice comes from co_review_wait.`;
+			return text(r.status === "pending" ? answer : `${answer}\n\n${r.status === "submitted" ? `The reviewer submitted the review. Act on it:\n\n${formatVerdict(r)}` : formatVerdict(r)}`);
 		}
 	});
 }

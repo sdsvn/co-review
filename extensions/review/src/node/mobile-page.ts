@@ -137,7 +137,8 @@ export const MOBILE_PAGE = `<!doctype html>
       + (t.intent === 'question' ? '<span class="badge q">question</span>' : '')
       + (t.severity ? '<span class="badge ' + t.severity + '">' + t.severity + '</span>' : '')
       + (t.status === 'proposed' ? '<span class="badge proposed">proposed</span>' : '')
-      + (t.agentState === 'working' ? '<span class="badge q">agent working…</span>' : '') + '</div>';
+      + (t.agentState === 'queued' && t.status !== 'resolved' ? '<span class="badge">waiting for agent</span>' : '')
+      + (t.agentState === 'working' ? '<span class="badge q">agent is on it…</span>' : '') + '</div>';
     card.appendChild(el(head));
     if (t.code) { card.appendChild(el('<pre>' + esc(t.code.split('\\n').slice(0, 12).join('\\n')) + '</pre>')); }
     if (t.proposal) {

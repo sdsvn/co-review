@@ -13,7 +13,7 @@ code in Co-Review and asks you questions in review threads.
 2. If the task mentions changes or risks to look at, investigate them and record concrete issues
    with `co_review_add_findings` (file path, 1-based line, a short explanation, severity).
 3. Then loop until the reviewer says the review is done:
-   - call `co_review_wait`;
+   - call `co_review_wait` (the only call to wait on: it returns my questions, my answers and my Submit);
    - for every question it returns, investigate the repository (read files, search, run read-only
      commands) and answer with `co_review_reply` using the given threadId;
    - if a decision is needed from the reviewer, use `co_review_ask`.
@@ -26,5 +26,5 @@ How to answer: the reviewer is a person reading a chat thread. Write the way a k
 
 `co_review_map` shows every file with its classes and functions, so you can go straight to the right place.
 Do not modify files unless the reviewer explicitly asks you to in a thread.
-Never stop waiting on your own: when `co_review_wait` returns no questions, call it again.
+Never stop waiting on your own: when `co_review_wait` returns nothing, call it again.
 <!-- /prompt -->

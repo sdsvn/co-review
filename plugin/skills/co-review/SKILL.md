@@ -1,6 +1,6 @@
 ---
 name: co-review
-description: Review with the human in Co-Review and stay as their co-reviewer — the whole repository, your change, someone else's pull request or a design: prepare the review, add first-pass findings, show it, answer their questions in the threads, and act on their verdict. Use when the user says "review this with me", "open a review", "co-review", "let me review your change", "walk me through the change", "I want to review before you continue", "review this PR", "audit the repo", or when a change is ready and the human should look at it before it is committed or merged. Needs Co-Review's MCP tools (open_review, await_comment, reply, add_findings, await_review, get_review).
+description: Review with the human in Co-Review and stay as their co-reviewer — the whole repository, your change, someone else's pull request or a design: prepare the review, add first-pass findings, show it, answer their questions in the threads, and act on their verdict. Use when the user says "review this with me", "open a review", "co-review", "let me review your change", "walk me through the change", "I want to review before you continue", "review this PR", "audit the repo", or when a change is ready and the human should look at it before it is committed or merged. Needs Co-Review's MCP tools (open_review, await_reviewer, reply, add_findings, get_review).
 ---
 
 # Co-review with the human
@@ -14,8 +14,8 @@ In Claude Code the tools come with the Co-Review plugin (`/plugin install co-rev
 
 <!-- prompt: pi-tools -->
 > **In Pi or Oh My Pi** (the Co-Review package) the tools are named `co_review_start` (open_review; `dir` for a
-> review directory), `co_review_wait` (await_comment), `co_review_reply`, `co_review_add_findings`, `co_review_ask`,
-> `co_review_verdict` (await_review), `co_review_map` (repo_map) and `co_review_post_github` (post_review_to_github). In an interactive session, the reviewer's
+> review directory), `co_review_wait` (await_reviewer: questions, answers and the Submit), `co_review_reply`,
+> `co_review_add_findings`, `co_review_ask`, `co_review_map` (repo_map) and `co_review_post_github` (post_review_to_github). In an interactive session, the reviewer's
 > questions also arrive on their own as `[Co-Review]` messages.
 <!-- /prompt -->
 
@@ -59,7 +59,7 @@ instead of 5,000 files:
 4. Show it: `open_review({ reviewId })`. It opens on the findings page: every finding, grouped by area, as one
    page I can read and comment on. Give me the URL (if there is one) and the areas with their finding counts, in one
    short message.
-5. Then loop `await_comment` → investigate → `reply` until I submit, and act on my verdict (`await_review`).
+5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit, and act on my verdict.
    Don't edit files while I review unless I ask in a thread.
 <!-- /prompt -->
 
@@ -84,7 +84,7 @@ on lines, suggests edits and submits one verdict:
    `add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line, side: "new" },
    body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines).
 3. Show it: `open_review({ reviewId })`. Give me the URL (if there is one) and, in one sentence, what to look at first.
-4. Loop `await_comment` → investigate → `reply` until I submit, then act on my verdict (`await_review`):
+4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit, then act on my verdict:
    approve → go ahead; request changes → address every comment and apply the accepted suggestions as new commits
    (don't rewrite the reviewed diff), then reply in each thread with what changed. Don't edit files while I review
    unless I ask in a thread.
@@ -108,7 +108,7 @@ For a pull request you didn't write. You take the first pass; the human decides 
    "code-line", path, line, side: "new" }, body, severity }] })`. They arrive proposed: I accept or dismiss each one.
 5. Show it: `open_review({ reviewId })`. Give me the URL (if there is one) and two sentences: what the pull request
    does and its riskiest part.
-6. Loop `await_comment` → investigate → `reply` until I submit. It's someone else's change: don't edit it.
+6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit. It's someone else's change: don't edit it.
    I can post the review to the pull request myself (**Also post to GitHub** when submitting). If I ask you to post
    it, call `post_review_to_github`: Co-Review shows me what goes out and posts only when I confirm.
 <!-- /prompt -->
@@ -138,18 +138,18 @@ as source (the human uses **Open in Browser**), so comment on HTML as code (`pat
 
 **Live channel (Claude Code).** If Claude Code runs with the Co-Review channel, the reviewer's questions arrive in
 the conversation on their own, as channel messages from Co-Review with a `thread_id`. Answer each one with
-`reply({ threadId: thread_id, body })` and keep working on anything else in between; don't block on `await_comment`.
-A channel message that says the reviewer submitted means: call `await_review` (it returns at once) and go to step 3.
+`reply({ threadId: thread_id, body })` and keep working on anything else in between.
+A channel message that says the reviewer submitted means: call `await_reviewer` (it returns at once) and go to step 3.
 
-**Otherwise**, loop:
+**Otherwise**, loop on `await_reviewer`, the one call to wait on. It returns whatever the human does next:
 
 ```
 loop:
-  await_comment({ timeoutSec: 240 })     → { status: "comment", threads: [...] } or { status: "pending" }
-  pending → call again (the human is reading)
-  for each thread in threads:
-    investigate the code it points at (thread.location, thread.code)
-    reply({ threadId, body })
+  await_reviewer({ timeoutSec: 240 })
+    { status: "comment", threads: [...] } → for each thread: investigate the code it points at
+                                            (thread.location, thread.code), then reply({ threadId, body })
+    { status: "submitted", decision, … }  → go to step 3
+    { status: "pending" }                 → call again (the human is reading)
 ```
 
 How to answer:
@@ -163,15 +163,15 @@ How to answer:
   `path` or `query`), so you can go straight to the right place instead of searching.
 - **Don't edit files** while the review is open unless the human asks in the thread. If they ask, make the
   change, then reply with what changed and where.
-- If you need the human to choose, `ask_reviewer({ question, options: [...] })` shows buttons and blocks
-  until they pick.
+- If you need the human to choose, `ask_reviewer({ question, options: [...] })` shows buttons and waits like
+  `await_reviewer`: it returns their choice (`question.choice`), or whatever they did first; the choice then comes
+  from `await_reviewer`, as their message in that thread.
 - Don't resolve threads yourself (`resolve: true`) unless the human asked a question you fully answered and
   they said so.
 
 ## 3. Act on the verdict
 
-When the human submits, `await_comment` stops returning questions. Call
-`await_review({ timeoutSec: 300 })` and loop until `status: "submitted"`:
+`await_reviewer` returns `status: "submitted"` when the human submits (after any comments still waiting for you):
 
 | `decision` | Do |
 |---|---|

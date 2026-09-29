@@ -151,10 +151,15 @@ export interface ReviewMessage {
     status?: MessageStatus;
     activity?: AgentActivity[];
     permission?: PermissionRequest;
+    /** The reviewer's choice for an agent's question (`ask_reviewer`): delivered to the agent, but needs no reply. */
+    choice?: string;
 }
 
-/** `working`: the agent is answering; `waiting_for_human`: it asked for a decision. */
-export type AgentState = 'idle' | 'working' | 'waiting_for_human';
+/**
+ * Where a thread stands with the agent: `queued`, the reviewer's latest message is for the (MCP) agent and it has not
+ * picked it up yet; `working`, the agent has it and is answering; `waiting_for_human`, it asked for a decision.
+ */
+export type AgentState = 'idle' | 'queued' | 'working' | 'waiting_for_human';
 
 /**
  * The agent participating in a review:
@@ -323,6 +328,22 @@ export interface ReviewVerdict {
     submittedAt: number;
     /** Number of submissions so far (the review round). */
     count: number;
+    /** For a review with an MCP agent: `waiting` until an agent picks the round up, then `delivered`. */
+    toAgent?: 'waiting' | 'delivered';
+}
+
+/**
+ * Whether the reviewer's latest message in `thread` is waiting for the MCP agent `agentId`: a question to the review's
+ * agent seat, anything in a review directory (the agent's own work), or a follow-up in a thread the agent is part of.
+ * The backend delivers these to the agent; the frontend shows them as waiting for it.
+ */
+export function waitsForAgent(review: Review, thread: ReviewThread, agentId: string): boolean {
+    const last = thread.messages[thread.messages.length - 1];
+    if (thread.status === 'resolved' || !last || last.author.kind !== 'human') {
+        return false;
+    }
+    const seated = review.agent?.transport === 'mcp' && review.agent.id === agentId;
+    return ((thread.intent === 'question' || !!review.bundle) && seated) || thread.messages.some(m => m.author.id === agentId);
 }
 
 export namespace ReviewScope {

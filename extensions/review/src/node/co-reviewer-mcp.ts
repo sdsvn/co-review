@@ -10,7 +10,7 @@ import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
-import { CodeLocation, Participant, Review, ReviewThread, Severity } from '../common/review-model';
+import { CodeLocation, Participant, Review, ReviewThread, Severity, waitsForAgent } from '../common/review-model';
 import { SyntaxSymbol } from '../common/syntax-protocol';
 import { AgentPresenceTracker, AgentWindows, HumanDecisions } from './agent-coordination';
 import { coReviewHome, ReviewStore } from './review-store';
@@ -21,6 +21,7 @@ import { documentFormat, DocumentFormat } from '../common/design-format';
 import { acceptedSuggestions, commentOf, findThread, threadRef } from './review-payloads';
 import { ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT } from './prompts.gen';
 import { LANGUAGE_BY_EXTENSION, RepoIndex } from './repo-index';
+import { currentUser } from './participants';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js') as typeof import('@modelcontextprotocol/sdk/server/mcp.js');
@@ -32,7 +33,7 @@ interface Session {
     server: McpServerType;
     /** Human message ids already handed to this agent, so each question is delivered once. */
     delivered: Set<string>;
-    /** Submissions already returned by await_review. */
+    /** Submissions already returned by await_reviewer. */
     consumedSubmit: number;
     /** Pushes review events into a Claude Code session (channels); see startChannel. */
     channel?: { dispose(): void };
@@ -51,7 +52,7 @@ function fail(message: string): ToolResult {
 /**
  * MCP endpoint (`/mcp`, Streamable HTTP) for agents that run in their own harness
  * (Claude Code, Codex, Cursor, …). The agent opens a review, then acts as a co-reviewer:
- * it blocks on `await_comment` until the reviewer asks something, answers with `reply`,
+ * it blocks on `await_reviewer` until the reviewer asks something or submits, answers with `reply`,
  * and can add findings or ask the reviewer to decide. The ACP integration is the other
  * direction: there Co-Review launches the agent itself.
  */
@@ -162,7 +163,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'review directory), or a design document (open_review with dir). In each, prepare the review without showing it '
                 + '(open_review with open: false), add your first-pass findings, then show it with open_review({ reviewId }) and tell the '
                 + 'reviewer the URL. Then loop: '
-                + 'await_comment → investigate the repository → reply. Use add_findings for issues you find, '
+                + 'await_reviewer → investigate the repository → reply, until it returns the reviewer\'s Submit; await_reviewer is the only call to wait on. Use add_findings for issues you find, '
                 + 'ask_reviewer when you need a decision, and repo_map to find where things live before searching. '
                 + 'To review the whole repository: repo_map({ overview: true }) for where to start and how the code clusters, then '
                 + 'add_findings with the area as the first label and status "proposed" (a few per area); get_review returns `coverage`, '
@@ -170,8 +171,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'its pages come back as target "doc:<path>". '
                 + 'To have a design reviewed before you implement, follow the design-document rules in open_review\'s description. '
                 + 'In Claude Code with channels on, the reviewer\'s questions and submissions also arrive as <channel source="co-review"> '
-                + 'messages (thread_id attribute): answer each with reply({ threadId: thread_id }) instead of looping await_comment, '
-                + 'and on a submission call await_review (it returns immediately).\n\n' + ANSWER_STYLE
+                + 'messages (thread_id attribute): answer each with reply({ threadId: thread_id }) instead of looping await_reviewer, '
+                + 'and on a submission call await_reviewer (it returns immediately).\n\n' + ANSWER_STYLE
         });
         const rootArg = z.string().optional().describe('Absolute path of the repository (defaults to the one Co-Review was started for)');
         const reviewArg = z.string().optional().describe('Review id (defaults to the review opened with open_review)');
@@ -193,7 +194,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'is a review page, `/x.md` links resolve from the bundle root and `path:line` links open the code. '
                 + 'To have the reviewer start from your findings, prepare it first: open_review({ ..., open: false }), add_findings, '
                 + 'then open_review({ reviewId }) shows it. '
-                + 'Then loop await_comment → reply, and/or await_review for the reviewer\'s Submit.\n\n'
+                + 'Then loop await_reviewer → reply until the reviewer submits.\n\n'
                 + 'Design documents: to have a design reviewed before implementing, write the smallest document that lets the reviewer '
                 + 'understand, challenge and approve the change:\n' + DESIGN_PROMPT,
             inputSchema: {
@@ -211,7 +212,6 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 title: z.string().optional(),
                 open: z.boolean().optional().describe('Show the review to the reviewer: the browser, or the desktop app\'s window (default true). '
                     + 'false prepares it without showing it (e.g. while you add first-pass findings); call again to show it'),
-                addr: z.string().optional().describe('Ignored'),
                 openspec: z.string().optional().describe('OpenSpec change directory (…/changes/<id>) shown with the document')
             }
         }, async ({ reviewId, root, dir, markdown, patch: inlinePatch, diff, patchName, storePath, title, open, openspec }) => {
@@ -271,7 +271,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             review = await this.store.setAgent(review.id, { id: agent.id, name: agent.name, transport: 'mcp' });
             currentReviewId = review.id;
             this.startChannel(session, review, agent);
-            session.consumedSubmit = review.verdict?.count ?? 0;
+            // A round no agent has picked up yet (submitted while none was connected) is still delivered.
+            session.consumedSubmit = (review.verdict?.count ?? 0) - (review.verdict?.toAgent === 'waiting' ? 1 : 0);
             this.presence.seen(review.id);
             // The desktop app shows the review in the repository's window (opened, or focused, by launching the app
             // with it; its frontend switches to the review); a browser cannot attach to the Electron backend.
@@ -295,75 +296,20 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 proposedFindings: review.threads.filter(t => t.status === 'proposed').length, ...extra,
                 ...(open === false ? { note: `Prepared, not shown to the reviewer yet. Add your first-pass findings, then call open_review({ reviewId: "${review.id}" }) to show it.` }
                     : url ? { url } : { note: 'Shown in the Co-Review desktop app.' }),
-                hint: 'Share the URL with the reviewer, then loop await_comment → reply, or call await_review to wait for their Submit.'
+                hint: 'Share the URL with the reviewer, then loop await_reviewer → reply until it returns their Submit.'
             });
         });
 
-        server.registerTool('await_review', {
-            description: 'Block until the reviewer clicks Submit, then return the batch: {decision, summary, comments[], acceptedSuggestions[]}. '
-                + 'Returns {status:"pending"} on timeout — call again to keep waiting.',
+        server.registerTool('await_reviewer', {
+            description: 'Wait for the reviewer\'s next move; the one call to wait on, whatever you are waiting for. Returns '
+                + '{status:"comment", threads[] (the ones to answer, with code and conversation), comments[] (unresolved threads), needsReply} '
+                + 'when they ask you something, reply in a thread you are part of (in a review directory: any comment, including on '
+                + 'proposed findings) or answer an ask_reviewer question; {status:"submitted", decision, summary, comments[], '
+                + 'acceptedSuggestions[]} when they click Submit; {status:"pending"} on timeout. Answer comments with reply, act on a '
+                + 'Submit, and call it again until the review is done.',
             inputSchema: { reviewId: reviewArg, timeoutSec: z.number().int().min(1).max(3600).optional() }
-        }, async ({ reviewId, timeoutSec }, extra) => {
-            const initial = await resolveReview(reviewId);
-            if (!initial) {
-                return fail('No review. Call open_review first.');
-            }
-            const stopListening = this.presence.listen(initial.id);
-            try {
-                const deadline = Date.now() + (timeoutSec ?? 300) * 1000;
-                for (;;) {
-                    const review = await this.store.get(initial.id);
-                    if (review?.verdict && review.verdict.count > session.consumedSubmit) {
-                        session.consumedSubmit = review.verdict.count;
-                        // Approved: this agent is done with the review, and a window it showed can close.
-                        if (review.verdict.decision === 'approve' && session.transport.sessionId) {
-                            this.windows.done(session.transport.sessionId, FileUri.create(this.root(review)).toString());
-                        }
-                        return json(this.batch(review));
-                    }
-                    if (Date.now() >= deadline || extra.signal.aborted) {
-                        return json({ status: 'pending', hint: 'No submit yet within the timeout. Call await_review again to keep waiting.' });
-                    }
-                    await this.nextChange(initial.id, deadline - Date.now(), extra.signal);
-                }
-            } finally {
-                stopListening();
-            }
-        });
-
-        server.registerTool('await_comment', {
-            description: 'Block until the reviewer asks you something or replies in a thread you are part of (in a review directory: any '
-                + 'comment, including on proposed findings). Returns {status:"comment", comments[] (unresolved threads, needsReply), needsReply, threads[] (the ones to answer, with code '
-                + 'and conversation)}; on timeout {status:"pending"} — call again.',
-            inputSchema: { reviewId: reviewArg, timeoutSec: z.number().int().min(1).max(3600).optional() }
-        }, async ({ reviewId, timeoutSec }, extra) => {
-            const initial = await resolveReview(reviewId);
-            if (!initial) {
-                return fail('No review. Call open_review first.');
-            }
-            const agent = this.agentOf(session);
-            const stopListening = this.presence.listen(initial.id);
-            try {
-                const deadline = Date.now() + (timeoutSec ?? 240) * 1000;
-                for (;;) {
-                    const review = await this.store.get(initial.id);
-                    const waiting = review ? this.waitingThreads(review, agent, session) : [];
-                    if (waiting.length) {
-                        for (const thread of waiting) {
-                            session.delivered.add(thread.messages[thread.messages.length - 1].id);
-                            await this.store.setAgentState(review!.id, thread.id, 'working');
-                        }
-                        return json(this.commentBatch(review!, waiting));
-                    }
-                    if (Date.now() >= deadline || extra.signal.aborted) {
-                        return json({ status: 'pending' });
-                    }
-                    await this.nextChange(initial.id, deadline - Date.now(), extra.signal);
-                }
-            } finally {
-                stopListening();
-            }
-        });
+        }, async ({ reviewId, timeoutSec }, extra) =>
+            this.awaitReviewer(session, await resolveReview(reviewId), (timeoutSec ?? 240) * 1000, extra.signal));
 
         server.registerTool('reply', {
             description: `Answer in a review thread (markdown). ${ANSWER_STYLE_SHORT} threadId: the thread id or its short id ("t2").`,
@@ -389,7 +335,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + '(without `line`, on the file or folder; `labels` group them in the panel, e.g. the area of the repository; '
                 + '`status: "proposed"` lets the reviewer Accept or Dismiss each one, as for a first-pass audit); '
                 + 'anchored findings {id, target ("doc" | "doc:<path>" | "patch:<slug>"), anchor, severity, labels, body, verdict?} are PROPOSED '
-                + '(the reviewer Accepts or Dismisses; only accepted ones come back in await_review). A Markdown page takes '
+                + '(the reviewer Accepts or Dismisses; only accepted ones come back in the submitted batch). A Markdown page takes '
                 + 'target "doc:<path>" and anchor {type: "text", exact} | {type: "document"}.',
             inputSchema: {
                 reviewId: reviewArg,
@@ -444,11 +390,13 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 const latest = await this.store.get(review.id);
                 ids.push(`t${latest!.nextThreadNumber - 1}`);
             }
-            return json({ created: ids.length, ids, hint: 'Findings with an anchor are proposed: only the ones the reviewer accepts come back in await_review.' });
+            return json({ created: ids.length, ids, hint: 'Findings with an anchor are proposed: only the ones the reviewer accepts come back when they submit.' });
         });
 
         server.registerTool('ask_reviewer', {
-            description: 'Ask the reviewer to decide between options (shown as buttons in the thread). Blocks until answered or timeout.',
+            description: 'Ask the reviewer to decide between options (shown as buttons in the thread), then wait as await_reviewer does. '
+                + 'Their choice comes back as their message in that thread ({status:"comment"}, `question.choice` set); if they comment '
+                + 'elsewhere, reply in the thread or submit first, you get that instead, and the choice comes later from await_reviewer.',
             inputSchema: {
                 reviewId: reviewArg,
                 question: z.string(),
@@ -456,20 +404,48 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 threadId: z.string().optional().describe('Ask inside this thread; otherwise a repository-level thread is created'),
                 timeoutSec: z.number().int().min(1).max(3600).optional()
             }
-        }, async ({ reviewId, question, options, threadId, timeoutSec }) => {
+        }, async ({ reviewId, question, options, threadId, timeoutSec }, extra) => {
             const review = await resolveReview(reviewId);
+            const inThread = review && threadId ? findThread(review, threadId.trim()) : undefined;
             if (!review) {
                 return fail('No review. Call open_review first.');
             }
+            if (threadId && !inThread) {
+                return fail(`No thread "${threadId}".`);
+            }
             const agent = this.agentOf(session);
-            const id = threadId ?? (await this.store.createThread(review.id, { kind: 'repository' }, question, agent)).id;
+            const thread = inThread ?? await this.store.createThread(review.id, { kind: 'repository' }, question, agent);
             const request = { id: randomUUID(), title: question, options: options.map((name, i) => ({ id: String(i), name, kind: 'allow_once' })) };
-            const messageId = await this.store.startMessage(review.id, id, agent, { body: threadId ? question : '', permission: request, status: 'done' });
-            await this.store.setAgentState(review.id, id, 'waiting_for_human');
-            const choice = await this.decisions.wait(request.id, (timeoutSec ?? 900) * 1000);
-            await this.store.updateMessage(review.id, id, messageId, { permission: { ...request, outcome: choice ?? 'cancelled' } });
-            await this.store.setAgentState(review.id, id, 'idle');
-            return json(choice === undefined ? { status: 'pending' } : { status: 'answered', choice: options[Number(choice)] });
+            const messageId = await this.store.startMessage(review.id, thread.id, agent, { body: inThread ? question : '', permission: request, status: 'done' });
+            await this.store.setAgentState(review.id, thread.id, 'waiting_for_human');
+            // The answer can come at any time, also after this call returned: it lands in the thread as the reviewer's
+            // message, which await_reviewer delivers like any other.
+            let choice: string | undefined;
+            const recorded = this.decisions.wait(request.id).then(async optionId => {
+                choice = optionId === undefined ? undefined : options[Number(optionId)];
+                await this.store.updateMessage(review.id, thread.id, messageId, { permission: { ...request, outcome: optionId ?? 'cancelled' } });
+                if (choice === undefined) {
+                    await this.store.setAgentState(review.id, thread.id, 'idle');
+                    return;
+                }
+                const answered = await this.store.addMessage(review.id, thread.id, `Chose: **${choice}**`, await currentUser(review.workspaceRoot), { choice });
+                return answered.messages[answered.messages.length - 1].id;
+            });
+            recorded.catch(error => console.error('[co-review] recording the reviewer\'s choice failed', error));
+            const result = await this.awaitReviewer(session, review, (timeoutSec ?? 900) * 1000, extra.signal);
+            if (result.isError) {
+                return result;
+            }
+            const payload = JSON.parse(result.content[0].text);
+            if (choice !== undefined) {
+                // This call returns the choice: it is delivered, not something to wait for again.
+                const choiceMessage = await recorded.catch(() => undefined);
+                if (choiceMessage) {
+                    session.delivered.add(choiceMessage);
+                    await this.store.setAgentState(review.id, thread.id, 'idle');
+                }
+            }
+            return json({ ...payload, question: { threadId: threadRef(thread), status: choice === undefined ? 'pending' : 'answered', choice } });
         });
 
         server.registerTool('post_review_to_github', {
@@ -544,7 +520,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         });
 
         server.registerTool('get_review', {
-            description: 'Non-blocking snapshot: the latest verdict, open comments (the await_review batch), all threads with location and messages, '
+            description: 'Non-blocking snapshot: the latest verdict, open comments (the submitted batch), all threads with location and messages, '
                 + 'and `coverage` (repository reviews): source files the reviewer marked as viewed, overall and per area.',
             inputSchema: { reviewId: reviewArg, root: rootArg }
         }, async ({ reviewId, root }) => {
@@ -561,9 +537,59 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     }
 
     /**
+     * Waits for the reviewer's next move in `initial`: threads waiting for this agent, or a Submit not yet returned to
+     * this session (comments first: the submitted batch then has the answers in it). Every call that waits goes through
+     * here, so none of them can miss what the others would return.
+     */
+    protected async awaitReviewer(session: Session, initial: Review | undefined, timeoutMs: number, signal: AbortSignal): Promise<ToolResult> {
+        if (!initial) {
+            return fail('No review. Call open_review first.');
+        }
+        const agent = this.agentOf(session);
+        const stopListening = this.presence.listen(initial.id);
+        try {
+            const deadline = Date.now() + timeoutMs;
+            for (;;) {
+                const review = await this.store.get(initial.id);
+                if (!review) {
+                    return fail(`Review ${initial.id} was deleted.`);
+                }
+                const submitted = !!review.verdict && review.verdict.count > session.consumedSubmit;
+                const waiting = this.waitingThreads(review, agent, session);
+                if (submitted && !waiting.length) {
+                    session.consumedSubmit = review.verdict!.count;
+                    if (review.verdict!.toAgent === 'waiting') {
+                        await this.store.verdictDelivered(review.id);
+                    }
+                    // Approved: this agent is done with the review, and a window it showed can close.
+                    if (review.verdict!.decision === 'approve' && session.transport.sessionId) {
+                        this.windows.done(session.transport.sessionId, FileUri.create(this.root(review)).toString());
+                    }
+                    return json({ ...this.batch(review), hint: 'The reviewer submitted: act on the decision and the open comments.' });
+                }
+                if (waiting.length) {
+                    for (const thread of waiting) {
+                        const last = thread.messages[thread.messages.length - 1];
+                        session.delivered.add(last.id);
+                        // A choice is the answer to the agent's own question: handed over, nothing to reply to.
+                        await this.store.setAgentState(review.id, thread.id, last.choice !== undefined ? 'idle' : 'working');
+                    }
+                    return json(this.commentBatch(review, waiting));
+                }
+                if (Date.now() >= deadline || signal.aborted) {
+                    return json({ status: 'pending', hint: 'Nothing from the reviewer yet. Call it again to keep waiting.' });
+                }
+                await this.nextChange(initial.id, deadline - Date.now(), signal);
+            }
+        } finally {
+            stopListening();
+        }
+    }
+
+    /**
      * Claude Code channels: pushes the reviewer's questions and submissions into the agent's session as they happen,
      * so it answers without polling. Only for Claude Code clients; a session not started with channels ignores the
-     * notifications. Pushed questions are not marked delivered, so await_comment still returns them in that case.
+     * notifications. Pushed questions are not marked delivered, so await_reviewer still returns them in that case.
      */
     protected startChannel(session: Session, opened: Review, agent: Participant): void {
         session.channel?.dispose();
@@ -590,7 +616,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             if (verdict && verdict.count > submits) {
                 submits = verdict.count;
                 await notify(`The reviewer submitted round ${verdict.count}: ${verdict.decision}${verdict.summary ? ` — "${verdict.summary}"` : ''}. `
-                    + 'Call await_review (it returns immediately) for the open comments and accepted suggestions.', { review_id: review.id, event: 'submitted' });
+                    + 'Call await_reviewer (it returns immediately) for the open comments and accepted suggestions.', { review_id: review.id, event: 'submitted' });
             }
         };
         const run = () => push().catch(error => console.error('[co-review] channel push failed', error));
@@ -617,17 +643,14 @@ export class CoReviewerMcp implements BackendApplicationContribution {
      * Unresolved threads whose latest message is from the reviewer and addressed to this agent. Proposed findings
      * count: the reviewer often asks about a finding before accepting or dismissing it.
      */
+    /**
+     * The threads to hand this agent: the reviewer's latest message is for it (see waitsForAgent), not yet handed to
+     * this session, and not already taken (`idle`: e.g. a choice ask_reviewer returned). A thread another session took
+     * (`working`) is handed again: that session may be gone, and a repeat beats a question nobody answers.
+     */
     protected waitingThreads(review: Review, agent: Participant, session: Session): ReviewThread[] {
-        return review.threads.filter(thread => {
-            const last = thread.messages[thread.messages.length - 1];
-            if (thread.status === 'resolved' || !last || last.author.kind !== 'human' || session.delivered.has(last.id)) {
-                return false;
-            }
-            // Questions go to whoever holds the review's agent seat; follow-ups to the agents in the thread.
-            const seated = review.agent?.transport === 'mcp' && review.agent.id === agent.id;
-            // A review directory is the agent's own work: every reviewer comment is for it.
-            return ((thread.intent === 'question' || !!review.bundle) && seated) || thread.messages.some(m => m.author.id === agent.id);
-        });
+        return review.threads.filter(thread => waitsForAgent(review, thread, agent.id) && thread.agentState !== 'idle'
+            && !session.delivered.has(thread.messages[thread.messages.length - 1].id));
     }
 
     /**
@@ -673,7 +696,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         }
     }
 
-    /** The await_review / get_review batch. */
+    /** The submitted (await_reviewer) / get_review batch. */
     protected batch(review: Review): Record<string, unknown> {
         const open = review.threads.filter(t => t.status === 'open');
         const docFile = review.bundle ? this.bundles.documentOf(review.bundle.dir) : undefined;
@@ -692,7 +715,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         };
     }
 
-    /** The await_comment batch, plus the threads to answer with full context. */
+    /** The await_reviewer comment batch, plus the threads to answer with full context. */
     protected commentBatch(review: Review, waiting: ReviewThread[]): Record<string, unknown> {
         // Proposed findings are part of the conversation too (the reviewer asks before accepting or dismissing).
         const unresolved = review.threads.filter(t => t.status !== 'resolved');
@@ -704,7 +727,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             openCount: unresolved.filter(t => t.status === 'open').length,
             needsReply: unresolved.filter(needs).length,
             threads: waiting.map(t => this.describe(review, t)),
-            hint: 'reply(threadId, body) to answer (edit the reviewed files on disk if needed — the view live-reloads), then call await_comment again.',
+            hint: 'reply(threadId, body) to answer (edit the reviewed files on disk if needed — the view live-reloads), then wait again with the same call.',
             howToAnswer: ANSWER_STYLE_SHORT
         };
     }

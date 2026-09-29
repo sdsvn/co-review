@@ -225,6 +225,7 @@ details[open] > summary.co-review-step-line::before { content: '▾'; }
 .co-review-decision.request-changes.active { border-color: var(--theia-charts-red); }
 .co-review-muted { color: var(--theia-descriptionForeground); }
 .co-review-badge.proposed { border-color: var(--theia-charts-blue); color: var(--theia-charts-blue); }
+.co-review-badge.queued { border-style: dashed; color: var(--theia-descriptionForeground); }
 .co-review-actions.always { opacity: 1; }
 
 /* ---- Patch review ---- */

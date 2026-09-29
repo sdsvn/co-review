@@ -341,6 +341,11 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
     // ACP agents post as `agent:<id>`; MCP agents' ids already are participant ids.
     const agentEngaged = !!agent && thread.messages.some(m => m.author.id === agent.id || m.author.id === `agent:${agent.id}`);
     const canAsk = !!agent && !resolved && !agentBusy && !agentEngaged;
+    // Your latest message is for the agent (MCP) and it has not picked it up yet: say so, so nobody wonders whether it saw it.
+    const review = manager.activeReview;
+    const queued = thread.agentState === 'queued' && !resolved;
+    const listening = queued && !!manager.getAgentPresence(review!.id)?.listening;
+    const agentName = agent?.name ?? 'The agent';
     return <div id={props.inline ? undefined : `co-review-thread-${thread.id}`}
         className={`co-review-thread ${resolved ? 'resolved' : ''} ${props.selected ? 'selected' : ''} ${props.inline ? 'inline' : ''}`}
         onClick={props.onSelect}>
@@ -360,7 +365,12 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
                     title={props.anchorState === 'moved' ? 'The commented code moved; the comment followed it.' : 'The commented code no longer exists.'}>
                     {props.anchorState}
                 </span>}
-            {thread.agentState === 'working' && <span className='co-review-badge working'>working…</span>}
+            {queued && <span className='co-review-badge queued'
+                title={listening ? `${agentName} is listening and picks this up now.` : `${agentName} is busy; it gets this the next time it checks in. Nothing is lost.`}>
+                {listening ? `sending to ${agentName}…` : `waiting for ${agentName}`}
+            </span>}
+            {thread.agentState === 'working' && <span className='co-review-badge working'
+                title={`${agentName} has your message and is working on an answer.`}>{agentName} is on it…</span>}
             {thread.agentState === 'waiting_for_human' && <span className='co-review-badge waiting'>needs your decision</span>}
             {resolved && <span className='co-review-badge resolved'>resolved</span>}
             {proposed && <span className='co-review-badge proposed' title='Automated finding: accept to keep it, dismiss to drop it'>proposed finding</span>}

@@ -125,7 +125,7 @@ export class AgentSetup {
             { id: 'codex', label: 'Codex', kind: 'toml', file: path.join(home, '.codex', 'config.toml'),
                 snippet: [`[mcp_servers.${SERVER}]`, `command = ${JSON.stringify(l.command)}`, `args = ${JSON.stringify(l.args)}`,
                     ...hasEnv ? [`env = { ${Object.entries(env).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join(', ')} }`] : [],
-                    '# await_comment / await_review block for minutes', 'tool_timeout_sec = 600'].join('\n') },
+                    '# await_reviewer and ask_reviewer block for minutes', 'tool_timeout_sec = 600'].join('\n') },
             { id: 'cursor', label: 'Cursor', kind: 'json', file: path.join(home, '.cursor', 'mcp.json'), key: ['mcpServers'], snippet: json({ mcpServers: { [SERVER]: stdio } }) },
             { id: 'claude-desktop', label: 'Claude Desktop', kind: 'json', file: path.join(appSupport, 'Claude', 'claude_desktop_config.json'), key: ['mcpServers'],
                 snippet: json({ mcpServers: { [SERVER]: stdio } }) },

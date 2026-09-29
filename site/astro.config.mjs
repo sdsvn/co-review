@@ -56,7 +56,7 @@ export default defineConfig({
 					projectName: 'Co-Review',
 					description: 'Co-Review is a review app with IDE features: an agent such as Claude Code opens its work as a review, the human comments on code, designs and diagrams, and the agent answers in the threads through MCP tools and waits for the verdict.',
 					details: [
-						'- Agents connect through the MCP server `co-review mcp` (tools: open_review, await_comment, reply, add_findings, ask_reviewer, await_review, get_review). The Agent contract page is the reference.',
+						'- Agents connect through the MCP server `co-review mcp` (tools: open_review, await_reviewer, reply, add_findings, ask_reviewer, get_review, repo_map, post_review_to_github). The Agent contract page is the reference.',
 						'- Claude Code: install the plugin with `/plugin marketplace add sdsvn/co-review` and `/plugin install co-review@co-review`.',
 						'- Design documents declare `co-review: design` frontmatter; the Design documents page is the format.'
 					].join('\n'),

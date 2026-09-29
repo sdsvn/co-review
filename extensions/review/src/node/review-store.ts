@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { AgentConfig, AgentState, CodeLocation, Participant, Review, ReviewActivity, ReviewBundle, ReviewDecision, ReviewMessage, ReviewThread, ThreadOptions, ThreadStatus } from '../common/review-model';
+import { AgentConfig, AgentState, CodeLocation, Participant, Review, ReviewActivity, ReviewBundle, ReviewDecision, ReviewMessage, ReviewThread, ThreadOptions, ThreadStatus, waitsForAgent } from '../common/review-model';
 import { CreateReviewParams } from '../common/review-protocol';
 
 /** Where Co-Review keeps its state: `$CO_REVIEW_HOME`, default `~/.co-review`. */
@@ -178,19 +178,28 @@ export class ReviewStore {
                 updatedAt: now
             };
             review.threads.push(thread);
+            this.queueForAgent(review, thread);
             this.record(review, { kind: 'thread-created', actor: author, threadId: thread.id, at: now });
             this.afterWrite(() => this.onDidAddMessageEmitter.fire({ review, thread, message: thread.messages[0] }));
             return thread;
         });
     }
 
-    addMessage(reviewId: string, threadId: string, body: string, author: Participant): Promise<ReviewThread> {
+    addMessage(reviewId: string, threadId: string, body: string, author: Participant, extra?: Pick<ReviewMessage, 'choice'>): Promise<ReviewThread> {
         return this.mutateThread(reviewId, threadId, (review, thread, now) => {
-            const message: ReviewMessage = { id: randomUUID(), author, body, createdAt: now };
+            const message: ReviewMessage = { ...extra, id: randomUUID(), author, body, createdAt: now };
             thread.messages.push(message);
+            this.queueForAgent(review, thread);
             this.record(review, { kind: 'message-added', actor: author, threadId, at: now });
             this.afterWrite(() => this.onDidAddMessageEmitter.fire({ review, thread, message }));
         });
+    }
+
+    /** The reviewer's latest message is for the review's MCP agent: it waits for the agent to pick it up (shown as such). */
+    protected queueForAgent(review: Review, thread: ReviewThread): void {
+        if (review.agent?.transport === 'mcp' && waitsForAgent(review, thread, review.agent.id)) {
+            thread.agentState = 'queued';
+        }
     }
 
     /** Adds an (agent) message that is filled in later with {@link updateMessage}; returns its id. */
@@ -239,8 +248,9 @@ export class ReviewStore {
     }
 
     setThreadIntent(reviewId: string, threadId: string, intent: ReviewThread['intent']): Promise<ReviewThread> {
-        return this.mutateThread(reviewId, threadId, (_review, thread) => {
+        return this.mutateThread(reviewId, threadId, (review, thread) => {
             thread.intent = intent;
+            this.queueForAgent(review, thread);
         });
     }
 
@@ -254,8 +264,21 @@ export class ReviewStore {
     /** The reviewer submits the review (a round): decision + message to the agent. */
     submit(reviewId: string, decision: ReviewDecision, summary: string, actor: Participant): Promise<Review> {
         return this.mutate(reviewId, (review, now) => {
-            review.verdict = { decision, summary, submittedAt: now, count: (review.verdict?.count ?? 0) + 1 };
+            review.verdict = {
+                decision, summary, submittedAt: now, count: (review.verdict?.count ?? 0) + 1,
+                ...review.agent?.transport === 'mcp' ? { toAgent: 'waiting' as const } : {}
+            };
             this.record(review, { kind: 'review-submitted', actor, at: now });
+            return review;
+        });
+    }
+
+    /** An agent picked up the latest round. */
+    verdictDelivered(reviewId: string): Promise<Review> {
+        return this.mutate(reviewId, review => {
+            if (review.verdict) {
+                review.verdict.toAgent = 'delivered';
+            }
             return review;
         });
     }

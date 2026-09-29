@@ -6,7 +6,7 @@ harness (Codex, Cursor, VS Code, Gemini CLI, Zed, …) works through the same MC
 
 What an agent gets:
 
-- **The review tools** (MCP): `open_review`, `await_comment`, `reply`, `add_findings`, `ask_reviewer`, `await_review`,
+- **The review tools** (MCP): `open_review`, `await_reviewer`, `reply`, `add_findings`, `ask_reviewer`,
   `get_review`, and `post_review_to_github` for pull requests.
 - **Two skills.** `co-review` runs a review with you (the whole repository, its change, or someone else's pull
   request): it prepares the review, takes a first pass, shows it, answers your comments in their threads and acts on
@@ -40,7 +40,7 @@ Either way, restart Claude Code afterwards so it loads the plugin.
 
 | The plugin adds | What it does |
 |---|---|
-| **MCP server** `plugin:co-review:co-review` | The review tools: `open_review`, `await_comment`, `reply`, `add_findings`, `ask_reviewer`, `await_review`, `get_review`, `post_review_to_github` |
+| **MCP server** `plugin:co-review:co-review` | The review tools: `open_review`, `await_reviewer`, `reply`, `add_findings`, `ask_reviewer`, `get_review`, `post_review_to_github` |
 | **Skills** `co-review`, `co-review-design` | The workflows; they also trigger on requests like "review this with me" or "design this first" |
 | **`/co-review:audit [focus]`** | Reviews the whole repository with you: first-pass findings grouped by area on a findings page, then answers your questions |
 | **`/co-review:review [base]`** | Opens its change (uncommitted, or the branch against `base`) as a pull-request page and stays as your co-reviewer until you submit |
@@ -55,7 +55,7 @@ Check it with `/mcp`: `plugin:co-review:co-review` should be connected. The plug
 
 ### Live review comments (channel)
 
-By default Claude Code waits for your comments with `await_comment`, which works everywhere. With Claude Code's
+By default Claude Code waits for you with `await_reviewer`, which works everywhere. With Claude Code's
 [channels](https://code.claude.com/docs/en/channels), Co-Review pushes each question into the conversation as you
 ask it, and Claude answers in the thread and carries on with its work. Nothing blocks and no turn is spent waiting.
 
@@ -67,7 +67,7 @@ claude --dangerously-load-development-channels plugin:co-review@co-review
 
 Claude Code asks you to confirm once. Channels need a claude.ai or Console login (not Bedrock or Vertex), and Team
 or Enterprise admins have to enable them (`channelsEnabled`). Without the flag, the plugin still works through
-`await_comment`, and nothing is lost: a pushed question is still returned by `await_comment` if the session didn't
+`await_reviewer`, and nothing is lost: a pushed question is still returned by `await_reviewer` if the session didn't
 receive it.
 
 ### The hook
@@ -128,7 +128,7 @@ for one session without installing, run `omp -e ./integrations/omp`.
 | `/co-review-pr <n>` | Reviews someone else's pull request with you, starting from its first-pass findings |
 | `/co-review-design <task>` | Writes a design doc, opens it for review, implements after approval |
 | `pi --co-review` / `omp --co-review` | Starts the session already listening to the review |
-| `co_review_start`, `co_review_wait`, `co_review_reply`, `co_review_add_findings`, `co_review_ask`, `co_review_verdict`, `co_review_map` | The tools, for the model and for subagents |
+| `co_review_start`, `co_review_wait`, `co_review_reply`, `co_review_add_findings`, `co_review_ask`, `co_review_map` | The tools, for the model and for subagents |
 | `co-reviewer` agent (Pi only) | Stays in the review as co-reviewer while the main session keeps working |
 
 Both packages also load the `co-review` and `co-review-design` skills. In an interactive session the agent waits for
@@ -180,7 +180,7 @@ repository.
 > safely (Zed, Goose).
 
 > [!TIP]
-> `await_comment` and `await_review` wait for you for up to a few minutes. Where a harness has a tool-call timeout,
+> `await_reviewer` and `ask_reviewer` wait for you for up to a few minutes. Where a harness has a tool-call timeout,
 > raise it to 600 s, as the examples below do.
 
 ### Codex
@@ -278,4 +278,4 @@ For an agent that doesn't load skills, add to its `AGENTS.md` / `CLAUDE.md`:
 
 > When a change is ready, or a design needs review, open it in Co-Review with the `open_review` tool (for a change:
 > `open_review({ diff: "HEAD", open: false })`, then `add_findings`, then `open_review({ reviewId })` to show it) and
-> stay as co-reviewer: answer every comment in its thread, and wait for my verdict (`await_review`) before committing.
+> stay as co-reviewer: answer every comment in its thread, and wait for my verdict (`await_reviewer` returns it) before committing.

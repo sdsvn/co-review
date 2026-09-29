@@ -484,7 +484,7 @@ title: Charge customers through an outbox
 
 `co-review: design` makes Co-Review render the step tree and check the document. Problems are shown to the reviewer
 as a banner, and the agent gets the same list in `format.warnings` (from `open_review`) and `doc.format` (from
-`await_review` and `get_review`).
+`await_reviewer`'s submitted batch and `get_review`).
 
 | Document | Rendered as |
 |---|---|
@@ -576,7 +576,7 @@ first line such as *"Before implementing <task>, write a design for me to review
 3. Check it before I see it: `open_review({ dir, open: false })` lists problems in `format.warnings`. Fix every
    one and call it again until there are none. Then show it with `open_review({ reviewId })` and share the URL.
 4. Answer comments in their threads and revise the design; keep the wording of commented steps stable.
-5. Implement only after approval (`await_review`). If the code must depart from the approved design, update the
-   design and ask again.
+5. Implement only after approval: keep calling `await_reviewer` (answering comments with `reply`) until it
+   returns my Submit. If the code must depart from the approved design, update the design and ask again.
 ```
 <!-- /prompt -->

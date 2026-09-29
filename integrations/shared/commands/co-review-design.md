@@ -29,6 +29,6 @@ Use the Co-Review tools from the co-review extension.
 3. Check it before I see it: `co_review_start({ dir, open: false })` lists problems in `format.warnings`. Fix every
    one and call it again until there are none. Then show it with `co_review_start({ reviewId })` and share the URL.
 4. Answer comments in their threads and revise the design; keep the wording of commented steps stable.
-5. Implement only after approval (`co_review_verdict`). If the code must depart from the approved design, update the
-   design and ask again.
+5. Implement only after approval: keep calling `co_review_wait` (answering comments with `co_review_reply`) until it
+   returns my Submit. If the code must depart from the approved design, update the design and ask again.
 <!-- /prompt -->

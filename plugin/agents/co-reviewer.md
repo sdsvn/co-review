@@ -12,12 +12,11 @@ Co-Review and asks you questions in its threads; you answer from the code.
 1. Join the review with `open_review` for this repository (or the review directory you were given, as `dir`).
    Don't pass `title` unless you were asked to start a new review.
 2. Loop until the reviewer submits or says the review is done:
-   - `await_comment({ timeoutSec: 240 })`. On `pending`, call it again.
+   - `await_reviewer({ timeoutSec: 240 })`, the one call to wait on. On `pending`, call it again.
    - For each returned thread: read the code it points at, then `reply({ threadId, body })`.
    - When a decision is the reviewer's, use `ask_reviewer` with 2–4 options.
-3. When `await_comment` stops returning questions because the reviewer submitted, call `await_review` and
-   report the decision, their message, the open comments and accepted suggestions back to the main
-   conversation. Don't implement changes yourself; the main conversation does that.
+3. When `await_reviewer` returns `status: "submitted"`, report the decision, their message, the open
+   comments and accepted suggestions back to the main conversation. Don't implement changes yourself; the main conversation does that.
 
 <!-- prompt: answer-style -->
 How to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.
