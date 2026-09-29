@@ -161,3 +161,34 @@ export function parsePatchMeta(text: string): PatchMeta {
 
 /** Document of a review directory, first match wins (see llms.txt). */
 export const DOCUMENT_NAMES = ['index.markdown', 'index.md', 'INDEX.md', 'README.md', 'readme.md'];
+
+/**
+ * The lines of the new side that a patch changes, per file: added lines, and for removed lines the new-side line
+ * where they were (the next line kept or added).
+ */
+export function changedLines(files: PatchFile[]): Map<string, number[]> {
+    const changed = new Map<string, number[]>();
+    for (const file of files) {
+        const lines = new Set<number>();
+        let removed = false;
+        for (const row of file.rows) {
+            if (row.t === 'del') {
+                removed = true;
+            } else if (row.t === 'add' && row.n) {
+                lines.add(row.n);
+                removed = false;
+            } else if (row.t === 'ctx' && row.n) {
+                if (removed) {
+                    lines.add(row.n);
+                }
+                removed = false;
+            } else {
+                removed = false;
+            }
+        }
+        if (lines.size) {
+            changed.set(file.path, [...lines].sort((a, b) => a - b));
+        }
+    }
+    return changed;
+}

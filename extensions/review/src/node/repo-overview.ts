@@ -4,20 +4,20 @@ import { ReviewCoverage } from '../common/review-model';
 import { GraphState } from './graphify';
 
 /** A Graphify `graph.json` (networkx node-link): what the overview reads from it. */
-interface GraphifyGraph {
+export interface GraphifyGraph {
     nodes: { id: string; label?: string; source_file?: string; source_location?: string; community?: number; community_name?: string }[];
     links?: GraphifyEdge[];
     edges?: GraphifyEdge[];
 }
 
-interface GraphifyEdge {
+export interface GraphifyEdge {
     source: string;
     target: string;
     relation?: string;
 }
 
 /** Edges that say how code depends on code; `contains` / `method` only restate the file's structure. */
-const DEPENDENCIES = new Set(['calls', 'references', 'imports', 'imports_from', 'implements', 'indirect_call', 'inherits', 'uses']);
+export const DEPENDENCIES = new Set(['calls', 'references', 'imports', 'imports_from', 'implements', 'indirect_call', 'inherits', 'uses']);
 const ENTRY_POINT = /(^|\/)(main|index|server|app|cli|cmd)\.[a-z]+$/i;
 
 export interface OverviewInput {

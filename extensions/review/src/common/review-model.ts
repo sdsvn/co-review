@@ -328,6 +328,22 @@ export interface ReviewBundle {
     docVersion?: number;
     /** The last time the review was posted to its GitHub pull request. */
     github?: { url: string; round: number; postedAt: number };
+    /**
+     * A change review's code (see CodeFolders): the folder its window opens on, so the IDE works on real files: the
+     * repository itself for the reviewer's own change, else a worktree of the change's head (`worktree`).
+     */
+    code?: string;
+    /** The repository the change was diffed in. */
+    repo?: string;
+    /** The change's base and head commits (`head` undefined: the working tree). */
+    base?: string;
+    head?: string;
+    /** Co-Review created `code` as a git worktree, and removes it with the review. */
+    worktree?: boolean;
+    /** How much of the worktree is checked out: the change's neighbourhood first, then all of it. */
+    checkout?: 'neighbourhood' | 'full';
+    /** Files the change affects without changing them (its blast radius, from the Graphify graph): open these next. */
+    related?: string[];
 }
 
 export type ReviewDecision = 'approve' | 'request-changes' | 'comment';

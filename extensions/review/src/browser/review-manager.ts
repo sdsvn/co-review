@@ -75,7 +75,8 @@ export class ReviewManager {
         this._ready = this.load();
         this.workspaceService.onWorkspaceChanged(() => this._ready = this.load());
         this.client.onDidChangeReview(review => {
-            if (review.workspaceRoot !== this._root) {
+            // The window's own reviews, and change reviews whose code folder it shows.
+            if (review.workspaceRoot !== this._root && !(review.bundle?.code && URI.fromFilePath(review.bundle.code).toString() === this._root)) {
                 return;
             }
             const index = this._reviews.findIndex(r => r.id === review.id);
@@ -459,7 +460,44 @@ export class ReviewManager {
     }
 
     threadsForUri(uri: string): ReviewThread[] {
-        return this.activeReview?.threads.filter(t => t.location.uri === uri) ?? [];
+        return [...this.activeReview?.threads.filter(t => t.location.uri === uri) ?? [], ...this.diffThreadsIn(uri)];
+    }
+
+    /** Copies of diff threads placed in the head file (see diffThreadsIn): shown there, never saved from there. */
+    protected readonly placed = new WeakSet<ReviewThread>();
+
+    isPlacedFromDiff(thread: ReviewThread): boolean {
+        return this.placed.has(thread);
+    }
+
+    /**
+     * A change review's threads on new-side lines of its diff, placed at the same lines of the file in its code
+     * folder, so opening the file from the diff shows the conversation there too.
+     */
+    protected diffThreadsIn(uri: string): ReviewThread[] {
+        const review = this.activeReview;
+        const code = review?.bundle?.code;
+        if (!review || !code) {
+            return [];
+        }
+        const folder = URI.fromFilePath(code);
+        return review.threads.flatMap(t => {
+            const a = t.location.patchAnchor;
+            const start = a?.type === 'code-line' ? a.line : a?.type === 'code-range' ? a.startLine : undefined;
+            const end = a?.type === 'code-range' ? a.endLine : start;
+            if (!a?.path || (a.side ?? 'new') !== 'new' || !start || !end || folder.resolve(a.path).toString() !== uri) {
+                return [];
+            }
+            const copy: ReviewThread = {
+                ...t, location: {
+                    kind: start === end ? 'line' : 'range', uri,
+                    range: { start: { line: start - 1, character: 0 }, end: { line: end - 1, character: Number.MAX_SAFE_INTEGER } },
+                    anchor: { text: a.source ?? t.location.anchor?.text ?? '' }
+                }
+            };
+            this.placed.add(copy);
+            return [copy];
+        });
     }
 
     getAnchorState(threadId: string): AnchorState | undefined {

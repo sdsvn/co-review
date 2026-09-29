@@ -161,6 +161,17 @@ export class ReviewStore {
         return undefined;
     }
 
+    /**
+     * The reviews a window of `workspaceRoot` shows: the workspace's own, and change reviews whose code folder it is
+     * (their review directory is elsewhere; see CodeFolders).
+     */
+    async listForWindow(workspaceRoot: string): Promise<Review[]> {
+        const root = realUri(workspaceRoot);
+        const own = await this.list(root);
+        const coded = (await this.listAll()).filter(r => r.bundle?.code && FileUri.create(r.bundle.code).toString() === root && !own.some(o => o.id === r.id));
+        return [...own, ...coded].sort((a, b) => b.updatedAt - a.updatedAt);
+    }
+
     /** Every review in every workspace (for the mobile view). */
     async listAll(): Promise<Review[]> {
         const workspaces = path.join(coReviewHome(), 'workspaces');

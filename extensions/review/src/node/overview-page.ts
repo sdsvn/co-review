@@ -3,7 +3,8 @@ import { inject, injectable, postConstruct } from '@theia/core/shared/inversify'
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { DocAnchor, isOverviewPage, Review, ReviewThread } from '../common/review-model';
-import { parsePatch, parsePatchMeta, PatchMeta } from '../common/patch';
+import { changedLines, parsePatch, parsePatchMeta, PatchFile, PatchMeta } from '../common/patch';
+import { BlastRadius, blastRadius, buildGraph, GraphNode } from './graphify';
 import { BundleService } from './bundle-service';
 import { RepoIndex } from './repo-index';
 import { ReviewStore } from './review-store';
@@ -66,6 +67,52 @@ export interface OverviewParts {
     patches: { name: string; files: { path: string; added: number; removed: number }[] }[];
     /** A repository review: the repository overview (where to start, the areas and how they connect). */
     repository?: string;
+    /** A change review with a repository: its blast radius ('no graph': Graphify isn't installed or has no graph). */
+    radius?: BlastRadius | 'no graph';
+}
+
+/** A definition as a link into the code (the window's folder is the code). */
+function def(node: GraphNode): string {
+    return `[\`${node.label.replace(/`/g, "'")}\`](${node.file}${node.line ? `:${node.line}` : ''})`;
+}
+
+/** The blast radius section: what the change touches, what depends on it, as lists and a chart. */
+function radiusSection(radius: BlastRadius | 'no graph'): string[] {
+    if (radius === 'no graph') {
+        return ['', '## Blast radius', '', '_With [Graphify](https://graphify.net) installed, this lists what else the change affects: '
+            + 'what calls, imports or implements the code it changes._'];
+    }
+    const lines = ['', '## Blast radius', ''];
+    if (!radius.changed.length) {
+        return [...lines, 'The repository\'s code graph has no definitions in the changed lines.'];
+    }
+    lines.push(`**Changed** (${radius.changed.length}): ${radius.changed.map(def).join(', ')}`);
+    if (!radius.affected.length) {
+        return [...lines, '', 'Nothing else in the repository\'s code graph calls, imports or implements them.'];
+    }
+    const areas = new Map<string, typeof radius.affected>();
+    for (const node of radius.affected) {
+        areas.set(node.area ?? 'Other', [...areas.get(node.area ?? 'Other') ?? [], node]);
+    }
+    lines.push('', `**Affected** (${radius.affected.length}), by area: what uses the changed code (up to two steps away), and what it uses.`, '');
+    for (const [area, list] of areas) {
+        lines.push(`- **${area}**: ${list.map(n => `${def(n)} (${n.direction}${n.hops > 1 ? `, ${n.hops} steps` : ''})`).join(', ')}`);
+    }
+    const shown = [...radius.changed, ...radius.affected].slice(0, 30);
+    const ids = new Map(shown.map((n, i) => [n.id, `n${i}`]));
+    const edges = radius.edges.filter(e => ids.has(e.from) && ids.has(e.to)).slice(0, 40);
+    if (edges.length) {
+        lines.push('', '```mermaid', '%% id: blast-radius', 'flowchart LR');
+        for (const node of shown) {
+            const changed = radius.changed.includes(node);
+            lines.push(`    ${ids.get(node.id)}["${node.label.replace(/"/g, "'")}"]${changed ? ':::changed' : ''}`);
+        }
+        for (const e of edges) {
+            lines.push(`    ${ids.get(e.from)} --> ${ids.get(e.to)}`);
+        }
+        lines.push('    classDef changed stroke-width:3px', '```');
+    }
+    return lines;
 }
 
 /**
@@ -121,6 +168,10 @@ export function overviewPage(review: Review, root: string, parts: OverviewParts)
         }
     }
 
+    if (parts.radius) {
+        lines.push(...radiusSection(parts.radius));
+    }
+
     lines.push('', `## Findings and comments (${threads.length})`);
     if (!threads.length) {
         lines.push('', 'None yet.');
@@ -164,6 +215,8 @@ export class OverviewPages {
     protected readonly timers = new Map<string, NodeJS.Timeout>();
     /** Repository sections by review: built when the page is opened, reused when the review changes (it is slow). */
     protected readonly repositories = new Map<string, string>();
+    /** Blast radii by review, the same way. */
+    protected readonly radii = new Map<string, BlastRadius | 'no graph'>();
 
     @postConstruct()
     protected init(): void {
@@ -207,9 +260,26 @@ export class OverviewPages {
         if (dir) {
             const meta = await fs.readFile(path.join(dir, 'PR.md'), 'utf8').then(parsePatchMeta, () => undefined);
             parts.pr = meta && (meta.title || meta.url || meta.number) ? meta : undefined;
+            const all: PatchFile[] = [];
             for (const file of patches) {
                 const text = await fs.readFile(file, 'utf8').catch(() => '');
-                parts.patches.push({ name: path.basename(file).replace(/\.(patch|diff)$/, ''), files: parsePatch(text) });
+                const files = parsePatch(text);
+                all.push(...files);
+                parts.patches.push({ name: path.basename(file).replace(/\.(patch|diff)$/, ''), files });
+            }
+            const repo = review.bundle?.repo;
+            if (repo) {
+                // The graph is built or refreshed when the page is opened; rewrites after review changes reuse it.
+                if (fresh || !this.radii.has(review.id)) {
+                    const state = await buildGraph(repo).catch(() => 'failed' as const);
+                    const radius = state === 'built' ? await blastRadius(repo, changedLines(all)).catch(() => undefined) : undefined;
+                    this.radii.set(review.id, radius ?? 'no graph');
+                    // The Related files follow the graph, e.g. once Graphify built one the open didn't have.
+                    if (radius && review.bundle && JSON.stringify(radius.files) !== JSON.stringify(review.bundle.related ?? [])) {
+                        await this.store.setBundle(review.id, { ...review.bundle, related: radius.files });
+                    }
+                }
+                parts.radius = this.radii.get(review.id);
             }
         } else {
             const root = FileUri.fsPath(review.workspaceRoot);

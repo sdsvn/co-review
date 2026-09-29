@@ -91,7 +91,10 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     getGitInfo(workspaceRoot: string): Promise<GitInfo>;
     resolveCommit(workspaceRoot: string, ref: string): Promise<string | undefined>;
 
+    /** The reviews a window of `workspaceRoot` shows: its own, and change reviews whose code folder it is. */
     listReviews(workspaceRoot: string): Promise<Review[]>;
+    /** A change review's file as it was at the base of the change (repository-relative path); undefined if it didn't exist. */
+    readBaseFile(reviewId: string, file: string): Promise<string | undefined>;
     getReview(reviewId: string): Promise<Review | undefined>;
     createReview(params: CreateReviewParams): Promise<Review>;
     renameReview(reviewId: string, title: string): Promise<Review>;

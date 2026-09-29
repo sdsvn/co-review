@@ -21,6 +21,9 @@ import { documentFormat, DocumentFormat } from '../common/design-format';
 import { acceptedSuggestions, commentOf, findThread, threadRef } from './review-payloads';
 import { ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT } from './prompts.gen';
 import { LANGUAGE_BY_EXTENSION, RepoIndex } from './repo-index';
+import { CodeFolders } from './code-folders';
+import { changedLines, parsePatch } from '../common/patch';
+import { blastRadius } from './graphify';
 import { currentUser } from './participants';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -71,6 +74,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     @inject(BundleService) protected readonly bundles: BundleService;
     @inject(GitHubReviews) protected readonly github: GitHubReviews;
     @inject(RepoIndex) protected readonly index: RepoIndex;
+    @inject(CodeFolders) protected readonly codes: CodeFolders;
 
     protected readonly sessions = new Map<string, Session>();
     /** Workspace the backend was started with; the default `root`. */
@@ -109,7 +113,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
 
     protected async doMarkClosed(workspaceRoot: string, closed: boolean): Promise<void> {
         // A window shows one workspace: a repository, or a review directory (whose reviews are its own workspace's).
-        const reviews = (await this.store.list(workspaceRoot)).filter(r => r.agent?.transport === 'mcp');
+        const reviews = (await this.store.listForWindow(workspaceRoot)).filter(r => r.agent?.transport === 'mcp');
         for (const review of reviews) {
             if (closed) {
                 await this.store.setClosed(review.id, { at: Date.now() });
@@ -277,6 +281,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         }, async ({ reviewId, root, dir, markdown, patch: inlinePatch, diff, patchName, storePath, title, open, openspec, overview }) => {
             const agent = this.agentOf(session);
             let patch = inlinePatch;
+            // A diff Co-Review ran: the repository and the diff give the review its code folder (see CodeFolders).
+            let change: { repo: string; text: string } | undefined;
             if (diff && !reviewId) {
                 const repo = root ? realPath(root) : defaultRoot;
                 if (!repo) {
@@ -289,6 +295,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 if (!text.trim()) {
                     return fail(`git diff ${diff} is empty: there is nothing to review.`);
                 }
+                change = { repo, text };
                 if (dir) {
                     await fs.mkdir(path.resolve(dir), { recursive: true });
                     await fs.writeFile(path.join(path.resolve(dir), `${patchName || 'change'}.patch`), text);
@@ -305,7 +312,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             }
             if (existing) {
                 review = existing;
-                workspace = this.root(existing);
+                workspace = this.windowRoot(existing);
                 if (existing.bundle) {
                     const docFile = this.bundles.documentOf(existing.bundle.dir);
                     extra = { hasDoc: !!docFile, patches: this.bundles.patchesOf(existing.bundle.dir).length, dir: existing.bundle.dir, ...this.formatOf(docFile) };
@@ -314,6 +321,18 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 const opened = await this.bundles.open({ dir, markdown, patch, patchName, title, storePath, openspec, author: agent });
                 review = opened.review;
                 workspace = opened.dir;
+                if (change) {
+                    // The window opens on the code; the diff page stays the front page. Without it, the review directory.
+                    try {
+                        // Its blast radius from the repository's Graphify graph, when it has one: those files come first too.
+                        const files = parsePatch(change.text);
+                        const radius = await blastRadius(change.repo, changedLines(files)).catch(() => undefined);
+                        workspace = await this.codes.prepare(review, change.repo, diff!, files.map(f => f.path), radius?.files ?? []);
+                        review = (await this.store.get(review.id)) ?? review;
+                    } catch (e) {
+                        console.error('[co-review] preparing the code of the review failed', e);
+                    }
+                }
                 extra = { hasDoc: !!opened.docFile, patches: opened.patches.length, dir: opened.dir, ...this.formatOf(opened.docFile) };
             } else {
                 workspace = root ? realPath(root) : defaultRoot!;
@@ -440,7 +459,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                         severity: finding.severity as Severity | undefined, labels: finding.labels, verdict: finding.verdict, proposal: finding.proposal
                     }, agent);
                 } else if (finding.path) {
-                    const root = FileUri.fsPath(review.workspaceRoot);
+                    const root = this.codeRoot(review);
                     const file = path.resolve(root, finding.path);
                     if (file !== root && !file.startsWith(root + path.sep)) {
                         return fail(`${finding.path} is outside the repository (${root}).`);
@@ -575,7 +594,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             }
         }, async ({ root, path: under, query, refresh, overview }) => {
             const review = await resolveReview(undefined, root ? realPath(root) : undefined);
-            const workspace = root ? realPath(root) : review && !review.bundle ? FileUri.fsPath(review.workspaceRoot) : defaultRoot;
+            const workspace = root ? realPath(root) : review && (!review.bundle || review.bundle.code) ? this.codeRoot(review) : defaultRoot;
             if (!workspace) {
                 return fail('No repository: pass `root` (absolute path).');
             }
@@ -633,7 +652,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     // Approved: this agent is done with the review, and a window it showed can close.
                     if (review.verdict!.decision === 'approve' && session.transport.sessionId) {
                         this.windows.done(session.transport.sessionId, `You approved the review, and ${agent.name} has it.`,
-                            FileUri.create(this.root(review)).toString());
+                            FileUri.create(this.windowRoot(review)).toString());
                     }
                     return json({ ...this.batch(review), hint: 'The reviewer submitted: act on the decision and the open comments.' });
                 }
@@ -764,6 +783,16 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         return review.bundle?.dir ?? FileUri.fsPath(review.workspaceRoot);
     }
 
+    /** Where a review's code is: a change review's code folder, else its repository (or review directory). */
+    protected codeRoot(review: Review): string {
+        return review.bundle?.code ?? FileUri.fsPath(review.workspaceRoot);
+    }
+
+    /** The folder a review's window shows: its code when it has some, else its review directory or repository. */
+    protected windowRoot(review: Review): string {
+        return review.bundle?.code ?? this.root(review);
+    }
+
     /** The document's design-format check, so the agent learns about departures in the loop. */
     protected formatOf(docFile: string | undefined): { format?: DocumentFormat & { next?: string } } {
         if (!docFile) {
@@ -794,7 +823,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             submittedAt: review.verdict && new Date(review.verdict.submittedAt).toISOString(),
             round: review.verdict?.count ?? 0,
             doc: { slug: docFile ? path.basename(docFile) : '', version: review.bundle?.docVersion ?? 1, ...this.formatOf(docFile) },
-            comments: open.map(t => commentOf(t, this.root(review))),
+            comments: open.map(t => commentOf(t, this.root(review), {}, this.codeRoot(review))),
             acceptedSuggestions: acceptedSuggestions(review),
             openCount: open.length,
             proposedCount: review.threads.filter(t => t.status === 'proposed').length
@@ -809,7 +838,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         return {
             status: 'comment',
             reviewId: review.id,
-            comments: unresolved.map(t => commentOf(t, this.root(review), { lastRole: t.messages[t.messages.length - 1]?.author.kind, needsReply: needs(t) })),
+            comments: unresolved.map(t => commentOf(t, this.root(review), { lastRole: t.messages[t.messages.length - 1]?.author.kind, needsReply: needs(t) }, this.codeRoot(review))),
             openCount: unresolved.filter(t => t.status === 'open').length,
             needsReply: unresolved.filter(needs).length,
             threads: waiting.map(t => this.describe(review, t)),
@@ -819,8 +848,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     }
 
     protected describe(review: Review, thread: ReviewThread): object {
-        const root = this.root(review);
         const location = thread.location;
+        // Pages of a review directory relative to it; code relative to the code folder.
+        const root = location.kind === 'document' || location.kind === 'patch' ? this.root(review) : this.codeRoot(review);
         return {
             threadId: thread.id,
             id: threadRef(thread),
@@ -844,7 +874,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
 
     /** A file or folder of the repository (`.` or `/`: the repository itself). */
     protected async pathLocation(review: Review, relative: string): Promise<CodeLocation> {
-        const root = FileUri.fsPath(review.workspaceRoot);
+        const root = this.codeRoot(review);
         const file = path.resolve(root, relative);
         if (file === root) {
             return { kind: 'repository' };
@@ -855,7 +885,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
 
     /** Builds a semantic location (range, anchor, Tree-sitter tokens, symbol) from path + lines. */
     protected async locationFor(review: Review, relative: string, line: number, endLine?: number): Promise<CodeLocation> {
-        const root = FileUri.fsPath(review.workspaceRoot);
+        const root = this.codeRoot(review);
         const file = path.resolve(root, relative);
         const uri = FileUri.create(file).toString();
         const text = await fs.readFile(file, 'utf8').catch(() => undefined);

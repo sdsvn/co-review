@@ -150,7 +150,7 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
                 }
                 this.reviews.setAnchorState(thread.id, resolved.state);
                 next.push(...this.decorationsFor(thread, resolved.range, resolved.state));
-                if (resolved.state === 'moved' && !editor.document.dirty) {
+                if (resolved.state === 'moved' && !editor.document.dirty && !this.reviews.isPlacedFromDiff(thread)) {
                     this.persistMove(thread, model, resolved.range);
                 }
                 if (this.isShownInline(thread)) {

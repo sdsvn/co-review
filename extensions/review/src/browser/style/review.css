@@ -319,3 +319,21 @@ details[open] > summary.co-review-step-line::before { content: '▾'; }
 .co-review-github-note { flex-basis: 100%; font-size: var(--theia-ui-font-size0); color: var(--theia-descriptionForeground); }
 .co-review-github-note.error { color: var(--theia-errorForeground); }
 .co-review-submit-bar { flex-wrap: wrap; }
+
+/* Stepping from the diff into the code (a review with a code folder) */
+.co-review-patch-no.link { cursor: pointer; }
+.co-review-patch-no.link:hover { color: var(--theia-textLink-foreground); text-decoration: underline; }
+.co-review-code-hover { position: fixed; z-index: 100; max-width: 560px; max-height: 320px; overflow: auto; padding: 6px 10px;
+    background: var(--theia-editorHoverWidget-background); color: var(--theia-editorHoverWidget-foreground);
+    border: 1px solid var(--theia-editorHoverWidget-border); border-radius: 4px; font-size: var(--theia-ui-font-size1); }
+.co-review-code-hover pre { white-space: pre-wrap; margin: 4px 0; }
+
+/* Changed Files view (a change review's files, and those it affects) */
+.co-review-changed-files-root { padding: 4px 0; font-size: var(--theia-ui-font-size1); }
+.co-review-changed-files-note { padding: 4px 12px 8px; }
+.co-review-changed-files-group { padding: 6px 12px 2px; font-weight: 600; color: var(--theia-descriptionForeground); text-transform: uppercase; font-size: 0.85em; }
+.co-review-changed-file { display: flex; align-items: center; gap: 6px; padding: 2px 12px; cursor: pointer; }
+.co-review-changed-file:hover { background: var(--theia-list-hoverBackground); }
+.co-review-changed-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-review-changed-file .action-label { opacity: 0; }
+.co-review-changed-file:hover .action-label { opacity: 1; }

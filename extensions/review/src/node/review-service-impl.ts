@@ -11,6 +11,7 @@ import { AgentSetupInfo, CreateReviewParams, GitHubPost, GitHubTarget, GitInfo, 
 import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
 import { OverviewPages } from './overview-page';
+import { CodeFolders } from './code-folders';
 import { GitHubReviews } from './github';
 import { ReviewStore } from './review-store';
 
@@ -48,6 +49,9 @@ export class ReviewServiceImpl implements ReviewService {
 
     @inject(OverviewPages)
     protected readonly pages: OverviewPages;
+
+    @inject(CodeFolders)
+    protected readonly codes: CodeFolders;
 
     @inject(GitHubReviews)
     protected readonly github: GitHubReviews;
@@ -104,7 +108,12 @@ export class ReviewServiceImpl implements ReviewService {
     }
 
     listReviews(workspaceRoot: string): Promise<Review[]> {
-        return this.store.list(workspaceRoot);
+        return this.store.listForWindow(workspaceRoot);
+    }
+
+    async readBaseFile(reviewId: string, file: string): Promise<string | undefined> {
+        const review = await this.store.get(reviewId);
+        return review && this.codes.baseFile(review, file);
     }
 
     getReview(reviewId: string): Promise<Review | undefined> {
@@ -127,8 +136,11 @@ export class ReviewServiceImpl implements ReviewService {
         return this.store.archive(reviewId, archived);
     }
 
-    createThread(reviewId: string, location: CodeLocation, body: string, author: Participant, options?: ThreadOptions): Promise<ReviewThread> {
-        return this.store.createThread(reviewId, location, body, author, options);
+    async createThread(reviewId: string, location: CodeLocation, body: string, author: Participant, options?: ThreadOptions): Promise<ReviewThread> {
+        // Written in the editor on lines of a change review's diff: a comment on the diff (see CodeFolders.onDiff).
+        const review = location.kind === 'patch' ? undefined : await this.store.get(reviewId);
+        const onDiff = review && await this.codes.onDiff(review, location);
+        return this.store.createThread(reviewId, onDiff ?? location, body, author, options);
     }
 
     addMessage(reviewId: string, threadId: string, body: string, author: Participant): Promise<ReviewThread> {

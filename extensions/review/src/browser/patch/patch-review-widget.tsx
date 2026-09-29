@@ -11,6 +11,7 @@ import { parsePatch, parsePatchMeta, PatchFile, PatchMeta, PatchRow } from '../.
 import { DraftEditor, ThreadView } from '../review-components';
 import { ReviewDraft, ReviewManager } from '../review-manager';
 import { ReviewNavigator } from '../review-navigator';
+import { CodeHover, CodeNavigation } from '../review-code';
 
 export const PatchReviewWidgetOptions = Symbol('PatchReviewWidgetOptions');
 export interface PatchReviewWidgetOptions {
@@ -61,12 +62,16 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
     @inject(FileService) protected readonly fileService: FileService;
     @inject(ReviewManager) protected readonly reviews: ReviewManager;
     @inject(ReviewNavigator) protected readonly navigator: ReviewNavigator;
+    @inject(CodeNavigation) protected readonly code: CodeNavigation;
 
     protected files: PatchFile[] = [];
     protected meta: PatchMeta | undefined;
     protected error: string | undefined;
     protected collapsed = new Set<string>();
     protected rangeStart: { path: string; row: PatchRow } | undefined;
+    /** The language server's hover for the name under the pointer (new-side lines of a review with code). */
+    protected hover: (CodeHover & { x: number; y: number }) | undefined;
+    protected hoverTimer: number | undefined;
 
     get uri(): URI {
         return new URI(this.options.uri);
@@ -98,6 +103,13 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
                 this.load();
             }
         }));
+        // A review directory outside the window's folder (a review with code) isn't under the workspace's watcher.
+        this.reviews.ready.then(() => {
+            const root = this.reviews.root;
+            if (!this.isDisposed && (!root || !new URI(root).isEqualOrParent(this.uri))) {
+                this.toDispose.push(this.fileService.watch(dir));
+            }
+        });
         this.toDispose.push(this.reviews.onDidChange(() => this.update()));
         this.toDispose.push(this.reviews.onDidChangeDrafts(() => this.update()));
         this.toDispose.push(this.reviews.onDidChangeCollapsed(() => this.update()));
@@ -150,6 +162,76 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
             }
         }
         return items;
+    }
+
+    /** The review's code folder is there to step into (see CodeNavigation). */
+    protected get withCode(): boolean {
+        return this.code.has(this.reviews.activeReview);
+    }
+
+    /** Where in a row's code the pointer is: the 0-based column in the file's line, from the rendered text. */
+    protected columnAt(e: React.MouseEvent): number | undefined {
+        const caret = document.caretRangeFromPoint?.(e.clientX, e.clientY);
+        const span = (e.target as HTMLElement).closest('.co-review-patch-code');
+        if (!caret || !span || !span.contains(caret.startContainer)) {
+            return undefined;
+        }
+        // The rendered text starts with the row's sign (+, − or a space).
+        return Math.max(0, caret.startOffset - 1);
+    }
+
+    /** A line number: new side opens the head file there, old side the base version (read-only). */
+    protected onLineNumber(path: string, row: PatchRow, side: 'old' | 'new'): void {
+        const review = this.reviews.activeReview;
+        const line = side === 'new' ? row.n : row.o;
+        if (!this.code.has(review) || !line) {
+            return;
+        }
+        if (side === 'new') {
+            this.code.openHead(review, path, line);
+        } else {
+            this.code.openBase(review, path, line);
+        }
+    }
+
+    /** Cmd/Ctrl-click on a name in a new-side line: its definition. */
+    protected onCodeClick(e: React.MouseEvent, path: string, row: PatchRow): void {
+        const review = this.reviews.activeReview;
+        const column = this.columnAt(e);
+        if (!(e.metaKey || e.ctrlKey) || !this.code.has(review) || row.t === 'del' || row.t === 'hunk' || !row.n || column === undefined) {
+            return;
+        }
+        e.preventDefault();
+        this.code.goToDefinition(review, path, row.n, column).then(async found => {
+            if (!found) {
+                // No language server answer: the name in its file, where the editor can try.
+                await this.code.openHead(review, path, row.n!, column);
+            }
+        });
+    }
+
+    /** Resting on a name in a new-side line shows what the language server knows about it. */
+    protected onCodeHover(e: React.MouseEvent, path: string, row: PatchRow): void {
+        window.clearTimeout(this.hoverTimer);
+        const review = this.reviews.activeReview;
+        const column = this.columnAt(e);
+        const { clientX: x, clientY: y } = e;
+        if (!this.code.has(review) || row.t === 'del' || row.t === 'hunk' || !row.n || column === undefined || !/\w/.test(row.s[column] ?? '')) {
+            return;
+        }
+        this.hoverTimer = window.setTimeout(async () => {
+            const found = await this.code.hover(review, path, row.n!, column);
+            this.hover = found && { ...found, x, y };
+            this.update();
+        }, 700);
+    }
+
+    protected hideHover(): void {
+        window.clearTimeout(this.hoverTimer);
+        if (this.hover) {
+            this.hover = undefined;
+            this.update();
+        }
     }
 
     protected addDraft(anchor: PatchAnchor): void {
@@ -221,6 +303,9 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
             </div>
             {items.filter(i => i.anchor.type === 'patch').map(i => this.renderItem(i))}
             {this.files.map(file => this.renderFile(file, items))}
+            {this.hover && <div className='co-review-code-hover' style={{ left: this.hover.x + 8, top: this.hover.y + 14 }}
+                onMouseLeave={() => this.hideHover()}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(md.render(this.hover.contents.join('\n\n---\n\n'))) }} />}
         </div>;
     }
 
@@ -235,6 +320,7 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
             }
             this.update();
         };
+        const withCode = this.withCode;
         return <div key={file.path} className='co-review-patch-file'>
             <div className='co-review-patch-file-head' onClick={toggle}>
                 <span className={codicon(collapsed ? 'chevron-right' : 'chevron-down')} />
@@ -243,6 +329,10 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
                 <span className='co-review-add-count'>+{file.added}</span><span className='co-review-del-count'>−{file.removed}</span>
                 {fileItems.length > 0 && <span className='co-review-muted'><span className={codicon('comment-discussion')} /> {fileItems.length}</span>}
                 <span className='co-review-spacer' />
+                {this.withCode && file.tag !== 'deleted' && <span className={`${codicon('go-to-file')} action-label`} title='Open the file'
+                    onClick={e => { e.stopPropagation(); this.code.openHead(this.reviews.activeReview!, file.path, file.rows.find(r => r.n)?.n ?? 1); }} />}
+                {this.withCode && file.tag === 'modified' && <span className={`${codicon('diff')} action-label`} title='Compare: base and head side by side'
+                    onClick={e => { e.stopPropagation(); this.code.compare(this.reviews.activeReview!, file.path); }} />}
                 <span className={`${codicon('comment')} action-label`} title='Comment on this file'
                     onClick={e => { e.stopPropagation(); this.addDraft({ type: 'code-file', path: file.path }); }} />
             </div>
@@ -253,13 +343,19 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
                         const commented = fileItems.some(i => covers(i.anchor, file.path, row));
                         return <React.Fragment key={index}>
                             <div className={`co-review-patch-row ${row.t} ${commented ? 'commented' : ''}`}>
-                                <span className='co-review-patch-no'>{row.o ?? ''}</span>
-                                <span className='co-review-patch-no'>{row.n ?? ''}</span>
+                                <span className={`co-review-patch-no ${withCode && row.o ? 'link' : ''}`} title={withCode && row.o ? 'Open the base version here' : undefined}
+                                    onClick={() => this.onLineNumber(file.path, row, 'old')}>{row.o ?? ''}</span>
+                                <span className={`co-review-patch-no ${withCode && row.n ? 'link' : ''}`} title={withCode && row.n ? 'Open the file here' : undefined}
+                                    onClick={() => this.onLineNumber(file.path, row, 'new')}>{row.n ?? ''}</span>
                                 <span className='co-review-patch-plus'>
                                     {row.t !== 'hunk' && <span className={codicon('add')} title='Comment (shift-click another line for a range)'
                                         onClick={e => this.onRowClick(e, file.path, row)} />}
                                 </span>
-                                <span className='co-review-patch-code'>{row.t === 'hunk' ? row.s : `${row.t === 'add' ? '+' : row.t === 'del' ? '−' : ' '}${row.s}`}</span>
+                                <span className='co-review-patch-code'
+                                    onClick={e => this.onCodeClick(e, file.path, row)}
+                                    onMouseMove={e => this.onCodeHover(e, file.path, row)}
+                                    onMouseLeave={() => window.clearTimeout(this.hoverTimer)}>
+                                    {row.t === 'hunk' ? row.s : `${row.t === 'add' ? '+' : row.t === 'del' ? '−' : ' '}${row.s}`}</span>
                             </div>
                             {fileItems.filter(i => endsAt(i.anchor, file.path, row)).map(i => this.renderItem(i))}
                         </React.Fragment>;

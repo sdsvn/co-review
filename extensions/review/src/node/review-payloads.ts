@@ -67,9 +67,9 @@ function line(a: AnchorRecord): number | undefined {
     return typeof a.line === 'number' ? a.line : typeof a.startLine === 'number' ? a.startLine : undefined;
 }
 
-/** One entry of `comments[]` (await_reviewer / get_review). */
-export function commentOf(thread: ReviewThread, root: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
-    const anchor = anchorOf(thread, root);
+/** One entry of `comments[]` (await_reviewer / get_review); code paths relative to `codeRoot` (default `root`). */
+export function commentOf(thread: ReviewThread, root: string, extra: Record<string, unknown> = {}, codeRoot = root): Record<string, unknown> {
+    const anchor = anchorOf(thread, codeRoot);
     const last = thread.messages[thread.messages.length - 1];
     return {
         id: threadRef(thread),

@@ -149,6 +149,24 @@ the diff.
 **You:** triage the findings, add your own comments, ask the agent about anything ("does this break the old API?"),
 and submit. The agent doesn't touch the pull request.
 
+**The code around the diff.** The window opens on the pull request's code, not just its diff: a git worktree of its
+head under `~/.co-review/worktrees/` (it shares your clone's objects and leaves your clone alone), removed when you
+archive or delete the review. The change's neighbourhood is checked out first, the rest follows in the background.
+Nothing heavy runs until you reach for it:
+
+- The sidebar shows **Changed Files** instead of the whole tree: the files the pull request changes, and under
+  **Related** the ones it affects (what calls, imports or implements the changed code, from the Graphify graph). The
+  explorer, search and outline are one click away.
+- On the diff page, a new-side line number opens the file there, and an old-side one the base version (read-only).
+  Cmd/Ctrl-click a name to go to its definition; rest the pointer on it for its type and docs. **Compare** on a
+  file shows base and head side by side.
+- The overview page adds a **Blast radius**: the definitions the change touches, what depends on them, and a chart.
+- A comment you write in the editor on a line of the diff is a comment on the diff (it's on the pull-request page
+  and posted to GitHub); anywhere else it's a comment on the file. Threads on the diff show in the editor too.
+
+A review of your own change works the same way, on your repository itself: what you review is the diff taken when
+the review opened, so editing files while you review doesn't change it.
+
 **Post it to GitHub.** When you submit, tick **Also post to GitHub: owner/repo#42**. Co-Review posts your review to
 the pull request as one GitHub review, through the GitHub CLI (so `gh auth login` is the only setup):
 

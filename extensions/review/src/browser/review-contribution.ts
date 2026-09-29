@@ -28,6 +28,7 @@ import { ReviewManager } from './review-manager';
 import { ReviewWidget } from './review-widget';
 import { ReviewEditorDecorator } from './review-editor-decorator';
 import { ReviewNavigator } from './review-navigator';
+import { ChangedFilesContribution } from './changed-files-view';
 
 export const REVIEW_CONTEXT_MENU_GROUP = [...EDITOR_CONTEXT_MENU, '0_co_review'];
 export const REVIEW_NAVIGATOR_GROUP = [...NavigatorContextMenu.NAVIGATION, '0_co_review'];
@@ -48,6 +49,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
     @inject(OpenerService) protected readonly openerService: OpenerService;
     @inject(ReviewEditorDecorator) protected readonly decorator: ReviewEditorDecorator;
     @inject(ReviewNavigator) protected readonly navigator: ReviewNavigator;
+    @inject(ChangedFilesContribution) protected readonly changedFiles: ChangedFilesContribution;
     @inject(ClipboardService) protected readonly clipboard: ClipboardService;
     @inject(FileNavigatorContribution) protected readonly fileNavigator: FileNavigatorContribution;
 
@@ -198,8 +200,13 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         if (!root) {
             return;
         }
-        await this.fileNavigator.openView({ activate: false, reveal: true });
         const review = this.reviews.activeReview;
+        // A change review with code starts on its changed files, not the whole tree (one click away).
+        if (review?.bundle?.code) {
+            await this.changedFiles.openView({ activate: false, reveal: true });
+        } else {
+            await this.fileNavigator.openView({ activate: false, reveal: true });
+        }
         // A review that starts with findings (an agent's first pass) opens on them: the panel lists them all.
         if (review?.threads.some(t => t.status !== 'resolved')) {
             await this.openView({ activate: false, reveal: true });
@@ -267,11 +274,12 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
     protected async openBundleDocument(): Promise<void> {
         await this.reviews.ready;
         const review = this.reviews.activeReview;
-        const root = this.reviews.root;
-        if (!review?.bundle || !root || this.shell.getWidgets('main').length) {
+        if (!review?.bundle || this.shell.getWidgets('main').length) {
             return;
         }
-        const rootUri = new URI(root);
+        // The review directory, which isn't the window's folder when the review has code (see CodeFolders).
+        const rootUri = URI.fromFilePath(review.bundle.dir);
+        const root = rootUri.toString();
         let doc: string | undefined;
         for (const name of DOCUMENT_NAMES) {
             if (await this.fileService.exists(rootUri.resolve(name))) {
