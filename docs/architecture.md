@@ -51,7 +51,7 @@ Each backend service handles one concern.
 
 ## Desktop windows (`src/electron-main`)
 
-**`ReviewElectronMainApplication`** replaces Theia's Electron main application. Started with `--background` (as `co-review mcp` does for an agent), it opens no window until a review is shown or the app is activated. `open_review` shows a review by launching the app again with the repository; the running instance gets it as a second instance and opens that repository's window, or focuses it if one is open, instead of opening a second one.
+**`ReviewElectronMainApplication`** replaces Theia's Electron main application. Started with `--background` (as `co-review mcp` does for an agent), it opens no window until a review is shown or the app is activated. `open_review` shows a review by launching the app again with the repository; the running instance gets it as a second instance and opens that repository's window, or focuses it if one is open, instead of opening a second one. In an app started with `--background`, **`AgentWindows`** (backend) remembers the windows agents showed and, when the last agent using one is done with it (the reviewer approved the review, or the agent's MCP session ended), asks that window's frontend to close; with no window left, the app quits.
 
 ## Frontend (`src/browser`)
 

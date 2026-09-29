@@ -146,4 +146,6 @@ export interface ReviewClient {
     onAgentPresence(presence: AgentPresence): void;
     onReviewChanged(review: Review): void;
     onReviewDeleted(reviewId: string, workspaceRoot: string): void;
+    /** The desktop window of `workspaceRoot` should close: the agent that showed it is done (see AgentWindows). */
+    onCloseWindow(workspaceRoot: string): void;
 }

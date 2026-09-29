@@ -12,7 +12,7 @@ import * as path from 'path';
 import { z } from 'zod';
 import { CodeLocation, Participant, Review, ReviewThread, Severity } from '../common/review-model';
 import { SyntaxSymbol } from '../common/syntax-protocol';
-import { AgentPresenceTracker, HumanDecisions } from './agent-coordination';
+import { AgentPresenceTracker, AgentWindows, HumanDecisions } from './agent-coordination';
 import { coReviewHome, ReviewStore } from './review-store';
 import { SyntaxServiceImpl } from './syntax-service-impl';
 import { BundleService } from './bundle-service';
@@ -62,6 +62,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     @inject(SyntaxServiceImpl) protected readonly syntax: SyntaxServiceImpl;
     @inject(HumanDecisions) protected readonly decisions: HumanDecisions;
     @inject(AgentPresenceTracker) protected readonly presence: AgentPresenceTracker;
+    @inject(AgentWindows) protected readonly windows: AgentWindows;
     @inject(BundleService) protected readonly bundles: BundleService;
     @inject(GitHubReviews) protected readonly github: GitHubReviews;
     @inject(RepoIndex) protected readonly index: RepoIndex;
@@ -135,7 +136,11 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             created.server = this.createServer(created, root, baseUrl);
             created.transport.onclose = () => {
                 created.channel?.dispose();
-                return created.transport.sessionId && this.sessions.delete(created.transport.sessionId);
+                const id = created.transport.sessionId;
+                if (id) {
+                    this.sessions.delete(id);
+                    this.windows.done(id);
+                }
             };
             await created.server.connect(created.transport);
             session = created;
@@ -280,6 +285,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     const env = { ...process.env };
                     delete env.ELECTRON_RUN_AS_NODE;
                     spawn(exe, [...args, workspace], { detached: true, stdio: 'ignore', env }).on('error', () => undefined).unref();
+                    if (session.transport.sessionId) {
+                        this.windows.shown(FileUri.create(workspace).toString(), session.transport.sessionId);
+                    }
                 }
             }
             return json({
@@ -307,6 +315,10 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     const review = await this.store.get(initial.id);
                     if (review?.verdict && review.verdict.count > session.consumedSubmit) {
                         session.consumedSubmit = review.verdict.count;
+                        // Approved: this agent is done with the review, and a window it showed can close.
+                        if (review.verdict.decision === 'approve' && session.transport.sessionId) {
+                            this.windows.done(session.transport.sessionId, FileUri.create(this.root(review)).toString());
+                        }
                         return json(this.batch(review));
                     }
                     if (Date.now() >= deadline || extra.signal.aborted) {

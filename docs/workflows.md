@@ -185,7 +185,8 @@ sends it back to revise.
 ## Tips
 
 - **Desktop app or browser.** Both work the same. In the desktop app, the window appears when the agent shows the
-  review; Co-Review keeps running in the background between reviews. In the browser, the agent gives you a link.
+  review, and closes once you approve it or the agent's session ends (when an agent started the app). In the
+  browser, the agent gives you a link.
 - **Keep working while you review.** In Claude Code, *"keep answering my review while you fix the tests"* hands the
   review to the background `co-reviewer` subagent.
 - **Several reviews.** The switcher at the top of the Review panel lists them; archive the ones you're done with.

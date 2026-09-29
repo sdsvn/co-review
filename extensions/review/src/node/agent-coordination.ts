@@ -66,3 +66,39 @@ export class AgentPresenceTracker {
         this.onDidChangeEmitter.fire({ reviewId: p.reviewId, listening: p.listening, lastSeen: p.lastSeen });
     }
 }
+
+/**
+ * Desktop windows that agents showed with `open_review` in an app an agent started (`--background`, from
+ * `co-review mcp`). When the last agent using a window is done with its review (the reviewer approved it, or the
+ * agent's session ended), the window closes; with no window left the app quits, as it would for the reviewer.
+ * A window the reviewer opened themselves, or any window of an app they started, stays.
+ */
+@injectable()
+export class AgentWindows {
+
+    protected readonly startedByAgent = !!process.versions.electron && process.argv.includes('--background');
+    /** Workspace URI -> the agent sessions that showed it. */
+    protected readonly shownBy = new Map<string, Set<string>>();
+    protected readonly onDidRequestCloseEmitter = new Emitter<string>();
+    /** Fired with a workspace URI whose window should close. */
+    readonly onDidRequestClose = this.onDidRequestCloseEmitter.event;
+
+    shown(workspaceRoot: string, session: string): void {
+        if (this.startedByAgent) {
+            const sessions = this.shownBy.get(workspaceRoot) ?? new Set();
+            sessions.add(session);
+            this.shownBy.set(workspaceRoot, sessions);
+        }
+    }
+
+    /** `session` is done with the window of `workspaceRoot` (all its windows when omitted). */
+    done(session: string, workspaceRoot?: string): void {
+        for (const [root, sessions] of this.shownBy) {
+            if ((workspaceRoot === undefined || root === workspaceRoot) && sessions.delete(session) && !sessions.size) {
+                this.shownBy.delete(root);
+                // After the agent's tool result is on its way: quitting the app ends this backend too.
+                setTimeout(() => !this.shownBy.has(root) && this.onDidRequestCloseEmitter.fire(root), 2000);
+            }
+        }
+    }
+}

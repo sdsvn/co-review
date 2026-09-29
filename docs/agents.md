@@ -65,7 +65,7 @@ The setup depends on the harness:
 
 ### How `co-review mcp` works
 
-`co-review mcp` uses the harness's working directory as the repository and bridges stdio to the `/mcp` endpoint of a running Co-Review (desktop or browser). When none is running, it answers the agent's handshake itself and starts Co-Review on the first tool call, so opening an agent session doesn't start the app.
+`co-review mcp` uses the harness's working directory as the repository and bridges stdio to the `/mcp` endpoint of a running Co-Review (desktop or browser). When none is running, it answers the agent's handshake itself and starts Co-Review on the first tool call, so opening an agent session doesn't start the app. If Co-Review quits during the session, the calls waiting on it fail with an error rather than hang, and the next call reconnects (starting Co-Review again). When the harness ends the session, the bridge ends its Co-Review session too and exits.
 
 A client that speaks Streamable HTTP can also connect directly (local connections only):
 

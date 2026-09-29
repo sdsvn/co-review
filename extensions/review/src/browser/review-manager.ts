@@ -92,6 +92,8 @@ export class ReviewManager {
             this.presence.set(p.reviewId, p);
             this.onDidChangeEmitter.fire();
         });
+        // The agent that showed this window is done with its review (desktop app started by an agent).
+        this.client.onDidRequestCloseWindow(root => root === this._root && window.close());
         this.client.onDidDeleteReview(({ reviewId }) => {
             this._reviews = this._reviews.filter(r => r.id !== reviewId);
             this.presence.delete(reviewId);

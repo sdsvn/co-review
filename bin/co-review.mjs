@@ -99,24 +99,70 @@ async function mcp() {
         }
     };
 
+    // Co-Review can go away under a session (the reviewer quits the app, or it closes itself when the review is
+    // done). The agent's calls then fail with an error instead of waiting forever, and the next one reconnects,
+    // starting Co-Review again and replaying the agent's `initialize`.
     let http;
+    /** The connection being made or made: every message to Co-Review waits for it. Reset when Co-Review is lost. */
+    let connection;
     let init;
+    /** Agent requests forwarded to Co-Review and not answered yet. */
+    const inflight = new Set();
     const watched = new Map();
     const internal = new Map();
     let nextId = 0;
-    const request = (method, params) => new Promise((ok, fail) => {
+    const request = (method, params, timeoutMs = 30_000) => new Promise((ok, fail) => {
         const id = `co-review:${nextId++}`;
-        internal.set(id, reply => (reply.error ? fail(new Error(reply.error.message)) : ok(reply.result)));
-        http.send({ jsonrpc: '2.0', id, method, params }).catch(fail);
+        const timer = setTimeout(() => internal.get(id)?.({ error: { message: `${method} timed out` } }), timeoutMs);
+        internal.set(id, reply => {
+            clearTimeout(timer);
+            internal.delete(id);
+            return reply.error ? fail(new Error(reply.error.message)) : ok(reply.result);
+        });
+        http.send({ jsonrpc: '2.0', id, method, params }).catch(e => internal.get(id)?.({ error: { message: e.message } }));
     });
-    const connect = async () => {
+    const lost = why => {
+        if (!http) {
+            return;
+        }
+        log(`lost Co-Review: ${why}`);
+        const dead = http;
+        http = undefined;
+        connection = undefined;
+        dead.close().catch(() => undefined);
+        for (const id of inflight) {
+            stdio.send({ jsonrpc: '2.0', id, error: { code: -32603, message: `Co-Review closed (${why}). Call the tool again: it reconnects.` } });
+        }
+        inflight.clear();
+        for (const reply of [...internal.values()]) {
+            reply({ error: { message: why } });
+        }
+    };
+    // Transport errors are also reported for streams the SDK resumes by itself: check that the session still answers.
+    let checking = false;
+    const check = async () => {
+        if (checking || !http) {
+            return;
+        }
+        checking = true;
+        try {
+            await request('ping', {}, 10_000);
+        } catch (e) {
+            lost(e.message);
+        } finally {
+            checking = false;
+        }
+    };
+    const connect = async replay => {
         const base = await ensureServer({ port, root });
-        http = new StreamableHTTPClientTransport(new URL(`${base}/mcp?root=${encodeURIComponent(root)}`));
-        http.onmessage = message => {
+        const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp?root=${encodeURIComponent(root)}`));
+        transport.onmessage = message => {
             const own = internal.get(message.id);
             if (own) {
-                internal.delete(message.id);
                 return own(message);
+            }
+            if ('id' in message && !('method' in message)) {
+                inflight.delete(message.id);
             }
             // Keep the handshake fresh for the next session.
             const key = watched.get(message.id);
@@ -126,63 +172,84 @@ async function mcp() {
             }
             stdio.send(message);
         };
-        http.onerror = e => log('http:', e.message);
-        http.onclose = () => process.exit(0);
-        await http.start();
-    };
-    // Forward JSON-RPC messages both ways; the HTTP transport handles the MCP session id.
-    const forward = message => {
-        if (message.method === 'initialize' || message.method === 'tools/list') {
-            watched.set(message.id, message.method === 'initialize' ? 'initialize' : 'tools');
-        }
-        http.send(message).catch(e => log('forward failed:', e.message));
-    };
-
-    const running = await findServer({ port });
-    if (running || !cached?.initialize || !cached?.tools) {
-        await connect();
-        stdio.onmessage = forward;
-    } else {
-        // Answer the handshake here; connect (starting Co-Review) when the agent first calls a tool.
-        let connecting;
-        const answer = (message, result) => stdio.send({ jsonrpc: '2.0', id: message.id, result });
-        stdio.onmessage = message => {
-            if (!connecting) {
-                if (message.method === 'initialize') {
-                    init = message;
-                    return answer(message, { ...cached.initialize, protocolVersion: message.params.protocolVersion });
-                }
-                if (message.method === 'tools/list') {
-                    return answer(message, cached.tools);
-                }
-                if (message.method === 'ping') {
-                    return answer(message, {});
-                }
-                if (!('id' in message)) {
-                    return;
-                }
-                connecting = (async () => {
-                    await connect();
-                    await request('initialize', init.params);
-                    await http.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
-                    const tools = await request('tools/list', {});
-                    if (JSON.stringify(tools) !== JSON.stringify(cached.tools)) {
-                        remember('tools', tools);
-                        stdio.send({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' });
-                    }
-                })();
-                // Try again on the next call if Co-Review did not start.
-                connecting.catch(() => (connecting = undefined));
+        transport.onerror = e => {
+            log('http:', e.message);
+            if (transport === http) {
+                check();
             }
-            connecting.then(() => forward(message), e => {
-                log(e.message);
-                if ('id' in message) {
-                    stdio.send({ jsonrpc: '2.0', id: message.id, error: { code: -32603, message: `Co-Review did not start: ${e.message}` } });
-                }
-            });
         };
+        await transport.start();
+        http = transport;
+        if (replay) {
+            await request('initialize', init.params);
+            await http.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+            const tools = await request('tools/list', {});
+            if (JSON.stringify(tools) !== JSON.stringify(cached?.tools)) {
+                remember('tools', tools);
+                stdio.send({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' });
+            }
+        }
+    };
+    const answer = (message, result) => stdio.send({ jsonrpc: '2.0', id: message.id, result });
+
+    // With Co-Review running (or nothing cached yet) connect now and forward the handshake; otherwise answer it here.
+    if (await findServer({ port }) || !cached?.initialize || !cached?.tools) {
+        connection = connect(false);
+        connection.catch(() => (connection = undefined));
     }
-    stdio.onclose = () => (http ? http.close() : process.exit(0));
+    stdio.onmessage = message => {
+        const handshake = message.method === 'initialize';
+        if (handshake) {
+            init = message;
+        }
+        if (!connection && cached?.initialize && cached?.tools) {
+            if (handshake) {
+                return answer(message, { ...cached.initialize, protocolVersion: message.params.protocolVersion });
+            }
+            if (message.method === 'tools/list') {
+                return answer(message, cached.tools);
+            }
+            if (message.method === 'ping') {
+                return answer(message, {});
+            }
+            if (!('id' in message)) {
+                return;
+            }
+        }
+        if (!connection) {
+            connection = connect(!!init && !handshake);
+            // Try again on the next call if Co-Review did not start.
+            connection.catch(() => (connection = undefined));
+        }
+        const isRequest = 'id' in message && 'method' in message;
+        if (isRequest) {
+            inflight.add(message.id);
+        }
+        if (handshake || message.method === 'tools/list') {
+            watched.set(message.id, handshake ? 'initialize' : 'tools');
+        }
+        connection.then(() => http.send(message)).catch(e => {
+            if (http) {
+                lost(e.message);
+            } else {
+                log(e.message);
+            }
+            if (isRequest && inflight.delete(message.id)) {
+                stdio.send({ jsonrpc: '2.0', id: message.id, error: { code: -32603, message: `Co-Review is not reachable: ${e.message}` } });
+            }
+        });
+    };
+    // The agent's session ended (the harness closed stdin, which the stdio transport does not report): end ours
+    // too, so Co-Review knows this agent is done, and exit instead of lingering on the open HTTP stream.
+    const end = async () => {
+        if (http) {
+            await Promise.race([http.terminateSession().catch(() => undefined), new Promise(r => setTimeout(r, 2000))]);
+        }
+        process.exit(0);
+    };
+    stdio.onclose = end;
+    process.stdin.on('end', end);
+    process.stdout.on('error', end);
     await stdio.start();
 }
 
