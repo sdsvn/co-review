@@ -2,7 +2,7 @@ import { Emitter } from '@theia/core/lib/common/event';
 import { FileUri } from '@theia/core/lib/common/file-uri';
 import { injectable } from '@theia/core/shared/inversify';
 import { createHash, randomUUID } from 'crypto';
-import { promises as fs } from 'fs';
+import { promises as fs, realpathSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { AgentConfig, AgentState, CodeLocation, Participant, Review, ReviewActivity, ReviewBundle, ReviewDecision, ReviewMessage, ReviewThread, ThreadOptions, ThreadStatus, waitsForAgent } from '../common/review-model';
@@ -11,6 +11,26 @@ import { CreateReviewParams } from '../common/review-protocol';
 /** Where Co-Review keeps its state: `$CO_REVIEW_HOME`, default `~/.co-review`. */
 export function coReviewHome(): string {
     return process.env.CO_REVIEW_HOME || path.join(os.homedir(), '.co-review');
+}
+
+/**
+ * `p` resolved, with symbolic links followed (on macOS `/var` is `/private/var`, where `$TMPDIR` lives), as Theia
+ * resolves the folder a window opens: the same folder always gets the same workspace key, whichever way it was
+ * named. A path that doesn't exist yet keeps its missing part.
+ */
+export function realPath(p: string): string {
+    const resolved = path.resolve(p);
+    try {
+        return realpathSync(resolved);
+    } catch {
+        const parent = path.dirname(resolved);
+        return parent === resolved ? resolved : path.join(realPath(parent), path.basename(resolved));
+    }
+}
+
+/** A `file:` URI with its path as {@link realPath}; other URIs as they are. */
+export function realUri(uri: string): string {
+    return uri.startsWith('file:') ? FileUri.create(realPath(FileUri.fsPath(uri))).toString() : uri;
 }
 
 export type ReviewChange = { kind: 'changed'; review: Review } | { kind: 'deleted'; reviewId: string; workspaceRoot: string };
@@ -41,11 +61,62 @@ export class ReviewStore {
 
     /** Where the reviews (and other state) of a workspace live, outside the repository. */
     workspaceDir(workspaceRoot: string): string {
-        const hash = createHash('sha256').update(workspaceRoot).digest('hex').slice(0, 16);
+        const hash = createHash('sha256').update(realUri(workspaceRoot)).digest('hex').slice(0, 16);
         return path.join(coReviewHome(), 'workspaces', hash);
     }
 
+    /** Reviews saved before paths were resolved (see realPath), moved where their folder's windows look for them. */
+    protected migration: Promise<void> | undefined;
+
+    protected migrated(): Promise<void> {
+        return this.migration ??= this.migrate().catch(e => console.error('[co-review] moving reviews to resolved paths failed', e));
+    }
+
+    protected async migrate(): Promise<void> {
+        const workspaces = path.join(coReviewHome(), 'workspaces');
+        for (const ws of await fs.readdir(workspaces).catch(() => [] as string[])) {
+            const info = await fs.readFile(path.join(workspaces, ws, 'workspace.json'), 'utf8').then(t => JSON.parse(t) as { root: string }, () => undefined);
+            const real = info && realUri(info.root);
+            if (!info || !real || real === info.root) {
+                continue;
+            }
+            const from = FileUri.fsPath(info.root);
+            const to = FileUri.fsPath(real);
+            const fromUri = info.root;
+            // Every path and URI under the old name, renamed (workspaceRoot, the review directory, thread locations).
+            const rename = (value: unknown): unknown => {
+                if (typeof value === 'string') {
+                    for (const [a, b] of [[fromUri, real], [from, to]]) {
+                        if (value === a || value.startsWith(a + '/')) {
+                            return b + value.slice(a.length);
+                        }
+                    }
+                    return value;
+                }
+                if (Array.isArray(value)) {
+                    return value.map(rename);
+                }
+                if (value && typeof value === 'object') {
+                    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, rename(v)]));
+                }
+                return value;
+            };
+            const source = path.join(workspaces, ws, 'reviews');
+            const target = path.join(this.workspaceDir(real), 'reviews');
+            await fs.mkdir(target, { recursive: true });
+            await this.writeWorkspaceInfo(real);
+            for (const name of (await fs.readdir(source).catch(() => [] as string[])).filter(n => n.endsWith('.json'))) {
+                const review = rename(JSON.parse(await fs.readFile(path.join(source, name), 'utf8')));
+                await fs.writeFile(path.join(target, name), JSON.stringify(review, undefined, 2), 'utf8');
+            }
+            // The rest (repository map, pages) is rebuilt under the new key.
+            await fs.rm(path.join(workspaces, ws), { recursive: true, force: true });
+            console.info(`[co-review] reviews of ${from} moved to ${to}`);
+        }
+    }
+
     async list(workspaceRoot: string): Promise<Review[]> {
+        await this.migrated();
         const dir = path.join(this.workspaceDir(workspaceRoot), 'reviews');
         let names: string[];
         try {
@@ -69,6 +140,7 @@ export class ReviewStore {
 
     /** Finds the file of a review, also after a backend restart when no workspace was listed yet. */
     protected async locate(reviewId: string): Promise<string | undefined> {
+        await this.migrated();
         const known = this.locations.get(reviewId);
         if (known) {
             return known;
@@ -112,6 +184,8 @@ export class ReviewStore {
     }
 
     async create(params: CreateReviewParams): Promise<Review> {
+        await this.migrated();
+        params = { ...params, workspaceRoot: realUri(params.workspaceRoot) };
         const now = Date.now();
         const review: Review = {
             id: randomUUID(),
@@ -393,7 +467,8 @@ export class ReviewStore {
     }
 
     protected async writeWorkspaceInfo(workspaceRoot: string): Promise<void> {
-        const info = { root: workspaceRoot, path: FileUri.fsPath(workspaceRoot) };
+        const root = realUri(workspaceRoot);
+        const info = { root, path: FileUri.fsPath(root) };
         await fs.writeFile(path.join(this.workspaceDir(workspaceRoot), 'workspace.json'), JSON.stringify(info, undefined, 2), 'utf8');
     }
 }

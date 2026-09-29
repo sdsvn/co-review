@@ -6,7 +6,7 @@ import * as path from 'path';
 import { Participant, Review, Severity } from '../common/review-model';
 import { DOCUMENT_NAMES, parsePatchMeta } from '../common/patch';
 import { locationFromAnchor, toStateFile } from './review-payloads';
-import { coReviewHome, ReviewStore } from './review-store';
+import { coReviewHome, realPath, ReviewStore } from './review-store';
 
 export interface OpenBundleParams {
     dir?: string;
@@ -69,7 +69,7 @@ export class BundleService {
 
     /** Opens (or re-opens) the review of a review directory; inline content is written to a directory first. */
     async open(params: OpenBundleParams): Promise<OpenedBundle> {
-        const dir = params.dir ? path.resolve(params.dir) : this.writeInline(params);
+        const dir = realPath(params.dir ?? this.writeInline(params));
         const workspaceRoot = FileUri.create(dir).toString();
         const docFile = this.documentOf(dir);
         const title = params.title ?? (docFile ? this.titleOf(docFile) : path.basename(dir));

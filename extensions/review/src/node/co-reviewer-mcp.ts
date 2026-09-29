@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { CodeLocation, Participant, Review, ReviewThread, Severity, waitsForAgent } from '../common/review-model';
 import { SyntaxSymbol } from '../common/syntax-protocol';
 import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coordination';
-import { coReviewHome, ReviewStore } from './review-store';
+import { coReviewHome, realPath, ReviewStore } from './review-store';
 import { SyntaxServiceImpl } from './syntax-service-impl';
 import { BundleService } from './bundle-service';
 import { GitHubReviews } from './github';
@@ -70,7 +70,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
 
     protected readonly sessions = new Map<string, Session>();
     /** Workspace the backend was started with; the default `root`. */
-    protected defaultRoot: string | undefined = process.argv.slice(2).filter(a => !a.startsWith('-')).map(a => path.resolve(a)).pop();
+    protected defaultRoot: string | undefined = process.argv.slice(2).filter(a => !a.startsWith('-')).map(a => realPath(a)).pop();
 
     protected get registryFile(): string {
         return path.join(coReviewHome(), 'server.json');
@@ -165,7 +165,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 res.status(sessionId ? 404 : 400).json({ jsonrpc: '2.0', error: { code: -32000, message: 'No valid MCP session' }, id: null });
                 return;
             }
-            const root = typeof req.query.root === 'string' ? path.resolve(req.query.root) : this.defaultRoot;
+            const root = typeof req.query.root === 'string' ? realPath(req.query.root) : this.defaultRoot;
             const baseUrl = `http://${req.headers.host}`;
             const created: Session = {
                 delivered: new Set(),
@@ -264,7 +264,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             const agent = this.agentOf(session);
             let patch = inlinePatch;
             if (diff && !reviewId) {
-                const repo = root ? path.resolve(root) : defaultRoot;
+                const repo = root ? realPath(root) : defaultRoot;
                 if (!repo) {
                     return fail('`diff` needs the repository: pass `root`.');
                 }
@@ -302,7 +302,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 workspace = opened.dir;
                 extra = { hasDoc: !!opened.docFile, patches: opened.patches.length, dir: opened.dir, ...this.formatOf(opened.docFile) };
             } else {
-                workspace = root ? path.resolve(root) : defaultRoot!;
+                workspace = root ? realPath(root) : defaultRoot!;
                 if (!workspace) {
                     return fail('No repository: pass `root` (absolute path), or `dir` / `markdown` / `patch`.');
                 }
@@ -558,8 +558,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     + 'the code and how they connect; from graphify-out/graph.json when the repository has a Graphify graph)')
             }
         }, async ({ root, path: under, query, refresh, overview }) => {
-            const review = await resolveReview(undefined, root ? path.resolve(root) : undefined);
-            const workspace = root ? path.resolve(root) : review && !review.bundle ? FileUri.fsPath(review.workspaceRoot) : defaultRoot;
+            const review = await resolveReview(undefined, root ? realPath(root) : undefined);
+            const workspace = root ? realPath(root) : review && !review.bundle ? FileUri.fsPath(review.workspaceRoot) : defaultRoot;
             if (!workspace) {
                 return fail('No repository: pass `root` (absolute path).');
             }
@@ -577,7 +577,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'and `coverage` (repository reviews): source files the reviewer marked as viewed, overall and per area.',
             inputSchema: { reviewId: reviewArg, root: rootArg }
         }, async ({ reviewId, root }) => {
-            const review = await resolveReview(reviewId, root ? path.resolve(root) : undefined);
+            const review = await resolveReview(reviewId, root ? realPath(root) : undefined);
             if (!review) {
                 return fail('No review found.');
             }

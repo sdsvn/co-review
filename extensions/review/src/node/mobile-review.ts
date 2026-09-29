@@ -7,7 +7,7 @@ import { DocAnchor, PatchAnchor, Review, ReviewDecision, ReviewThread, ThreadSta
 import { BundleService } from './bundle-service';
 import { MOBILE_PAGE, MOBILE_MANIFEST, MOBILE_SERVICE_WORKER, MOBILE_ICON } from './mobile-page';
 import { currentUser } from './participants';
-import { ReviewStore } from './review-store';
+import { realPath, ReviewStore } from './review-store';
 
 /**
  * The phone view (`/m`): an installable, lightweight page to read and answer threads, accept
@@ -47,7 +47,7 @@ export class MobileReview implements BackendApplicationContribution {
         // Open reviews of a repository (reviews of it and of review directories inside it), for hooks and scripts.
         // `format=claude-hook` answers with Claude Code SessionStart context, or 204 when there is nothing to say.
         api.get('/status', async (req, res) => {
-            const root = path.resolve(String(req.query.root ?? ''));
+            const root = realPath(String(req.query.root ?? ''));
             const reviews = (await this.store.listAll()).map(r => ({ r, dir: r.bundle?.dir ?? FileUri.fsPath(r.workspaceRoot) }))
                 .filter(({ r, dir }) => !r.archivedAt && (dir === root || dir.startsWith(root + path.sep)) && r.threads.some(t => t.status === 'open' || t.status === 'proposed'))
                 .map(({ r, dir }) => ({
