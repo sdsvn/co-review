@@ -35,6 +35,10 @@ interface Session {
     delivered: Set<string>;
     /** Submissions already returned by await_reviewer. */
     consumedSubmit: number;
+    /** Threads handed to this agent and not answered yet (thread id -> review id): given back if the session ends. */
+    working: Map<string, string>;
+    /** The close (`Review.closed.at`) this session was told about, so it is told once. */
+    toldClosed?: number;
     /** Pushes review events into a Claude Code session (channels); see startChannel. */
     channel?: { dispose(): void };
 }
@@ -104,7 +108,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     }
 
     protected async doMarkClosed(workspaceRoot: string, closed: boolean): Promise<void> {
-        const reviews = (await this.store.listAll()).filter(r => r.agent?.transport === 'mcp' && FileUri.create(this.root(r)).toString() === workspaceRoot);
+        // A window shows one workspace: a repository, or a review directory (whose reviews are its own workspace's).
+        const reviews = (await this.store.list(workspaceRoot)).filter(r => r.agent?.transport === 'mcp');
         for (const review of reviews) {
             if (closed) {
                 await this.store.setClosed(review.id, { at: Date.now() });
@@ -170,6 +175,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             const created: Session = {
                 delivered: new Set(),
                 consumedSubmit: 0,
+                working: new Map(),
                 server: undefined!,
                 transport: new StreamableHTTPServerTransport({
                     sessionIdGenerator: () => randomUUID(),
@@ -183,6 +189,14 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 if (id) {
                     this.sessions.delete(id);
                     this.windows.done(id, `${this.agentOf(created).name} ended its session.`);
+                }
+                // What it took and never answered waits for the next agent again, instead of showing "on it" forever.
+                for (const [threadId, reviewId] of created.working) {
+                    this.store.get(reviewId).then(async review => {
+                        if (review?.threads.find(t => t.id === threadId)?.agentState === 'working') {
+                            await this.store.setAgentState(reviewId, threadId, 'queued');
+                        }
+                    }).catch(() => undefined);
                 }
             };
             await created.server.connect(created.transport);
@@ -376,6 +390,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             const agent = this.agentOf(session);
             const updated = await this.store.addMessage(review.id, thread.id, body, agent);
             await this.store.setAgentState(review.id, thread.id, 'idle');
+            session.working.delete(thread.id);
             if (resolve) {
                 await this.store.setThreadStatus(review.id, thread.id, 'resolved', agent);
             }
@@ -474,7 +489,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             // The answer can come at any time, also after this call returned: it lands in the thread as the reviewer's
             // message, which await_reviewer delivers like any other.
             let choice: string | undefined;
-            const recorded = this.decisions.wait(request.id).then(async optionId => {
+            // A day, so an unanswered question isn't kept for the life of the app; then the buttons show it was cancelled.
+            const recorded = this.decisions.wait(request.id, 24 * 60 * 60 * 1000).then(async optionId => {
                 choice = optionId === undefined ? undefined : options[Number(optionId)];
                 await this.store.updateMessage(review.id, thread.id, messageId, { permission: { ...request, outcome: optionId ?? 'cancelled' } });
                 if (choice === undefined) {
@@ -622,16 +638,23 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     return json({ ...this.batch(review), hint: 'The reviewer submitted: act on the decision and the open comments.' });
                 }
                 if (waiting.length) {
+                    // All marked delivered before any write: each write wakes the channel, which must not push them too.
                     for (const thread of waiting) {
-                        const last = thread.messages[thread.messages.length - 1];
-                        session.delivered.add(last.id);
+                        session.delivered.add(thread.messages[thread.messages.length - 1].id);
+                    }
+                    for (const thread of waiting) {
                         // A choice is the answer to the agent's own question: handed over, nothing to reply to.
-                        await this.store.setAgentState(review.id, thread.id, last.choice !== undefined ? 'idle' : 'working');
+                        const choice = thread.messages[thread.messages.length - 1].choice !== undefined;
+                        if (!choice) {
+                            session.working.set(thread.id, review.id);
+                        }
+                        await this.store.setAgentState(review.id, thread.id, choice ? 'idle' : 'working');
                     }
                     return json(this.commentBatch(review, waiting));
                 }
-                if (review.closed && !review.closed.reported) {
-                    await this.store.setClosed(review.id, { ...review.closed, reported: true });
+                // Told once per session: every agent on the review hears it, also a new session after a restart.
+                if (review.closed && session.toldClosed !== review.closed.at) {
+                    session.toldClosed = review.closed.at;
                     return json(this.closedNotice(review));
                 }
                 if (Date.now() >= deadline || signal.aborted) {
@@ -656,7 +679,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         }
         const pushed = new Set<string>();
         let submits = opened.verdict?.count ?? 0;
-        let toldClosed = false;
+        let toldClosed: number | undefined;
         const notify = (content: string, meta: Record<string, string>) =>
             session.server.server.notification({ method: 'notifications/claude/channel', params: { content, meta } });
         const push = async () => {
@@ -671,8 +694,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     await notify(this.channelText(review, thread), { review_id: review.id, thread_id: threadRef(thread), event: 'comment' });
                 }
             }
-            if (review.closed && !review.closed.reported && !toldClosed) {
-                toldClosed = true;
+            if (review.closed && review.closed.at !== toldClosed) {
+                toldClosed = review.closed.at;
                 await notify('The reviewer closed the review window. Call await_reviewer (it returns at once) for what to do.', { review_id: review.id, event: 'closed' });
             }
             const verdict = review.verdict;

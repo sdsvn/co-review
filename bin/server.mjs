@@ -1,6 +1,6 @@
 // Finds a running Co-Review (desktop or browser) or starts the browser app in the background.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,8 +12,18 @@ const pluginsDir = resolve(here, '..', 'plugins');
 // own Electron (ELECTRON_RUN_AS_NODE) and starts the desktop app instead.
 const desktopApp = !existsSync(appDir) && !!process.versions.electron ? process.execPath : undefined;
 export const home = process.env.CO_REVIEW_HOME || join(homedir(), '.co-review');
-// stdout may belong to a protocol (MCP); log to stderr.
-export const log = (...m) => console.error('[co-review]', ...m);
+export const logsDir = join(home, 'logs');
+// stdout may belong to a protocol (MCP); log to stderr, and to logs/cli.log (see `co-review logs`).
+export const log = (...m) => {
+    console.error('[co-review]', ...m);
+    try {
+        mkdirSync(logsDir, { recursive: true });
+        const text = m.map(x => (x instanceof Error ? x.stack ?? x.message : String(x))).join(' ');
+        appendFileSync(join(logsDir, 'cli.log'), `${new Date().toISOString()} ${process.pid} INFO  ${process.argv[2] ?? 'start'}: ${text}\n`);
+    } catch {
+        /* no log, rather than no command */
+    }
+};
 
 async function isRunning(url) {
     try {

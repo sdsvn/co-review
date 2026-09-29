@@ -1,6 +1,20 @@
 import { ContainerModule, injectable } from '@theia/core/shared/inversify';
 import { app, BrowserWindow } from '@theia/core/electron-shared/electron';
 import { ElectronMainApplication, ElectronMainCommandOptions } from '@theia/core/lib/electron-main/electron-main-application';
+import * as fs from 'fs';
+import * as path from 'path';
+import { captureOutput, DebugLog, logsDir, watchEventLoop } from '../node/debug-log';
+
+// The desktop app's own log (`co-review logs`): started detached, nobody sees its output otherwise.
+const log = new DebugLog('main');
+captureOutput(log);
+watchEventLoop(log);
+log.info(`Co-Review ${app.getVersion()} started: ${process.argv.slice(1).join(' ')}`);
+try {
+    fs.writeFileSync(path.join(logsDir(), 'app.json'), JSON.stringify({ pid: process.pid, version: app.getVersion(), started: new Date().toISOString() }));
+} catch {
+    /* no logs dir */
+}
 
 // The backend opens a window by launching the app again with a repository (the running app gets it as a second
 // instance): it needs the app's command line, as its own executable is Electron's helper. Unpackaged, that is
@@ -39,6 +53,30 @@ export class ReviewElectronMainApplication extends ElectronMainApplication {
 
     protected override hookApplicationEvents(): void {
         super.hookApplicationEvents();
+        // What a window does, in the log: a window that hangs or whose page crashes leaves a trace to go by.
+        app.on('browser-window-created', (_event, window) => {
+            const name = () => {
+                try {
+                    return decodeURI(new URL(window.webContents.getURL()).hash.slice(1)) || 'a window';
+                } catch {
+                    return 'a window';
+                }
+            };
+            window.on('unresponsive', () => log.warn(`window of ${name()} is not responding`));
+            window.on('responsive', () => log.info(`window of ${name()} responds again`));
+            window.on('closed', () => log.info('a window closed'));
+            window.webContents.on('render-process-gone', (_e, details) => log.error(`window of ${name()}: its page is gone (${details.reason}, exit code ${details.exitCode})`));
+            window.webContents.on('did-fail-load', (_e, code, description, url) => log.error(`window failed to load ${url}: ${description} (${code})`));
+            window.webContents.on('console-message', event => {
+                if (event.level === 'warning' || event.level === 'error') {
+                    log.write(event.level === 'error' ? 'error' : 'warn', `window of ${name()}: ${event.message} (${event.sourceId}:${event.lineNumber})`);
+                }
+            });
+        });
+        app.on('child-process-gone', (_event, details) => log.error(`${details.type} process gone: ${details.reason} (exit code ${details.exitCode})`));
+        app.on('second-instance', (_event, argv) => log.info(`launched again: ${argv.slice(1).join(' ')}`));
+        app.on('window-all-closed', () => log.info('all windows closed'));
+        app.on('will-quit', () => log.info('quitting'));
         app.on('activate', (_event, hasVisibleWindows) => {
             if (!hasVisibleWindows && !this.windows.size) {
                 this.openWindowWithWorkspace('');
@@ -48,6 +86,7 @@ export class ReviewElectronMainApplication extends ElectronMainApplication {
 
     protected override async openWindowWithWorkspace(workspacePath: string): Promise<BrowserWindow> {
         const existing = workspacePath ? this.windowOf(workspacePath) : undefined;
+        log.info(`${existing ? 'focusing' : 'opening'} the window of ${workspacePath || 'no workspace'}`);
         if (existing) {
             if (existing.isMinimized()) {
                 existing.restore();

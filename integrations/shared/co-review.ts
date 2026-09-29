@@ -123,12 +123,12 @@ class CoReviewConnection {
 	}
 
 	/** Opens (or joins) the review of `root`, or of the review directory `dir`. */
-	async open(root: string, opts: { reviewId?: string; dir?: string; diff?: string; patchName?: string; title?: string; open?: boolean }): Promise<Opened> {
+	async open(root: string, opts: { reviewId?: string; dir?: string; diff?: string; patchName?: string; title?: string; open?: boolean; overview?: string }): Promise<Opened> {
 		await this.connect(root);
 		return this.call<Opened>("open_review", {
 			root, ...(opts.reviewId ? { reviewId: opts.reviewId } : {}), ...(opts.dir ? { dir: resolve(root, opts.dir) } : {}), ...(opts.title ? { title: opts.title } : {}),
 			...(opts.diff ? { diff: opts.diff } : {}), ...(opts.patchName ? { patchName: opts.patchName } : {}),
-			...(opts.open === false ? { open: false } : {})
+			...(opts.open === false ? { open: false } : {}), ...(opts.overview ? { overview: opts.overview } : {})
 		});
 	}
 
@@ -230,7 +230,7 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 		);
 	};
 
-	const start = async (ctx: C, opts: { root?: string; reviewId?: string; dir?: string; diff?: string; patchName?: string; title?: string; open?: boolean; listen: boolean }) => {
+	const start = async (ctx: C, opts: { root?: string; reviewId?: string; dir?: string; diff?: string; patchName?: string; title?: string; open?: boolean; overview?: string; listen: boolean }) => {
 		const opened = await connection.open(resolve(opts.root ?? ctx.cwd), opts);
 		if (opts.listen) {
 			startListening(ctx);
@@ -279,15 +279,16 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 			`In the main interactive session, reviewer questions arrive as [Co-Review] messages after co_review_start. ${harness.subagentGuideline}`
 		],
 		parameters: Type.Object({
-			reviewId: Type.Optional(Type.String({ description: "An existing review to join and show (e.g. one prepared with open: false); the other parameters are then ignored" })),
+			reviewId: Type.Optional(Type.String({ description: "An existing review to join and show (e.g. one prepared with open: false); the other parameters except open and overview are then ignored" })),
 			root: Type.Optional(Type.String({ description: "Absolute repository path; defaults to the working directory" })),
 			dir: Type.Optional(Type.String({ description: "Review directory with a design document (index.markdown) and/or *.patch files, relative to root or absolute" })),
 			diff: Type.Optional(Type.String({ description: "A git revision range to review as a pull-request page, diffed by Co-Review: \"HEAD\" (uncommitted, new files included) or \"main...HEAD\"; with dir, written into it next to a PR.md" })),
 			patchName: Type.Optional(Type.String({ description: "Slug of the diff's page (default \"change\"); findings on it use target \"patch:<slug>\"" })),
 			title: Type.Optional(Type.String({ description: "Title for a new review; omit to join the latest one" })),
-			open: Type.Optional(Type.Boolean({ description: "Show the review to the reviewer (default true); false prepares it without showing it, e.g. while you add first-pass findings — call again to show it" }))
+			open: Type.Optional(Type.Boolean({ description: "Show the review to the reviewer (default true); false prepares it without showing it, e.g. while you add first-pass findings — call again to show it" })),
+			overview: Type.Optional(Type.String({ description: "Your overview for the review's front page (Markdown), which the reviewer reads first: what it does and why, how it works as a ```mermaid flowchart, what else it affects, where to start. Pass it with reviewId to add or update it" }))
 		}),
-		async execute(_id: string, params: { root?: string; reviewId?: string; dir?: string; diff?: string; patchName?: string; title?: string; open?: boolean }, _signal: AbortSignal, _onUpdate: unknown, ctx: C) {
+		async execute(_id: string, params: { root?: string; reviewId?: string; dir?: string; diff?: string; patchName?: string; title?: string; open?: boolean; overview?: string }, _signal: AbortSignal, _onUpdate: unknown, ctx: C) {
 			const listen = ctx.hasUI && harness.isMain(ctx);
 			const opened = await start(ctx, { ...params, listen });
 			const warnings = opened.format?.warnings?.length ? `\nFix the design document, then call co_review_start again: ${opened.format.warnings.join(" ")}` : "";

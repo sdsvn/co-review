@@ -83,9 +83,14 @@ export class ReviewStore {
             const from = FileUri.fsPath(info.root);
             const to = FileUri.fsPath(real);
             const fromUri = info.root;
-            // Every path and URI under the old name, renamed (workspaceRoot, the review directory, thread locations).
-            const rename = (value: unknown): unknown => {
+            // The paths and URIs under the old name, renamed: the workspace root, the review directory and its files,
+            // thread locations and scopes; never message text, which may quote a path.
+            const PATHS = new Set(['workspaceRoot', 'dir', 'storePath', 'openspec', 'uri', 'uris']);
+            const rename = (value: unknown, key?: string): unknown => {
                 if (typeof value === 'string') {
+                    if (!key || !PATHS.has(key)) {
+                        return value;
+                    }
                     for (const [a, b] of [[fromUri, real], [from, to]]) {
                         if (value === a || value.startsWith(a + '/')) {
                             return b + value.slice(a.length);
@@ -94,10 +99,10 @@ export class ReviewStore {
                     return value;
                 }
                 if (Array.isArray(value)) {
-                    return value.map(rename);
+                    return value.map(v => rename(v, key));
                 }
                 if (value && typeof value === 'object') {
-                    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, rename(v)]));
+                    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, rename(v, k)]));
                 }
                 return value;
             };
@@ -354,7 +359,7 @@ export class ReviewStore {
         });
     }
 
-    /** The reviewer closed the review's window (`at`), an agent was told (`reported`), or it is shown again (undefined). */
+    /** The reviewer closed the review's window (`at`), or it is shown again (undefined). */
     setClosed(reviewId: string, closed: Review['closed']): Promise<Review> {
         return this.mutate(reviewId, review => {
             review.closed = closed;

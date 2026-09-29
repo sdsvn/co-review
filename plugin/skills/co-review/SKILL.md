@@ -206,3 +206,6 @@ How to answer:
 - The human's comments are instructions for this change only. Don't widen scope.
 - Keep answering until the human submits or says the review is done. Don't end the loop on your own.
 - If Co-Review isn't running, `co-review mcp` starts it. Don't start servers yourself.
+- If Co-Review seems stuck (a window that doesn't respond, a call that keeps failing), run `co-review logs`: it says
+  whether Co-Review answers and shows its recent log (windows, backend, agent bridges). Show the human the relevant
+  lines rather than guessing.

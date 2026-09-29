@@ -80,6 +80,10 @@ export class ReviewServiceImpl implements ReviewService {
         this.windows.attach(workspaceRoot, this);
     }
 
+    async keepWindowOpen(workspaceRoot: string): Promise<void> {
+        this.windows.keptOpen(workspaceRoot);
+    }
+
     getCurrentUser(workspaceRoot: string): Promise<Participant> {
         return currentUser(workspaceRoot);
     }

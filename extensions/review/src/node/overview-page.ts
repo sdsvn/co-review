@@ -31,21 +31,30 @@ function where(thread: ReviewThread, root: string): { label: string; href?: stri
     return { label, href: label };
 }
 
+/** `code` as a fenced block, its fence longer than any run of backticks in it (so nothing in it can close the block). */
 function fence(code: string): string {
     const lines = code.replace(/\s+$/, '').split('\n');
     const shown = lines.length > 12 ? [...lines.slice(0, 12), `… ${lines.length - 12} more lines`] : lines;
-    const ticks = shown.some(s => s.includes('```')) ? '````' : '```';
+    const longest = Math.max(2, ...(shown.join('\n').match(/`+/g) ?? []).map(run => run.length));
+    const ticks = '`'.repeat(longest + 1);
     return `${ticks}\n${shown.join('\n')}\n${ticks}`;
 }
 
 /** A section written elsewhere, under this page's `##`: its title dropped, its headings one level down. */
 function nest(markdown: string): string[] {
-    let inFence = false;
+    // The fence that opened the current code block (CommonMark: closed by the same character, at least as long).
+    let open: string | undefined;
     return markdown.replace(/^#\s+.*\n+/, '').split('\n').map(line => {
-        if (/^(```|~~~)/.test(line)) {
-            inFence = !inFence;
+        const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+        if (marker && !open) {
+            open = marker;
+            return line;
         }
-        return !inFence && /^#{1,5}\s/.test(line) ? `#${line}` : line;
+        if (marker && open && marker[0] === open[0] && marker.length >= open.length && !line.trim().slice(marker.length).trim()) {
+            open = undefined;
+            return line;
+        }
+        return !open && /^#{1,5}\s/.test(line) ? `#${line}` : line;
     });
 }
 

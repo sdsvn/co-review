@@ -118,8 +118,11 @@ export class ReviewManager {
             this.messages.info(`${message} This window closes in ${seconds} seconds.`, { timeout: 0 }, 'Keep open', 'Close now'),
             countdown
         ]);
-        if (choice !== 'Keep open') {
+        // Only the countdown or Close now closes it: dismissing the notice keeps the window, like Keep open.
+        if (choice === 'close' || choice === 'Close now') {
             window.close();
+        } else if (this._root) {
+            this.service.keepWindowOpen(this._root);
         }
     }
 

@@ -103,11 +103,18 @@ export class ReviewWindows {
     /** The last window of a workspace closed. */
     readonly onDidClose = this.onDidCloseEmitter.event;
 
+    /** Workspaces whose last window went, waiting a few seconds for a reload to come back before counting as closed. */
+    protected readonly closing = new Map<string, NodeJS.Timeout>();
+
     /** A frontend shows `workspaceRoot` (it may have shown another one before). */
     attach(workspaceRoot: string, frontend: object): void {
-        this.detach(frontend, false);
+        this.detach(frontend);
         const set = this.frontends.get(workspaceRoot) ?? new Set();
-        const first = !set.size;
+        // Back within the grace period (a reload): not closed, and not newly opened either.
+        const reloaded = this.closing.has(workspaceRoot);
+        clearTimeout(this.closing.get(workspaceRoot));
+        this.closing.delete(workspaceRoot);
+        const first = !set.size && !reloaded;
         set.add(frontend);
         this.frontends.set(workspaceRoot, set);
         if (first) {
@@ -116,29 +123,36 @@ export class ReviewWindows {
     }
 
     /** A frontend went away; its workspace's window counts as closed when none comes back shortly. */
-    detach(frontend: object, closing = true): void {
+    detach(frontend: object): void {
         for (const [root, set] of this.frontends) {
-            if (set.delete(frontend) && !set.size && closing) {
-                setTimeout(() => !this.frontends.get(root)?.size && this.closed(root), 4000);
+            if (set.delete(frontend) && !set.size) {
+                clearTimeout(this.closing.get(root));
+                this.closing.set(root, setTimeout(() => this.closed(root), 4000));
             }
         }
     }
 
-    /** The app is quitting: every window is closing. */
+    /** The reviewer kept open a window Co-Review was closing for an agent: closing it later is theirs. */
+    keptOpen(workspaceRoot: string): void {
+        this.closingForAgent.delete(workspaceRoot);
+    }
+
+    /** The app is quitting: every window is closing, also those whose frontend already went (quitting closes them first). */
     shutdown(): void {
-        for (const [root, set] of this.frontends) {
-            if (set.size) {
-                set.clear();
-                this.closed(root);
-            }
+        for (const root of new Set([...this.frontends.keys(), ...this.closing.keys()])) {
+            this.closed(root);
         }
     }
 
     protected closed(workspaceRoot: string): void {
-        this.frontends.delete(workspaceRoot);
+        clearTimeout(this.closing.get(workspaceRoot));
+        this.closing.delete(workspaceRoot);
+        if (!this.frontends.delete(workspaceRoot)) {
+            return;
+        }
         const asked = this.closingForAgent.get(workspaceRoot);
         this.closingForAgent.delete(workspaceRoot);
-        // Closed within the countdown Co-Review started: for the agent. Later (they kept it open): by the reviewer.
+        // Closed within the countdown Co-Review started: for the agent; otherwise by the reviewer.
         const by: WindowCloser = asked !== undefined && Date.now() - asked < 30_000 ? 'agent' : 'reviewer';
         this.onDidCloseEmitter.fire({ workspaceRoot, by });
     }

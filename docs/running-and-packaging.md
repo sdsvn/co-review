@@ -125,6 +125,11 @@ writable, otherwise to `~/.local/bin`. Set `PREFIX=…` to choose another place.
   Co-Review goes away mid-session, the agent's call fails instead of waiting, and its next call starts Co-Review again.
 - `co-review status [dir]` lists the open reviews of `dir` in a running Co-Review (it never starts one).
 - `co-review setup <pi|omp>` installs the Pi or Oh My Pi package that ships with the app.
+- `co-review logs` is for when something hangs or fails: whether Co-Review answers (and how fast), then the recent
+  debug log of every Co-Review process merged by time (`--lines <n>`, default 80). The logs are in
+  `~/.co-review/logs`: `main.log` (the desktop app's windows: not responding, page crashes, errors in a window's
+  console), `backend.log` (the backend, including when it was blocked for over a second) and `cli.log` (the
+  `co-review` command and each agent's `co-review mcp` bridge).
 - `co-review version` (`-v`) prints the version; `co-review help` (`-h`) lists the commands and options.
 
 Installed from the app, the shim runs `bin/co-review.mjs` inside the app bundle, on the app's own Electron

@@ -369,7 +369,7 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
                 title={listening ? `${agentName} is listening and picks this up now.` : `${agentName} is busy; it gets this the next time it checks in. Nothing is lost.`}>
                 {listening ? `sending to ${agentName}…` : `waiting for ${agentName}`}
             </span>}
-            {thread.agentState === 'working' && <span className='co-review-badge working'
+            {thread.agentState === 'working' && !resolved && <span className='co-review-badge working'
                 title={`${agentName} has your message and is working on an answer.`}>{agentName} is on it…</span>}
             {thread.agentState === 'waiting_for_human' && <span className='co-review-badge waiting'>needs your decision</span>}
             {resolved && <span className='co-review-badge resolved'>resolved</span>}

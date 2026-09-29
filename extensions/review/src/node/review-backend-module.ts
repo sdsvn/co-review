@@ -1,3 +1,4 @@
+import { captureOutput, DebugLog, watchEventLoop } from './debug-log';
 import { ConnectionHandler, RpcConnectionHandler } from '@theia/core/lib/common/messaging';
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
 import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coordination';
@@ -15,6 +16,11 @@ import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
 import { OverviewPages } from './overview-page';
 import { GitHubReviews } from './github';
+
+// The backend's output and hangs, in `co-review logs` (a desktop app's backend has no terminal).
+const log = new DebugLog('backend');
+captureOutput(log);
+watchEventLoop(log);
 
 export default new ContainerModule(bind => {
     bind(ReviewStore).toSelf().inSingletonScope();
