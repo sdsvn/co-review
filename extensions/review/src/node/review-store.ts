@@ -273,6 +273,14 @@ export class ReviewStore {
         });
     }
 
+    /** The reviewer closed the review's window (`at`), an agent was told (`reported`), or it is shown again (undefined). */
+    setClosed(reviewId: string, closed: Review['closed']): Promise<Review> {
+        return this.mutate(reviewId, review => {
+            review.closed = closed;
+            return review;
+        });
+    }
+
     /** An agent picked up the latest round. */
     verdictDelivered(reviewId: string): Promise<Review> {
         return this.mutate(reviewId, review => {

@@ -96,7 +96,7 @@ loop:
   submitted → act on the verdict
 ```
 
-While the agent is blocked in `await_reviewer` (or `ask_reviewer`), the agent next to the review's scope in the panel is marked as listening (hover it for the status). When it is busy elsewhere, your questions wait and are delivered on its next call. Each thread says where your latest message is: **waiting for** the agent until it picks it up, then **… is on it** until it replies; the submit bar says whether the agent has your verdict yet. A Submit made while no agent is connected is delivered to the next one that joins.
+While the agent is blocked in `await_reviewer` (or `ask_reviewer`), the agent next to the review's scope in the panel is marked as listening (hover it for the status). When it is busy elsewhere, your questions wait and are delivered on its next call. Each thread says where your latest message is: **waiting for** the agent until it picks it up, then **… is on it** until it replies; the submit bar says whether the agent has your verdict yet. A Submit made while no agent is connected is delivered to the next one that joins. Closing the review's window (or quitting Co-Review) is told to the agent too: `await_reviewer` returns `closed`, and the agent stops waiting and says in its conversation what is still open. When an agent that started Co-Review closes a window it showed, the window says why first and closes after 10 seconds, unless you click **Keep open**.
 
 The full tool contract is in [`../llms.txt`](../llms.txt).
 

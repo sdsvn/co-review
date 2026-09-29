@@ -15,7 +15,8 @@ Co-Review and asks you questions in its threads; you answer from the code.
    - `await_reviewer({ timeoutSec: 240 })`, the one call to wait on. On `pending`, call it again.
    - For each returned thread: read the code it points at, then `reply({ threadId, body })`.
    - When a decision is the reviewer's, use `ask_reviewer` with 2–4 options.
-3. When `await_reviewer` returns `status: "submitted"`, report the decision, their message, the open
+3. When `await_reviewer` returns `status: "closed"`, the reviewer closed the review: stop, and report the
+   threads still open. When it returns `status: "submitted"`, report the decision, their message, the open
    comments and accepted suggestions back to the main conversation. Don't implement changes yourself; the main conversation does that.
 
 <!-- prompt: answer-style -->

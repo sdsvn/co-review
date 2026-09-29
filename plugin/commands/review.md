@@ -13,7 +13,7 @@ Review the change you made with me in Co-Review, following the `co-review` skill
    `add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line, side: "new" },
    body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines).
 3. Show it: `open_review({ reviewId })`. Give me the URL (if there is one) and, in one sentence, what to look at first.
-4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit, then act on my verdict:
+4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review, then act on my verdict:
    approve → go ahead; request changes → address every comment and apply the accepted suggestions as new commits
    (don't rewrite the reviewed diff), then reply in each thread with what changed. Don't edit files while I review
    unless I ask in a thread.

@@ -120,7 +120,8 @@ writable, otherwise to `~/.local/bin`. Set `PREFIX=…` to choose another place.
 - `co-review mcp [dir]` connects an agent (stdio MCP) to the app's backend, found through `~/.co-review/server.json`.
   It starts the app on the agent's first tool call, not when the agent session starts, and in the background: no
   window until the agent shows a review (`open_review`), or you open the app. A window the agent showed closes when
-  the agent is done with the review (you approve it, or its session ends); with no window left the app quits. If
+  the agent is done with the review (you approve it, or its session ends): it says why and closes after 10 seconds
+  unless you keep it open; with no window left the app quits. Closing a window yourself is told to the agent. If
   Co-Review goes away mid-session, the agent's call fails instead of waiting, and its next call starts Co-Review again.
 - `co-review status [dir]` lists the open reviews of `dir` in a running Co-Review (it never starts one).
 - `co-review setup <pi|omp>` installs the Pi or Oh My Pi package that ships with the app.

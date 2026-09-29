@@ -1,6 +1,6 @@
 import { ConnectionHandler, RpcConnectionHandler } from '@theia/core/lib/common/messaging';
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
-import { AgentPresenceTracker, AgentWindows, HumanDecisions } from './agent-coordination';
+import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coordination';
 import { CoReviewerMcp } from './co-reviewer-mcp';
 import { BundleService } from './bundle-service';
 import { MobileReview } from './mobile-review';
@@ -24,7 +24,7 @@ export default new ContainerModule(bind => {
     bind(AgentSetup).toSelf().inSingletonScope();
     bind(RepoIndex).toSelf().inSingletonScope();
     bind(AgentPresenceTracker).toSelf().inSingletonScope();
-    bind(AgentWindows).toSelf().inSingletonScope();
+    bind(ReviewWindows).toSelf().inSingletonScope();
     bind(FindingsPages).toSelf().inSingletonScope();
     bind(GitHubReviews).toSelf().inSingletonScope();
     bind(CoReviewerMcp).toSelf().inSingletonScope();

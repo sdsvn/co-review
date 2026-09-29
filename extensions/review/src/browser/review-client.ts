@@ -13,7 +13,7 @@ export class ReviewClientImpl implements ReviewClient {
     protected readonly onAgentPresenceEmitter = new Emitter<AgentPresence>();
     readonly onDidChangeAgentPresence = this.onAgentPresenceEmitter.event;
 
-    protected readonly onCloseWindowEmitter = new Emitter<string>();
+    protected readonly onCloseWindowEmitter = new Emitter<{ workspaceRoot: string; message: string }>();
     readonly onDidRequestCloseWindow = this.onCloseWindowEmitter.event;
 
     onAgentPresence(presence: AgentPresence): void {
@@ -28,7 +28,7 @@ export class ReviewClientImpl implements ReviewClient {
         this.onReviewDeletedEmitter.fire({ reviewId, workspaceRoot });
     }
 
-    onCloseWindow(workspaceRoot: string): void {
-        this.onCloseWindowEmitter.fire(workspaceRoot);
+    onCloseWindow(workspaceRoot: string, message: string): void {
+        this.onCloseWindowEmitter.fire({ workspaceRoot, message });
     }
 }

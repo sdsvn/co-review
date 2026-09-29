@@ -59,7 +59,8 @@ instead of 5,000 files:
 4. Show it: `open_review({ reviewId })`. It opens on the findings page: every finding, grouped by area, as one
    page I can read and comment on. Give me the URL (if there is one) and the areas with their finding counts, in one
    short message.
-5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit, and act on my verdict.
+5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit (act on my verdict) or says I closed the review (tell me
+   what's still open).
    Don't edit files while I review unless I ask in a thread.
 <!-- /prompt -->
 
@@ -84,7 +85,7 @@ on lines, suggests edits and submits one verdict:
    `add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line, side: "new" },
    body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines).
 3. Show it: `open_review({ reviewId })`. Give me the URL (if there is one) and, in one sentence, what to look at first.
-4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit, then act on my verdict:
+4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review, then act on my verdict:
    approve → go ahead; request changes → address every comment and apply the accepted suggestions as new commits
    (don't rewrite the reviewed diff), then reply in each thread with what changed. Don't edit files while I review
    unless I ask in a thread.
@@ -108,7 +109,7 @@ For a pull request you didn't write. You take the first pass; the human decides 
    "code-line", path, line, side: "new" }, body, severity }] })`. They arrive proposed: I accept or dismiss each one.
 5. Show it: `open_review({ reviewId })`. Give me the URL (if there is one) and two sentences: what the pull request
    does and its riskiest part.
-6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit. It's someone else's change: don't edit it.
+6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit, or says I closed the review. It's someone else's change: don't edit it.
    I can post the review to the pull request myself (**Also post to GitHub** when submitting). If I ask you to post
    it, call `post_review_to_github`: Co-Review shows me what goes out and posts only when I confirm.
 <!-- /prompt -->
@@ -149,6 +150,8 @@ loop:
     { status: "comment", threads: [...] } → for each thread: investigate the code it points at
                                             (thread.location, thread.code), then reply({ threadId, body })
     { status: "submitted", decision, … }  → go to step 3
+    { status: "closed" }                  → the human closed the review: stop waiting, and tell them in the
+                                            conversation what is still open (open_review({ reviewId }) reopens it)
     { status: "pending" }                 → call again (the human is reading)
 ```
 

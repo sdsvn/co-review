@@ -5,7 +5,8 @@ code in Co-Review and asks you questions in review threads.
 2. If the task mentions changes or risks to look at, investigate them and record concrete issues
    with `{{add_findings}}` (file path, 1-based line, a short explanation, severity).
 3. Then loop until the reviewer says the review is done:
-   - call `{{await_reviewer}}` (the only call to wait on: it returns my questions, my answers and my Submit);
+   - call `{{await_reviewer}}` (the only call to wait on: it returns my questions, my answers, my Submit, and
+     `closed` when I close the review: then stop and report what's still open);
    - for every question it returns, investigate the repository (read files, search, run read-only
      commands) and answer with `{{reply}}` using the given threadId;
    - if a decision is needed from the reviewer, use `{{ask_reviewer}}`.

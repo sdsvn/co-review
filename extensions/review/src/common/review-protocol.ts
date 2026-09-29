@@ -83,6 +83,8 @@ export interface GitHubPost {
 }
 
 export interface ReviewService extends RpcServer<ReviewClient> {
+    /** This frontend (window) shows `workspaceRoot`: its agents are told when the reviewer closes it. */
+    showWorkspace(workspaceRoot: string): Promise<void>;
     getCurrentUser(workspaceRoot: string): Promise<Participant>;
     getGitInfo(workspaceRoot: string): Promise<GitInfo>;
     resolveCommit(workspaceRoot: string, ref: string): Promise<string | undefined>;
@@ -146,6 +148,9 @@ export interface ReviewClient {
     onAgentPresence(presence: AgentPresence): void;
     onReviewChanged(review: Review): void;
     onReviewDeleted(reviewId: string, workspaceRoot: string): void;
-    /** The desktop window of `workspaceRoot` should close: the agent that showed it is done (see AgentWindows). */
-    onCloseWindow(workspaceRoot: string): void;
+    /**
+     * The agents that showed the desktop window of `workspaceRoot` are done with it (see ReviewWindows): tell the
+     * reviewer why (`message`), then close it unless they keep it open.
+     */
+    onCloseWindow(workspaceRoot: string, message: string): void;
 }

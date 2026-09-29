@@ -301,6 +301,11 @@ export interface Review {
     bundle?: ReviewBundle;
     /** The reviewer's latest submission (Submit review). */
     verdict?: ReviewVerdict;
+    /**
+     * The reviewer closed the review's window (or quit Co-Review) while an MCP agent was on it; `reported` once an
+     * agent was told. Cleared when the review is shown again.
+     */
+    closed?: { at: number; reported?: boolean };
     /** When the reviewer archived this review; archived reviews are hidden from the active list but not deleted. */
     archivedAt?: number;
     createdAt: number;

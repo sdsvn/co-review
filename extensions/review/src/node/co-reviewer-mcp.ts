@@ -1,7 +1,7 @@
 import { BackendApplicationContribution } from '@theia/core/lib/node/backend-application';
 import { FileUri } from '@theia/core/lib/common/file-uri';
 import * as express from '@theia/core/shared/express';
-import { inject, injectable } from '@theia/core/shared/inversify';
+import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import type { McpServer as McpServerType } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { StreamableHTTPServerTransport as TransportType } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { execFile, spawn } from 'child_process';
@@ -12,7 +12,7 @@ import * as path from 'path';
 import { z } from 'zod';
 import { CodeLocation, Participant, Review, ReviewThread, Severity, waitsForAgent } from '../common/review-model';
 import { SyntaxSymbol } from '../common/syntax-protocol';
-import { AgentPresenceTracker, AgentWindows, HumanDecisions } from './agent-coordination';
+import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coordination';
 import { coReviewHome, ReviewStore } from './review-store';
 import { SyntaxServiceImpl } from './syntax-service-impl';
 import { BundleService } from './bundle-service';
@@ -63,7 +63,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     @inject(SyntaxServiceImpl) protected readonly syntax: SyntaxServiceImpl;
     @inject(HumanDecisions) protected readonly decisions: HumanDecisions;
     @inject(AgentPresenceTracker) protected readonly presence: AgentPresenceTracker;
-    @inject(AgentWindows) protected readonly windows: AgentWindows;
+    @inject(ReviewWindows) protected readonly windows: ReviewWindows;
     @inject(BundleService) protected readonly bundles: BundleService;
     @inject(GitHubReviews) protected readonly github: GitHubReviews;
     @inject(RepoIndex) protected readonly index: RepoIndex;
@@ -86,7 +86,49 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         }
     }
 
-    onStop(): void {
+    /** Pending work of windows closing or opening, which quitting waits for. */
+    protected readonly closing = new Set<Promise<void>>();
+
+    @postConstruct()
+    protected init(): void {
+        // The reviewer closed a review's window: its agents are told (await_reviewer), also after Co-Review restarts.
+        this.windows.onDidClose(({ workspaceRoot, by }) => by === 'reviewer' && this.markClosed(workspaceRoot));
+        // Open again: not closed any more (and nothing to tell if no agent heard yet).
+        this.windows.onDidOpen(workspaceRoot => this.markClosed(workspaceRoot, false));
+    }
+
+    protected markClosed(workspaceRoot: string, closed = true): void {
+        const work = this.doMarkClosed(workspaceRoot, closed).catch(error => console.error('[co-review] recording a closed window failed', error));
+        this.closing.add(work);
+        work.finally(() => this.closing.delete(work));
+    }
+
+    protected async doMarkClosed(workspaceRoot: string, closed: boolean): Promise<void> {
+        const reviews = (await this.store.listAll()).filter(r => r.agent?.transport === 'mcp' && FileUri.create(this.root(r)).toString() === workspaceRoot);
+        for (const review of reviews) {
+            if (closed) {
+                await this.store.setClosed(review.id, { at: Date.now() });
+            } else if (review.closed) {
+                await this.store.setClosed(review.id, undefined);
+            }
+        }
+    }
+
+    /** What an agent waiting on a review hears when the reviewer closed it. */
+    protected closedNotice(review: Review): Record<string, unknown> {
+        return {
+            status: 'closed', reviewId: review.id, by: 'reviewer',
+            hint: 'The reviewer closed the review window (or quit Co-Review); the review and its threads are saved. Stop waiting on '
+                + 'this review. Tell the user in the conversation what is still open, if anything. To continue, open_review({ reviewId }) '
+                + 'shows it again.'
+        };
+    }
+
+    async onStop(): Promise<void> {
+        // Quitting: every window closes. Record it and let the agents' waits answer before the process exits.
+        this.windows.shutdown();
+        await Promise.all(this.closing);
+        await new Promise(resolve => setTimeout(resolve, 500));
         try {
             // Only remove our own registration.
             const current = JSON.parse(require('fs').readFileSync(this.registryFile, 'utf8'));
@@ -140,7 +182,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 const id = created.transport.sessionId;
                 if (id) {
                     this.sessions.delete(id);
-                    this.windows.done(id);
+                    this.windows.done(id, `${this.agentOf(created).name} ended its session.`);
                 }
             };
             await created.server.connect(created.transport);
@@ -279,6 +321,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             const desktop = !!process.versions.electron;
             const url = desktop ? undefined : `${baseUrl}/?review=${review.id}#${workspace}`;
             if (open !== false) {
+                if (review.closed) {
+                    review = await this.store.setClosed(review.id, undefined);
+                }
                 if (url) {
                     execFile(process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open', [url], () => undefined);
                 } else if (process.env.CO_REVIEW_APP_LAUNCH) {
@@ -305,7 +350,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + '{status:"comment", threads[] (the ones to answer, with code and conversation), comments[] (unresolved threads), needsReply} '
                 + 'when they ask you something, reply in a thread you are part of (in a review directory: any comment, including on '
                 + 'proposed findings) or answer an ask_reviewer question; {status:"submitted", decision, summary, comments[], '
-                + 'acceptedSuggestions[]} when they click Submit; {status:"pending"} on timeout. Answer comments with reply, act on a '
+                + 'acceptedSuggestions[]} when they click Submit; {status:"closed", hint} when they closed the review window or quit '
+                + 'Co-Review (stop waiting on it and tell the user); {status:"pending"} on timeout. Answer comments with reply, act on a '
                 + 'Submit, and call it again until the review is done.',
             inputSchema: { reviewId: reviewArg, timeoutSec: z.number().int().min(1).max(3600).optional() }
         }, async ({ reviewId, timeoutSec }, extra) =>
@@ -563,7 +609,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     }
                     // Approved: this agent is done with the review, and a window it showed can close.
                     if (review.verdict!.decision === 'approve' && session.transport.sessionId) {
-                        this.windows.done(session.transport.sessionId, FileUri.create(this.root(review)).toString());
+                        this.windows.done(session.transport.sessionId, `You approved the review, and ${agent.name} has it.`,
+                            FileUri.create(this.root(review)).toString());
                     }
                     return json({ ...this.batch(review), hint: 'The reviewer submitted: act on the decision and the open comments.' });
                 }
@@ -575,6 +622,10 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                         await this.store.setAgentState(review.id, thread.id, last.choice !== undefined ? 'idle' : 'working');
                     }
                     return json(this.commentBatch(review, waiting));
+                }
+                if (review.closed && !review.closed.reported) {
+                    await this.store.setClosed(review.id, { ...review.closed, reported: true });
+                    return json(this.closedNotice(review));
                 }
                 if (Date.now() >= deadline || signal.aborted) {
                     return json({ status: 'pending', hint: 'Nothing from the reviewer yet. Call it again to keep waiting.' });
@@ -598,6 +649,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         }
         const pushed = new Set<string>();
         let submits = opened.verdict?.count ?? 0;
+        let toldClosed = false;
         const notify = (content: string, meta: Record<string, string>) =>
             session.server.server.notification({ method: 'notifications/claude/channel', params: { content, meta } });
         const push = async () => {
@@ -611,6 +663,10 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     pushed.add(last.id);
                     await notify(this.channelText(review, thread), { review_id: review.id, thread_id: threadRef(thread), event: 'comment' });
                 }
+            }
+            if (review.closed && !review.closed.reported && !toldClosed) {
+                toldClosed = true;
+                await notify('The reviewer closed the review window. Call await_reviewer (it returns at once) for what to do.', { review_id: review.id, event: 'closed' });
             }
             const verdict = review.verdict;
             if (verdict && verdict.count > submits) {

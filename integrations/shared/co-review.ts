@@ -66,6 +66,8 @@ interface Verdict {
 	status: string;
 	/** With status "comment": reviewer comments that came before the Submit. */
 	threads?: Thread[];
+	/** With status "closed": what to do now that the reviewer closed the review. */
+	hint?: string;
 	decision?: string;
 	summary?: string;
 	round?: number;
@@ -133,7 +135,7 @@ class CoReviewConnection {
 	/** Waits for the reviewer: their questions, or their Submit (the verdict); `undefined` when the wait timed out. */
 	async next(timeoutSec: number, signal?: AbortSignal): Promise<Verdict | undefined> {
 		const r = await this.call<Verdict>("await_reviewer", { timeoutSec }, (timeoutSec + 60) * 1000, signal);
-		return r.status === "comment" || r.status === "submitted" ? r : undefined;
+		return r.status === "comment" || r.status === "submitted" || r.status === "closed" ? r : undefined;
 	}
 
 	async listen(onThreads: (threads: Thread[]) => void, onVerdict: (verdict: Verdict) => void, onError: (e: Error) => void): Promise<void> {
@@ -146,7 +148,7 @@ class CoReviewConnection {
 			try {
 				const r = await this.next(240);
 				if (r && !this.stopped) {
-					if (r.status === "submitted") {
+					if (r.status === "submitted" || r.status === "closed") {
 						onVerdict(r);
 					} else if (r.threads?.length) {
 						onThreads(r.threads);
@@ -194,6 +196,9 @@ function formatVerdict(r: Verdict): string {
 	if (r.status === "comment" && r.threads?.length) {
 		return r.threads.map(formatThread).join("\n\n---\n\n");
 	}
+	if (r.status === "closed") {
+		return `[Co-Review] ${(r.hint ?? "The reviewer closed the review.").replace(/open_review/g, "co_review_start")}`;
+	}
 	if (r.status !== "submitted") {
 		return "Nothing from the reviewer yet. Call co_review_wait again to keep co-reviewing.";
 	}
@@ -219,7 +224,8 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 		ctx.ui.setStatus("co-review", "Co-Review: listening");
 		void connection.listen(
 			threads => threads.forEach(thread => harness.deliver(ctx, formatThread(thread))),
-			verdict => harness.deliver(ctx, `[Co-Review] The reviewer submitted the review. Act on it:\n\n${formatVerdict(verdict)}`),
+			verdict => harness.deliver(ctx, verdict.status === "closed" ? formatVerdict(verdict)
+				: `[Co-Review] The reviewer submitted the review. Act on it:\n\n${formatVerdict(verdict)}`),
 			error => ctx.ui.setStatus("co-review", `Co-Review: reconnecting (${error.message.slice(0, 60)})`)
 		);
 	};

@@ -6,7 +6,7 @@ import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, ReviewDecision,
 import { AcpAgentService } from './acp-agent-service';
 import { BundleService } from './bundle-service';
 import { currentUser } from './participants';
-import { AgentPresenceTracker, AgentWindows, HumanDecisions } from './agent-coordination';
+import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coordination';
 import { AgentSetupInfo, CreateReviewParams, GitHubPost, GitHubTarget, GitInfo, ReviewClient, ReviewService } from '../common/review-protocol';
 import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
@@ -40,8 +40,8 @@ export class ReviewServiceImpl implements ReviewService {
     @inject(AgentPresenceTracker)
     protected readonly presence: AgentPresenceTracker;
 
-    @inject(AgentWindows)
-    protected readonly windows: AgentWindows;
+    @inject(ReviewWindows)
+    protected readonly windows: ReviewWindows;
 
     @inject(RepoIndex)
     protected readonly index: RepoIndex;
@@ -60,7 +60,7 @@ export class ReviewServiceImpl implements ReviewService {
         this.toDispose.dispose();
         if (client) {
             this.toDispose.push(this.presence.onDidChange(p => client.onAgentPresence(p)));
-            this.toDispose.push(this.windows.onDidRequestClose(root => client.onCloseWindow(root)));
+            this.toDispose.push(this.windows.onDidRequestClose(({ workspaceRoot, message }) => client.onCloseWindow(workspaceRoot, message)));
             this.toDispose.push(this.store.onDidChange(change => {
                 if (change.kind === 'changed') {
                     client.onReviewChanged(change.review);
@@ -73,6 +73,11 @@ export class ReviewServiceImpl implements ReviewService {
 
     dispose(): void {
         this.toDispose.dispose();
+        this.windows.detach(this);
+    }
+
+    async showWorkspace(workspaceRoot: string): Promise<void> {
+        this.windows.attach(workspaceRoot, this);
     }
 
     getCurrentUser(workspaceRoot: string): Promise<Participant> {

@@ -1,6 +1,8 @@
 import { Emitter } from '@theia/core/lib/common/event';
 import URI from '@theia/core/lib/common/uri';
 import { StorageService } from '@theia/core/lib/browser/storage-service';
+import { ConnectionStatus, ConnectionStatusService } from '@theia/core/lib/browser/connection-status-service';
+import { MessageService } from '@theia/core/lib/common/message-service';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewCoverage, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus, isFindingsPage } from '../common/review-model';
@@ -34,6 +36,8 @@ export class ReviewManager {
     @inject(ReviewClientImpl) protected readonly client: ReviewClientImpl;
     @inject(WorkspaceService) protected readonly workspaceService: WorkspaceService;
     @inject(StorageService) protected readonly storage: StorageService;
+    @inject(MessageService) protected readonly messages: MessageService;
+    @inject(ConnectionStatusService) protected readonly connection: ConnectionStatusService;
 
     protected readonly onDidChangeEmitter = new Emitter<void>();
     readonly onDidChange = this.onDidChangeEmitter.event;
@@ -93,7 +97,9 @@ export class ReviewManager {
             this.onDidChangeEmitter.fire();
         });
         // The agent that showed this window is done with its review (desktop app started by an agent).
-        this.client.onDidRequestCloseWindow(root => root === this._root && window.close());
+        this.client.onDidRequestCloseWindow(({ workspaceRoot, message }) => workspaceRoot === this._root && this.closeSoon(message));
+        // Tell the backend again after a reconnect: its agents are told when this window closes.
+        this.connection.onStatusChange(status => status === ConnectionStatus.ONLINE && this._root && this.service.showWorkspace(this._root));
         this.client.onDidDeleteReview(({ reviewId }) => {
             this._reviews = this._reviews.filter(r => r.id !== reviewId);
             this.presence.delete(reviewId);
@@ -104,9 +110,25 @@ export class ReviewManager {
         });
     }
 
+    /** Says why the window closes (`message`), then closes it after a countdown unless the reviewer keeps it open. */
+    protected async closeSoon(message: string): Promise<void> {
+        const seconds = 10;
+        const countdown = new Promise<'close'>(resolve => setTimeout(() => resolve('close'), seconds * 1000));
+        const choice = await Promise.race([
+            this.messages.info(`${message} This window closes in ${seconds} seconds.`, { timeout: 0 }, 'Keep open', 'Close now'),
+            countdown
+        ]);
+        if (choice !== 'Keep open') {
+            window.close();
+        }
+    }
+
     protected async load(): Promise<void> {
         const roots = await this.workspaceService.roots;
         this._root = roots[0]?.resource.toString();
+        if (this._root) {
+            this.service.showWorkspace(this._root);
+        }
         if (!this._root) {
             this._reviews = [];
             this._activeReviewId = undefined;
