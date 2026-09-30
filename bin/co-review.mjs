@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Co-Review command line: see USAGE (`co-review help`).
 import { dirname, join, resolve } from 'node:path';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ensureServer, findServer, home, log, logsDir, openUrl } from './server.mjs';
@@ -337,11 +337,26 @@ async function logs() {
     // Entries of every log, by time; a line without a time stamp continues the entry before it.
     const entries = [];
     for (const name of ['main', 'backend', 'cli']) {
+        // Only the end of the file: a log can be large (reading a huge one whole would crash this command).
         let text;
+        let fd;
         try {
-            text = readFileSync(join(logsDir, `${name}.log`), 'utf8');
+            fd = openSync(join(logsDir, `${name}.log`), 'r');
+            const { size } = fstatSync(fd);
+            const length = Math.min(size, 1024 * 1024);
+            const buffer = Buffer.alloc(length);
+            readSync(fd, buffer, 0, length, size - length);
+            text = buffer.toString('utf8');
+            // Starting mid-file: drop the partial first line.
+            if (length < size) {
+                text = text.slice(text.indexOf('\n') + 1);
+            }
         } catch {
             continue;
+        } finally {
+            if (fd !== undefined) {
+                closeSync(fd);
+            }
         }
         for (const line of text.split('\n').slice(-4000)) {
             const at = /^\d{4}-\d\d-\d\dT[\d:.]+Z /.exec(line)?.[0];

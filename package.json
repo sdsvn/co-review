@@ -5,6 +5,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "postinstall": "node bin/patch-theia.mjs",
     "build": "make browser",
     "download:plugins": "theia download:plugins --rate-limit=15 --parallel=false --ignore-errors",
     "start": "make start",

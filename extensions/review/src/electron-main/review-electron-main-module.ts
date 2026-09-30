@@ -3,7 +3,7 @@ import { app, BrowserWindow } from '@theia/core/electron-shared/electron';
 import { ElectronMainApplication, ElectronMainCommandOptions } from '@theia/core/lib/electron-main/electron-main-application';
 import * as fs from 'fs';
 import * as path from 'path';
-import { captureOutput, DebugLog, logsDir, watchEventLoop } from '../node/debug-log';
+import { captureOutput, DebugLog, logsDir, rateLimit, watchEventLoop } from '../node/debug-log';
 
 // The desktop app's own log (`co-review logs`): started detached, nobody sees its output otherwise.
 const log = new DebugLog('main');
@@ -67,9 +67,11 @@ export class ReviewElectronMainApplication extends ElectronMainApplication {
             window.on('closed', () => log.info('a window closed'));
             window.webContents.on('render-process-gone', (_e, details) => log.error(`window of ${name()}: its page is gone (${details.reason}, exit code ${details.exitCode})`));
             window.webContents.on('did-fail-load', (_e, code, description, url) => log.error(`window failed to load ${url}: ${description} (${code})`));
+            // A window's console warnings and errors, at most 20 a second: one caught in a loop can't flood the log.
+            const console = rateLimit(log);
             window.webContents.on('console-message', event => {
                 if (event.level === 'warning' || event.level === 'error') {
-                    log.write(event.level === 'error' ? 'error' : 'warn', `window of ${name()}: ${event.message} (${event.sourceId}:${event.lineNumber})`);
+                    console(event.level === 'error' ? 'error' : 'warn', `window of ${name()}: ${event.message} (${event.sourceId}:${event.lineNumber})`);
                 }
             });
         });
