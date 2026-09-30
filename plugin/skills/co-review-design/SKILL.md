@@ -40,8 +40,8 @@ open questions, and nothing else. Full method and examples: Co-Review's `docs/de
    to the change: about 10-30 lines if small, 30-80 medium, 80-150 large. Cut what doesn't help the reviewer decide.
 3. Check it before I see it: `open_review({ dir, open: false })` lists problems in `format.warnings`. Fix every
    one and call it again until there are none. Then show it with `open_review({ reviewId })` and share the URL.
-4. Answer comments in their threads and revise the design. Comments are on the version they were made on: once
-   the document changes, they leave it for the Review panel, so say in each thread what changed.
+4. Answer comments in their threads and revise the design; say in each thread what changed. A comment follows its
+   text through your edits (marked changed if you reword it); if you delete what it was on, it leaves the page.
 5. Implement only after approval: keep calling `await_reviewer` (answering comments with `reply`) until it
    returns my Submit. If the code must depart from the approved design, update the design and ask again.
 <!-- /prompt -->
@@ -56,10 +56,11 @@ Follow the `co-review` skill's loop (`await_reviewer` → investigate → `reply
   architectural problem, an open decision, or a detail that doesn't belong. Update the document and reply saying
   which step changed.
 - Don't accept suggestions blindly: if one conflicts with the code, say so, with the evidence.
-- **Comments are on a version.** Each comment belongs to the version of the document it was made on: once you save
-  a change, the earlier comments leave the document for the Review panel ("earlier version"), and `await_reviewer`
-  marks them `onEarlierVersion`. So reply in each thread with what changed and where, since the reviewer reads the
-  answer next to a comment that is no longer on the page.
+- **Comments follow their text.** When you edit the document, each comment is carried through the edit:
+  `anchorStatus` (in `await_reviewer` and `get_review`) is `active` when its text is still there (maybe moved),
+  `modified` when you changed it (`original` has what was commented), `removed` when you deleted it, `ambiguous` when
+  the same text now fits several places. Removed and ambiguous comments leave the page for the panel's Out of scope
+  tab. So reply in each thread with what changed; rewording a commented step is fine.
 - Move settled Open Questions into the Design.
 
 ## After the verdict

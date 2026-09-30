@@ -96,6 +96,8 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     /** A change review's file as it was at the base of the change (repository-relative path); undefined if it didn't exist. */
     readBaseFile(reviewId: string, file: string): Promise<string | undefined>;
     getReview(reviewId: string): Promise<Review | undefined>;
+    /** Brings a review's comments up to date with their files (AnchorTracker), e.g. after a commented file changed. */
+    refreshAnchors(reviewId: string): Promise<void>;
     createReview(params: CreateReviewParams): Promise<Review>;
     renameReview(reviewId: string, title: string): Promise<Review>;
     deleteReview(reviewId: string): Promise<void>;

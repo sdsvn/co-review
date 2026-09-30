@@ -3,10 +3,11 @@ import { inject, injectable, postConstruct } from '@theia/core/shared/inversify'
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Participant, Review, Severity } from '../common/review-model';
+import { contentVersion, Participant, Review, Severity } from '../common/review-model';
 import { DOCUMENT_NAMES, parsePatchMeta } from '../common/patch';
 import { locationFromAnchor, toStateFile } from './review-payloads';
 import { coReviewHome, realPath, ReviewStore } from './review-store';
+import { AnchorTracker } from './anchor-tracker';
 
 export interface OpenBundleParams {
     dir?: string;
@@ -47,6 +48,7 @@ interface Finding {
 export class BundleService {
 
     @inject(ReviewStore) protected readonly store: ReviewStore;
+    @inject(AnchorTracker) protected readonly tracker: AnchorTracker;
 
     protected readonly watchers = new Map<string, fs.FSWatcher>();
     protected readonly exportTimers = new Map<string, NodeJS.Timeout>();
@@ -143,8 +145,15 @@ export class BundleService {
         }
         const file = thread.location.uri ? FileUri.fsPath(thread.location.uri) : undefined;
         const text = file && fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined;
-        if (file && text !== undefined && text.includes(proposal.before)) {
-            fs.writeFileSync(file, text.replace(proposal.before, proposal.after));
+        // Where the comment is (its tracked place), not the first place the same words appear.
+        const tracked = thread.location.tracked;
+        const from = text === undefined ? -1 : tracked && tracked.version === contentVersion(text) && text.startsWith(proposal.before, tracked.from)
+            ? tracked.from : text.indexOf(proposal.before);
+        if (file && text !== undefined && from >= 0) {
+            const edit = { from, to: from + proposal.before.length, insert: proposal.after };
+            fs.writeFileSync(file, text.slice(0, edit.from) + edit.insert + text.slice(edit.to));
+            // The document's other comments follow this edit exactly.
+            await this.tracker.applied(reviewId, thread.location.uri!, text, [edit]);
             const version = (review.bundle?.docVersion ?? 1) + 1;
             await this.store.decideProposal(reviewId, threadId, true, `Edit accepted. Document version ${version} created.`, version);
         } else {

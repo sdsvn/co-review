@@ -12,6 +12,7 @@ import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
 import { OverviewPages } from './overview-page';
 import { CodeFolders } from './code-folders';
+import { AnchorTracker } from './anchor-tracker';
 import { GitHubReviews } from './github';
 import { ReviewStore } from './review-store';
 
@@ -52,6 +53,9 @@ export class ReviewServiceImpl implements ReviewService {
 
     @inject(CodeFolders)
     protected readonly codes: CodeFolders;
+
+    @inject(AnchorTracker)
+    protected readonly tracker: AnchorTracker;
 
     @inject(GitHubReviews)
     protected readonly github: GitHubReviews;
@@ -107,8 +111,15 @@ export class ReviewServiceImpl implements ReviewService {
         return git(FileUri.fsPath(workspaceRoot), ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
     }
 
-    listReviews(workspaceRoot: string): Promise<Review[]> {
+    async listReviews(workspaceRoot: string): Promise<Review[]> {
+        // Comments follow their code before anyone sees them (cheap when no commented file changed).
+        const reviews = await this.store.listForWindow(workspaceRoot);
+        await Promise.all(reviews.map(r => this.tracker.resolve(r.id)));
         return this.store.listForWindow(workspaceRoot);
+    }
+
+    async refreshAnchors(reviewId: string): Promise<void> {
+        await this.tracker.resolve(reviewId);
     }
 
     async readBaseFile(reviewId: string, file: string): Promise<string | undefined> {
@@ -116,7 +127,8 @@ export class ReviewServiceImpl implements ReviewService {
         return review && this.codes.baseFile(review, file);
     }
 
-    getReview(reviewId: string): Promise<Review | undefined> {
+    async getReview(reviewId: string): Promise<Review | undefined> {
+        await this.tracker.resolve(reviewId);
         return this.store.get(reviewId);
     }
 

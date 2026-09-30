@@ -79,11 +79,20 @@ export function markText(root: HTMLElement, anchor: DocAnchor, skip: string): HT
     if (!candidates.length) {
         return [];
     }
+    // A tracked anchor knows which occurrence it is (the same order in the source as on the page).
+    if (anchor.occurrence !== undefined && anchor.occurrence < candidates.length) {
+        candidates.unshift(candidates.splice(anchor.occurrence, 1)[0]);
+        return wrap(root, nodes, starts, candidates[0], candidates[0] + exact.length);
+    }
     const score = (i: number) => (anchor.prefix && full.slice(Math.max(0, i - anchor.prefix.length), i) === anchor.prefix ? 2 : 0)
         + (anchor.suffix && full.slice(i + exact.length, i + exact.length + anchor.suffix.length) === anchor.suffix ? 2 : 0)
         - Math.abs(i - (anchor.startOffsetHint ?? i)) / 1e6;
     const at = candidates.sort((a, b) => score(b) - score(a))[0];
-    const end = at + exact.length;
+    return wrap(root, nodes, starts, at, at + exact.length);
+}
+
+/** Wraps the page's text from `at` to `end` in <mark>s. */
+function wrap(root: HTMLElement, nodes: Text[], starts: number[], at: number, end: number): HTMLElement[] {
     const doc = root.ownerDocument;
     const marks: HTMLElement[] = [];
     nodes.forEach((node, index) => {

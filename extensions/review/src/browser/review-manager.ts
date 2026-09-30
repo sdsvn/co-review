@@ -3,6 +3,7 @@ import URI from '@theia/core/lib/common/uri';
 import { StorageService } from '@theia/core/lib/browser/storage-service';
 import { ConnectionStatus, ConnectionStatusService } from '@theia/core/lib/browser/connection-status-service';
 import { MessageService } from '@theia/core/lib/common/message-service';
+import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewCoverage, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus, isOverviewPage } from '../common/review-model';
@@ -38,6 +39,8 @@ export class ReviewManager {
     @inject(StorageService) protected readonly storage: StorageService;
     @inject(MessageService) protected readonly messages: MessageService;
     @inject(ConnectionStatusService) protected readonly connection: ConnectionStatusService;
+    @inject(FileService) protected readonly fileService: FileService;
+    protected refreshTimer: number | undefined;
 
     protected readonly onDidChangeEmitter = new Emitter<void>();
     readonly onDidChange = this.onDidChangeEmitter.event;
@@ -99,6 +102,14 @@ export class ReviewManager {
         });
         // The agent that showed this window is done with its review (desktop app started by an agent).
         this.client.onDidRequestCloseWindow(({ workspaceRoot, message }) => workspaceRoot === this._root && this.closeSoon(message));
+        // A commented file changed (an agent's edit, a save): the backend carries its comments through the change.
+        this.fileService.onDidFilesChange(e => {
+            const review = this.activeReview;
+            if (review?.threads.some(t => t.location.tracked && t.location.uri && e.contains(new URI(t.location.uri)))) {
+                window.clearTimeout(this.refreshTimer);
+                this.refreshTimer = window.setTimeout(() => this.service.refreshAnchors(review.id).catch(() => undefined), 300);
+            }
+        });
         // Tell the backend again after a reconnect: its agents are told when this window closes.
         this.connection.onStatusChange(status => status === ConnectionStatus.ONLINE && this._root && this.service.showWorkspace(this._root));
         this.client.onDidDeleteReview(({ reviewId }) => {

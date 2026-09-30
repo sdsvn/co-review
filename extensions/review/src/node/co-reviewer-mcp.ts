@@ -10,7 +10,7 @@ import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
-import { CodeLocation, contentVersion, Participant, Review, ReviewThread, Severity, waitsForAgent } from '../common/review-model';
+import { CodeLocation, Participant, Review, ReviewThread, Severity, waitsForAgent } from '../common/review-model';
 import { SyntaxSymbol } from '../common/syntax-protocol';
 import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coordination';
 import { coReviewHome, realPath, ReviewStore } from './review-store';
@@ -22,6 +22,7 @@ import { acceptedSuggestions, commentOf, findThread, threadRef } from './review-
 import { ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT } from './prompts.gen';
 import { LANGUAGE_BY_EXTENSION, RepoIndex } from './repo-index';
 import { CodeFolders } from './code-folders';
+import { AnchorTracker } from './anchor-tracker';
 import { changedLines, parsePatch } from '../common/patch';
 import { blastRadius } from './graphify';
 import { currentUser } from './participants';
@@ -75,6 +76,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     @inject(GitHubReviews) protected readonly github: GitHubReviews;
     @inject(RepoIndex) protected readonly index: RepoIndex;
     @inject(CodeFolders) protected readonly codes: CodeFolders;
+    @inject(AnchorTracker) protected readonly tracker: AnchorTracker;
 
     protected readonly sessions = new Map<string, Session>();
     /** Workspace the backend was started with; the default `root`. */
@@ -612,10 +614,12 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'and `coverage` (repository reviews): source files the reviewer marked as viewed, overall and per area.',
             inputSchema: { reviewId: reviewArg, root: rootArg }
         }, async ({ reviewId, root }) => {
-            const review = await resolveReview(reviewId, root ? realPath(root) : undefined);
-            if (!review) {
+            const found = await resolveReview(reviewId, root ? realPath(root) : undefined);
+            if (!found) {
                 return fail('No review found.');
             }
+            await this.tracker.resolve(found.id);
+            const review = (await this.store.get(found.id)) ?? found;
             // Which parts of the repository the reviewer has looked at, so the agent can point at what's left.
             const coverage = review.bundle ? undefined : await this.index.coverage(FileUri.fsPath(review.workspaceRoot), review.viewed).catch(() => undefined);
             return json({ ...this.batch(review), coverage, threads: review.threads.map(t => this.describe(review, t)) });
@@ -638,6 +642,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         try {
             const deadline = Date.now() + timeoutMs;
             for (;;) {
+                await this.tracker.resolve(initial.id);
                 const review = await this.store.get(initial.id);
                 if (!review) {
                     return fail(`Review ${initial.id} was deleted.`);
@@ -868,22 +873,14 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 symbol: location.symbol
             },
             code: location.kind !== 'repository' ? location.anchor?.text : undefined,
-            // Made on an earlier version of the document: what it quotes may have changed or moved since.
-            ...this.onEarlierVersion(thread) ? { onEarlierVersion: true } : {},
+            // What happened to the commented code: active, modified (quoted as it was in `original`), removed, ambiguous.
+            ...thread.location.tracked ? {
+                anchorStatus: thread.location.tracked.status,
+                ...thread.location.tracked.status === 'modified' ? { original: thread.location.tracked.original } : {},
+                ...thread.location.tracked.status === 'ambiguous' ? { candidates: thread.location.tracked.candidates?.length } : {}
+            } : {},
             messages: thread.messages.filter(m => m.body.trim()).map(m => ({ author: m.author.name, role: m.author.kind, body: m.body }))
         };
-    }
-
-    protected onEarlierVersion(thread: ReviewThread): boolean {
-        const version = thread.location.docAnchor?.version;
-        if (!version || !thread.location.uri?.startsWith('file:')) {
-            return false;
-        }
-        try {
-            return contentVersion(require('fs').readFileSync(FileUri.fsPath(thread.location.uri), 'utf8')) !== version;
-        } catch {
-            return false;
-        }
     }
 
     /** A file or folder of the repository (`.` or `/`: the repository itself). */

@@ -16,6 +16,7 @@ import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
 import { OverviewPages } from './overview-page';
 import { CodeFolders } from './code-folders';
+import { AnchorTracker } from './anchor-tracker';
 import { GitHubReviews } from './github';
 
 // The backend's output and hangs, in `co-review logs` (a desktop app's backend has no terminal).
@@ -34,6 +35,7 @@ export default new ContainerModule(bind => {
     bind(ReviewWindows).toSelf().inSingletonScope();
     bind(OverviewPages).toSelf().inSingletonScope();
     bind(CodeFolders).toSelf().inSingletonScope();
+    bind(AnchorTracker).toSelf().inSingletonScope();
     bind(GitHubReviews).toSelf().inSingletonScope();
     bind(CoReviewerMcp).toSelf().inSingletonScope();
     bind(BackendApplicationContribution).toService(CoReviewerMcp);

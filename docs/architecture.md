@@ -72,9 +72,18 @@ The frontend renders the review UI in the Theia workbench.
 
 ## Locations that follow the code
 
-Comments stay attached to the code they describe, even as the file changes. Each thread stores four anchors: `uri`, `range`, `symbol` (e.g. `OrderService.CreateOrder`), and a token anchor (the covered text, its neighbouring lines, and the Tree-sitter tokens of the range).
+A comment tracks what happened to the code it is on, and says so when that code is gone. Line, range and document text comments carry a **tracked range** (`location.tracked`, `common/anchor-tracking.ts`): character offsets in a version of the file (a content hash), the text and 40 characters of context on each side, and a state, separate from the thread's status:
 
-Resolution proceeds in order:
+- `active` — the text is there unchanged (it may have moved);
+- `modified` — it changed but is still identified (the original quote is kept);
+- `removed` — deleted, or not located reliably;
+- `ambiguous` — several places fit about equally well.
+
+Removed and ambiguous comments are **out of scope**: never placed on code, shown in the panel's Out of scope tab, and back in scope if the code changes again and they can be placed.
+
+**`AnchorTracker`** (backend) resolves a review's anchors whenever it is read (the window, `get_review`, `await_reviewer`) or a commented file changes: from the snapshot of the anchor's version (content-addressed under `~/.co-review/workspaces/<hash>/snapshots/`), it computes the edits to the current file with **diff-match-patch** (a line diff, then characters within changed lines) and maps the range through them with **CodeMirror change sets** (`@codemirror/state`), which also say how much of it was deleted. Same text at the mapped range: active; mostly kept and similar: modified, unless the unchanged text sits, with its context, where the edits wrote (a moved block): active there. Otherwise it searches: exact occurrences scored by matching context (one clear best: active; several close: ambiguous), then a fuzzy match (diff-match-patch's matcher) near the mapped position, only ever in text the edits wrote, never on code that was already there untouched; else removed. An edit Co-Review applies itself (an accepted suggestion) is mapped exactly, without a diff. The thresholds were tuned on real history with `extensions/review/test/anchor-corpus.mjs` (`make test` runs the unit tests).
+
+In an open editor, before a save, the older resolution below still places comments live:
 
 1. **Symbol** — the comment targets a symbol; resolve it by path.
 2. **Exact** — the text at the stored range is unchanged.

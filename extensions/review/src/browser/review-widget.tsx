@@ -4,14 +4,14 @@ import { Message } from '@theia/core/lib/browser/widgets/widget';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { codicon } from '@theia/core/lib/browser/widgets/widget';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
-import { AgentConfig, CodeLocation, Review, ReviewCoverage, ReviewDecision, ReviewScope, ReviewThread } from '../common/review-model';
+import { AgentConfig, CodeLocation, isOutOfScope, Review, ReviewCoverage, ReviewDecision, ReviewScope, ReviewThread } from '../common/review-model';
 import { GitHubTarget } from '../common/review-protocol';
 import { ReviewManager } from './review-manager';
 import { ReviewCommands } from './review-commands';
 import { ReviewNavigator } from './review-navigator';
 import { DraftEditor, ThreadView } from './review-components';
 
-type Filter = 'open' | 'proposed' | 'resolved' | 'all';
+type Filter = 'open' | 'proposed' | 'resolved' | 'all' | 'out-of-scope';
 
 /** Review overview: drafts and every thread of the active review, grouped by location. */
 @injectable()
@@ -151,14 +151,17 @@ export class ReviewWidget extends ReactWidget {
     }
 
     protected renderReview(review: Review): React.ReactNode {
-        const open = review.threads.filter(t => t.status === 'open').length;
-        const proposed = review.threads.filter(t => t.status === 'proposed').length;
+        // Out of scope (the commented code removed, or ambiguous): its own tab, like resolved ones, not among the open.
+        const inScope = (t: ReviewThread) => !isOutOfScope(t);
+        const open = review.threads.filter(t => t.status === 'open' && inScope(t)).length;
+        const proposed = review.threads.filter(t => t.status === 'proposed' && inScope(t)).length;
         const resolved = review.threads.filter(t => t.status === 'resolved').length;
+        const outOfScope = review.threads.filter(isOutOfScope).length;
         if (!this.filterChosen && this.filter === 'open' && !open && proposed) {
             this.filter = 'proposed';
         }
         const threads = review.threads
-            .filter(t => this.filter === 'all' || t.status === this.filter)
+            .filter(t => this.filter === 'all' || (this.filter === 'out-of-scope' ? isOutOfScope(t) : t.status === this.filter && (this.filter === 'resolved' || inScope(t))))
             .sort((a, b) => this.sortKey(a).localeCompare(this.sortKey(b)) || a.number - b.number);
         const groups = new Map<string, ReviewThread[]>();
         for (const thread of threads) {
@@ -188,6 +191,7 @@ export class ReviewWidget extends ReactWidget {
                 {this.renderFilter('open', `Open ${open}`)}
                 {proposed > 0 && this.renderFilter('proposed', `Proposed ${proposed}`)}
                 {this.renderFilter('resolved', `Resolved ${resolved}`)}
+                {outOfScope > 0 && this.renderFilter('out-of-scope', `Out of scope ${outOfScope}`)}
                 {this.renderFilter('all', `All ${review.threads.length}`)}
                 {review.threads.some(t => t.labels?.length) && <>
                     <span className='co-review-spacer' />

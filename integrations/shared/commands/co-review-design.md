@@ -28,8 +28,8 @@ Use the Co-Review tools from the co-review extension.
    to the change: about 10-30 lines if small, 30-80 medium, 80-150 large. Cut what doesn't help the reviewer decide.
 3. Check it before I see it: `co_review_start({ dir, open: false })` lists problems in `format.warnings`. Fix every
    one and call it again until there are none. Then show it with `co_review_start({ reviewId })` and share the URL.
-4. Answer comments in their threads and revise the design. Comments are on the version they were made on: once
-   the document changes, they leave it for the Review panel, so say in each thread what changed.
+4. Answer comments in their threads and revise the design; say in each thread what changed. A comment follows its
+   text through your edits (marked changed if you reword it); if you delete what it was on, it leaves the page.
 5. Implement only after approval: keep calling `co_review_wait` (answering comments with `co_review_reply`) until it
    returns my Submit. If the code must depart from the approved design, update the design and ask again.
 <!-- /prompt -->

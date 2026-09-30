@@ -325,6 +325,15 @@ export interface ThreadViewProps {
     onOpenReference?: OpenReference;
 }
 
+/** What a thread's anchor state means (its badge's tooltip). */
+const ANCHOR_TITLES: Record<string, string> = {
+    moved: 'The commented code moved; the comment followed it.',
+    changed: 'The commented code changed since the comment, but is still the same piece of code. Resolve the thread when it is dealt with.',
+    removed: 'The code this was about was removed: out of scope, shown in the panel only.',
+    ambiguous: 'The commented code now appears in several places that fit about equally well: out of scope until it changes again.',
+    outdated: 'The commented code no longer exists.'
+};
+
 export function ThreadView(props: ThreadViewProps): React.ReactElement {
     const { thread, manager } = props;
     const [expandedState, setExpanded] = React.useState(thread.status === 'open');
@@ -336,6 +345,10 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
     const expanded = props.inline || expandedState;
     const resolved = thread.status === 'resolved';
     const proposed = thread.status === 'proposed';
+    // Tracking's verdict on the commented code, wherever the thread is shown (also for a file that isn't open).
+    const tracked = thread.location.tracked?.status;
+    const anchorState = tracked === 'removed' || tracked === 'ambiguous' ? tracked
+        : tracked === 'modified' && (!props.anchorState || props.anchorState === 'exact') ? 'changed' : props.anchorState;
     const agent = manager.activeReview?.agent;
     const agentBusy = thread.agentState === 'working' || thread.agentState === 'waiting_for_human';
     // ACP agents post as `agent:<id>`; MCP agents' ids already are participant ids.
@@ -360,12 +373,10 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
             {thread.intent === 'question' && <span className={`${codicon('hubot')} co-review-mark`} title='Question for the agent' />}
             {thread.severity && <span className={`co-review-badge severity-${thread.severity}`}>{thread.severity}</span>}
             {thread.labels?.map(label => <span key={label} className='co-review-badge label'>{label}</span>)}
-            {props.anchorState && props.anchorState !== 'exact' &&
-                <span className={`co-review-badge ${props.anchorState === 'earlier' ? 'outdated' : props.anchorState}`}
-                    title={props.anchorState === 'moved' ? 'The commented code moved; the comment followed it.'
-                        : props.anchorState === 'earlier' ? 'Made on an earlier version of the document, which changed since: it is shown here, not on the document.'
-                            : 'The commented code no longer exists.'}>
-                    {props.anchorState === 'earlier' ? 'earlier version' : props.anchorState}
+            {anchorState && anchorState !== 'exact' &&
+                <span className={`co-review-badge ${anchorState === 'moved' ? 'moved' : 'outdated'}`} title={ANCHOR_TITLES[anchorState]}>
+                    {anchorState === 'ambiguous' ? `ambiguous: ${thread.location.tracked?.candidates?.length ?? 'several'} places`
+                        : anchorState === 'removed' ? 'code removed' : anchorState}
                 </span>}
             {queued && <span className='co-review-badge queued'
                 title={listening ? `${agentName} is listening and picks this up now.` : `${agentName} is busy; it gets this the next time it checks in. Nothing is lost.`}>

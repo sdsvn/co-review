@@ -9,7 +9,7 @@ import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
 import { EditorWidget } from '@theia/editor/lib/browser/editor-widget';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import * as monaco from '@theia/monaco-editor-core';
-import { CodeLocation, ReviewThread, ThreadIntent } from '../common/review-model';
+import { CodeLocation, isOutOfScope, ReviewThread, ThreadIntent } from '../common/review-model';
 import { DraftEditor, ThreadView } from './review-components';
 import { InlineZone } from './review-inline-zone';
 import { ReviewDraft, ReviewManager } from './review-manager';
@@ -133,7 +133,8 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
             }
             const current = ++generation;
             const uri = editor.uri.toString();
-            const threads = this.reviews.threadsForUri(uri).filter(t => t.location.range);
+            // Out of scope (its code removed, or ambiguous) stays off the code: it is in the Review panel only.
+            const threads = this.reviews.threadsForUri(uri).filter(t => t.location.range && !isOutOfScope(t));
             const drafts = this.reviews.draftsForUri(uri).filter(d => d.location.range);
             const [resolvedThreads, resolvedDrafts] = await Promise.all([
                 Promise.all(threads.map(async thread => ({ thread, resolved: await this.locations.resolve(model, thread.location) }))),
@@ -148,7 +149,8 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
                 if (!resolved) {
                     continue;
                 }
-                this.reviews.setAnchorState(thread.id, resolved.state);
+                // Tracking knows the code changed even where it still reads at the stored range.
+                this.reviews.setAnchorState(thread.id, thread.location.tracked?.status === 'modified' && resolved.state === 'exact' ? 'changed' : resolved.state);
                 next.push(...this.decorationsFor(thread, resolved.range, resolved.state));
                 if (resolved.state === 'moved' && !editor.document.dirty && !this.reviews.isPlacedFromDiff(thread)) {
                     this.persistMove(thread, model, resolved.range);

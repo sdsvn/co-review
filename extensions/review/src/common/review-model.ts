@@ -1,3 +1,4 @@
+import type { TrackedRange } from './anchor-tracking';
 /** Zero-based position, same convention as LSP. */
 export interface Position {
     line: number;
@@ -27,12 +28,8 @@ export interface DocAnchor {
     edgeId?: string;
     /** Mermaid node source (`id[label]`) or the tree step text. */
     source?: string;
-    /**
-     * The version of the document the comment was made on ({@link contentVersion} of its file). Once the document
-     * changes, the comment is about text that may be gone or moved: it is no longer placed on the document, and shows
-     * in the Review panel as on an earlier version. Not set on generated pages (the overview), which change all the time.
-     */
-    version?: string;
+    /** For a text anchor that is tracked: which occurrence of `exact` in the document it is (0 = the first). */
+    occurrence?: number;
 }
 
 /** A document's version: a short hash of its content (FNV-1a, with the length), the same in the backend and the browser. */
@@ -123,6 +120,18 @@ export interface CodeLocation {
     docAnchor?: DocAnchor;
     /** For `kind: 'patch'`: where in the patch (`uri` is the .patch file). */
     patchAnchor?: PatchAnchor;
+    /**
+     * What happened to the commented text as the file changed (see anchor-tracking.ts and AnchorTracker): its range
+     * in the file's current version, and whether it is active, modified, removed or ambiguous. Line and range comments
+     * and text comments on documents have one; the range, anchor text and quote above follow it.
+     */
+    tracked?: TrackedRange;
+}
+
+/** A comment whose target was removed, or can't be told apart from others: shown in the panel only, "out of scope". */
+export function isOutOfScope(thread: ReviewThread): boolean {
+    const status = thread.location.tracked?.status;
+    return thread.status !== 'resolved' && (status === 'removed' || status === 'ambiguous');
 }
 
 export type ParticipantKind = 'human' | 'agent' | 'system';

@@ -6,7 +6,7 @@ import URI from '@theia/core/lib/common/uri';
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { OpenerService, open } from '@theia/core/lib/browser/opener-service';
-import { contentVersion, DocAnchor, isOverviewPage, ReviewThread, ThreadIntent } from '../../common/review-model';
+import { DocAnchor, isOutOfScope, isOverviewPage, ReviewThread, ThreadIntent } from '../../common/review-model';
 import { DraftEditor, ThreadView } from '../review-components';
 import { ReviewDraft, ReviewManager } from '../review-manager';
 import { ReviewNavigator } from '../review-navigator';
@@ -152,13 +152,60 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         path.textContent = isOverviewPage(this.options.uri)
             ? `Overview of “${this.reviews.activeReview?.title ?? 'the review'}” — kept up to date; comment on any of it`
             : this.reviews.relativePath(this.options.uri);
-        this.header.append(path, spacer,
+        const waiting = document.createElement('span');
+        waiting.className = 'co-review-muted';
+        waiting.textContent = this.pendingReload ? 'The document changed; it updates when you finish your comment.' : '';
+        this.header.append(path, spacer, waiting,
             button('comment', 'Comment on the document', () => this.addDraft({ type: 'document' }, 'comment')),
             button('go-to-file', 'Open the source', () => this.navigator.open({ kind: 'file', uri: this.options.uri })));
     }
 
+    /** A reload that waits while the reviewer writes a comment in the page. */
+    protected pendingReload = false;
+
+    protected typing(): boolean {
+        const active = document.activeElement;
+        return !!active && this.content.contains(active) && !!active.closest('.co-review-slot') && /^(TEXTAREA|INPUT)$/.test(active.tagName);
+    }
+
+    protected reloadWhenFree(): void {
+        if (this.typing()) {
+            this.pendingReload = true;
+            this.renderHeader();
+            return;
+        }
+        this.pendingReload = false;
+        this.load();
+    }
+
+    /** Which block is at the top of the view, and how far into it: to stay on it when the page is rendered again. */
+    protected rememberPlace(): { index: number; text: string; offset: number } | undefined {
+        const top = this.node.getBoundingClientRect().top;
+        const blocks = Array.from(this.content.children).filter(e => !e.classList.contains('co-review-slot'));
+        const index = blocks.findIndex(e => e.getBoundingClientRect().bottom > top);
+        if (index < 0 || this.node.scrollTop === 0) {
+            return undefined;
+        }
+        return { index, text: (blocks[index].textContent ?? '').trim().slice(0, 120), offset: blocks[index].getBoundingClientRect().top - top };
+    }
+
+    protected restorePlace(place: { index: number; text: string; offset: number } | undefined): void {
+        if (!place) {
+            return;
+        }
+        const blocks = Array.from(this.content.children).filter(e => !e.classList.contains('co-review-slot'));
+        // The same block (by its text, the nearest one with it), else the block now at that position.
+        const same = blocks.map((e, i) => ({ e, i })).filter(({ e }) => (e.textContent ?? '').trim().slice(0, 120) === place.text)
+            .sort((a, b) => Math.abs(a.i - place.index) - Math.abs(b.i - place.index))[0]?.e;
+        const block = same ?? blocks[Math.min(place.index, blocks.length - 1)];
+        if (block) {
+            this.node.scrollTop += block.getBoundingClientRect().top - this.node.getBoundingClientRect().top - place.offset;
+        }
+    }
+
     protected async load(): Promise<void> {
         const seq = ++this.loadSeq;
+        const place = this.content.childElementCount ? this.rememberPlace() : undefined;
         const stale = () => seq !== this.loadSeq || this.isDisposed;
         // Restored widgets load before the reviews do; the OpenSpec section and threads need them.
         await this.reviews.ready;
@@ -202,6 +249,8 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         await this.renderDiagrams(stale);
         if (!stale()) {
             this.paint();
+            // After the threads are placed (they take room too), back to where the reviewer was.
+            setTimeout(() => !stale() && this.restorePlace(place), 40);
         }
     }
 
@@ -518,19 +567,18 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         const top = document.createElement('div');
         top.className = 'co-review-slot co-review-slot-top';
         this.content.prepend(top);
-        // Comments made on another version of the document stay off it: they are in the Review panel.
-        const version = isOverviewPage(this.options.uri) ? undefined : contentVersion(this.source);
         for (const item of items) {
             const thread = this.reviews.activeReview?.threads.find(t => t.id === item.key);
-            if (thread && version && item.anchor.version && item.anchor.version !== version) {
-                this.reviews.setAnchorState(thread.id, 'earlier');
+            // Its text was removed, or can't be told apart from other text: out of scope, in the Review panel only.
+            if (thread && isOutOfScope(thread)) {
+                this.reviews.setAnchorState(thread.id, thread.location.tracked!.status === 'removed' ? 'removed' : 'ambiguous');
                 continue;
             }
             const { target, marks } = locate(this.content, item.anchor);
             marks?.forEach(m => m.setAttribute('data-thread', item.key));
             const outdated = item.anchor.type !== 'document' && !target;
             if (thread) {
-                this.reviews.setAnchorState(thread.id, outdated ? 'outdated' : 'exact');
+                this.reviews.setAnchorState(thread.id, outdated ? 'outdated' : thread.location.tracked?.status === 'modified' ? 'changed' : 'exact');
             }
             if (thread && !outdated && this.isCollapsed(thread)) {
                 continue;

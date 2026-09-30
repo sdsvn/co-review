@@ -24,8 +24,11 @@ export function fromMonacoRange(range: monaco.IRange): Range {
  * - `moved`: the code (or its symbol) was found elsewhere in the file.
  * - `outdated`: the anchored code no longer exists; the stored range is shown as-is.
  */
-/** `earlier`: a comment on an earlier version of a document (see DocAnchor.version), shown in the panel only. */
-export type AnchorState = 'exact' | 'moved' | 'outdated' | 'earlier';
+/**
+ * From tracking (CodeLocation.tracked): `changed`, the commented code changed but is still identified; `removed` and
+ * `ambiguous`, out of scope (the panel only).
+ */
+export type AnchorState = 'exact' | 'moved' | 'outdated' | 'changed' | 'removed' | 'ambiguous';
 
 export interface ResolvedLocation {
     range: monaco.IRange;
