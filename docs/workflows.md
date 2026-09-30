@@ -174,7 +174,7 @@ the pull request as one GitHub review, through the GitHub CLI (so `gh auth login
 |---|---|
 | Your decision (Approve / Request changes / Comment) | The review's decision (on your own pull request GitHub only allows a comment; Co-Review posts it as one and says so) |
 | Your message | The review's summary |
-| Open threads on diff lines (your comments, findings you accepted) | Line comments, with the conversation |
+| Open threads on diff lines (your comments, findings you accepted) | Line comments: your point only, not the discussion (the agent can reword each in your voice when it posts) |
 | Suggested edits you accepted | GitHub suggestions the author can commit with one click |
 | Comments on the pull request or its description | Listed in the summary |
 | Proposed findings you didn't accept, resolved threads, the agent's own questions | Not posted |

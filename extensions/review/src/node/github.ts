@@ -22,10 +22,15 @@ const EVENTS: Record<ReviewDecision, 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'> 
 };
 const DECISION_LABEL: Record<ReviewDecision, string> = { approve: 'Approve', 'request-changes': 'Request changes', comment: 'Comment' };
 
-/** A thread's conversation as one comment: the message itself, or each message with its author when there are several. */
-function threadBody(thread: ReviewThread): string {
-    const messages = thread.messages.filter(m => m.author.kind !== 'system' && m.body.trim());
-    const text = messages.length === 1 ? messages[0].body.trim() : messages.map(m => `**${m.author.name}:** ${m.body.trim()}`).join('\n\n');
+/**
+ * A thread as the reviewer's comment on GitHub: their point, not the conversation. The agent's rewording in their voice
+ * when it gave one (post_review_to_github's `comments`), else the reviewer's own messages; a finding they accepted
+ * without writing anything is the finding's text. Replies from agents (and who said what) stay in Co-Review.
+ */
+function threadBody(thread: ReviewThread, reworded?: string): string {
+    const humans = thread.messages.filter(m => m.author.kind === 'human' && m.body.trim());
+    const first = thread.messages.find(m => m.author.kind !== 'system' && m.body.trim());
+    const text = reworded?.trim() || (humans.length ? humans.map(m => m.body.trim()).join('\n\n') : first?.body.trim() ?? '');
     const suggestion = thread.proposal && thread.proposal.status !== 'rejected' && thread.location.patchAnchor?.side !== 'old'
         ? `\n\n\`\`\`suggestion\n${thread.proposal.after.replace(/\n$/, '')}\n\`\`\`` : '';
     return (text || '(no message)') + suggestion;
@@ -65,7 +70,7 @@ export class GitHubReviews {
     }
 
     /** What would be posted: line comments and the body (with the comments that aren't on a diff line). */
-    compose(review: Review, decision: ReviewDecision, summary: string): { comments: LineComment[]; body: string; elsewhere: number } {
+    compose(review: Review, decision: ReviewDecision, summary: string, reworded: Map<string, string> = new Map()): { comments: LineComment[]; body: string; elsewhere: number } {
         const comments: LineComment[] = [];
         const elsewhere: string[] = [];
         // What the reviewer stands behind: open threads they wrote in or findings they accepted, and suggested edits they
@@ -77,14 +82,14 @@ export class GitHubReviews {
             const a = thread.location.patchAnchor;
             const side = a?.side === 'old' ? 'LEFT' : 'RIGHT';
             if (thread.location.kind === 'patch' && a?.path && a.type === 'code-line' && a.line) {
-                comments.push({ path: a.path, line: a.line, side, body: threadBody(thread) });
+                comments.push({ path: a.path, line: a.line, side, body: threadBody(thread, reworded.get(thread.id)) });
             } else if (thread.location.kind === 'patch' && a?.path && a.type === 'code-range' && a.startLine && a.endLine) {
                 comments.push(a.startLine === a.endLine
-                    ? { path: a.path, line: a.endLine, side, body: threadBody(thread) }
-                    : { path: a.path, line: a.endLine, side, start_line: a.startLine, start_side: side, body: threadBody(thread) });
+                    ? { path: a.path, line: a.endLine, side, body: threadBody(thread, reworded.get(thread.id)) }
+                    : { path: a.path, line: a.endLine, side, start_line: a.startLine, start_side: side, body: threadBody(thread, reworded.get(thread.id)) });
             } else {
                 const where = a?.path ?? (thread.location.docAnchor ? 'the description' : 'the pull request');
-                elsewhere.push(`- **${where}:** ${threadBody(thread).replace(/\n/g, '\n  ')}`);
+                elsewhere.push(`- **${where}:** ${threadBody(thread, reworded.get(thread.id)).replace(/\n/g, '\n  ')}`);
             }
         }
         const body = [summary.trim(), elsewhere.length ? `${summary.trim() ? '\n' : ''}${elsewhere.join('\n')}` : '']
@@ -93,7 +98,7 @@ export class GitHubReviews {
     }
 
     /** Posts the review; GitHub's refusals that have a fallback (your own pull request, a line outside the diff) are retried. */
-    async publish(reviewId: string, decision?: ReviewDecision, summary?: string): Promise<GitHubPost> {
+    async publish(reviewId: string, decision?: ReviewDecision, summary?: string, reworded?: Map<string, string>): Promise<GitHubPost> {
         const review = await this.store.get(reviewId);
         const target = await this.target(review);
         if (!review || !target) {
@@ -101,7 +106,7 @@ export class GitHubReviews {
                 + 'and `pr: <number>` (or `url: <pull request URL>`).');
         }
         const chosen = decision ?? review.verdict?.decision ?? 'comment';
-        const composed = this.compose(review, chosen, summary ?? review.verdict?.summary ?? '');
+        const composed = this.compose(review, chosen, summary ?? review.verdict?.summary ?? '', reworded);
         const endpoint = `repos/${target.repo}/pulls/${target.number}/reviews`;
         let event = EVENTS[chosen];
         let body = composed.body;

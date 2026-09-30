@@ -540,21 +540,35 @@ export class CoReviewerMcp implements BackendApplicationContribution {
 
         server.registerTool('post_review_to_github', {
             description: 'Post the review to its GitHub pull request (a review directory whose PR.md has `repo: <owner>/<name>` and '
-                + '`pr: <number>`), as one GitHub review: open threads on diff lines become line comments (suggested edits become '
-                + 'GitHub suggestions), the rest goes into the review\'s body, and the reviewer\'s latest verdict is the review\'s decision. '
+                + '`pr: <number>`), as one GitHub review: open threads on diff lines become line comments, each the reviewer\'s point '
+                + 'only, not the discussion (suggested edits become GitHub suggestions), the rest goes into the review\'s body, and the reviewer\'s latest verdict is the review\'s decision. '
                 + 'Only when the reviewer asks for it: Co-Review first shows them what will be posted and posts only if they confirm.',
             inputSchema: {
                 reviewId: reviewArg,
-                summary: z.string().optional().describe('The review\'s message on GitHub (default: the reviewer\'s summary from Submit review)')
+                summary: z.string().optional().describe('The review\'s message on GitHub (default: the reviewer\'s summary from Submit review)'),
+                comments: z.array(z.object({ threadId: z.string(), body: z.string() })).optional().describe('Each open comment as the '
+                    + 'reviewer\'s own point, in their voice (threadId: its id or short id). Only what they want changed, as one comment '
+                    + 'of theirs: not the discussion, not your replies, no mention of talking it over with you. A thread left out is '
+                    + 'posted as the reviewer\'s own messages.')
             }
-        }, async ({ reviewId, summary }) => {
+        }, async ({ reviewId, summary, comments }) => {
             const review = await resolveReview(reviewId);
             const target = await this.github.target(review);
             if (!review || !target) {
                 return fail('This review is not a GitHub pull request: its review directory needs a PR.md with `repo: <owner>/<name>` and `pr: <number>`.');
             }
+            const reworded = new Map<string, string>();
+            for (const c of comments ?? []) {
+                const thread = findThread(review, c.threadId.trim());
+                if (!thread) {
+                    return fail(`No thread "${c.threadId}".`);
+                }
+                if (c.body.trim()) {
+                    reworded.set(thread.id, c.body.trim());
+                }
+            }
             const decision = review.verdict?.decision ?? 'comment';
-            const composed = this.github.compose(review, decision, summary ?? review.verdict?.summary ?? '');
+            const composed = this.github.compose(review, decision, summary ?? review.verdict?.summary ?? '', reworded);
             const again = target.postedRound !== undefined && target.postedRound === (review.verdict?.count ?? 0)
                 ? ` This round was already posted (${target.postedUrl}).` : '';
             const question = `Post this review to GitHub, ${target.repo}#${target.number}? As "${decision}", with ${composed.comments.length} line `
@@ -572,7 +586,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 return json({ status: choice === undefined ? 'pending' : 'declined', hint: 'Nothing was posted. Don\'t post unless the reviewer asks again.' });
             }
             try {
-                const posted = await this.github.publish(review.id, decision, summary);
+                const posted = await this.github.publish(review.id, decision, summary, reworded);
                 await this.store.addMessage(review.id, thread.id, `Posted to GitHub: ${posted.url}`, agent);
                 await this.store.setThreadStatus(review.id, thread.id, 'resolved', agent).catch(() => undefined);
                 return json({ status: 'posted', ...posted });

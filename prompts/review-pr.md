@@ -15,4 +15,5 @@
    does and its riskiest part.
 6. Loop `{{await_reviewer}}` → investigate → `{{reply}}` until it returns my Submit, or says I closed the review. It's someone else's change: don't edit it.
    I can post the review to the pull request myself (**Also post to GitHub** when submitting). If I ask you to post
-   it, call `{{post_review_to_github}}`: Co-Review shows me what goes out and posts only when I confirm.
+   it, call `{{post_review_to_github}}` with `comments`: each of my open comments rewritten as my own point, in my
+   voice, without our discussion or any mention of it. Co-Review shows me what goes out and posts only when I confirm.
