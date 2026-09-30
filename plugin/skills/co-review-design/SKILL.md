@@ -40,7 +40,8 @@ open questions, and nothing else. Full method and examples: Co-Review's `docs/de
    to the change: about 10-30 lines if small, 30-80 medium, 80-150 large. Cut what doesn't help the reviewer decide.
 3. Check it before I see it: `open_review({ dir, open: false })` lists problems in `format.warnings`. Fix every
    one and call it again until there are none. Then show it with `open_review({ reviewId })` and share the URL.
-4. Answer comments in their threads and revise the design; keep the wording of commented steps stable.
+4. Answer comments in their threads and revise the design. Comments are on the version they were made on: once
+   the document changes, they leave it for the Review panel, so say in each thread what changed.
 5. Implement only after approval: keep calling `await_reviewer` (answering comments with `reply`) until it
    returns my Submit. If the code must depart from the approved design, update the design and ask again.
 <!-- /prompt -->
@@ -55,8 +56,10 @@ Follow the `co-review` skill's loop (`await_reviewer` → investigate → `reply
   architectural problem, an open decision, or a detail that doesn't belong. Update the document and reply saying
   which step changed.
 - Don't accept suggestions blindly: if one conflicts with the code, say so, with the evidence.
-- **Keep commented steps' wording stable.** Comments anchor to a step's text, so rewording outdates them, and moving
-  doesn't. Prefer adding or restructuring steps around a commented one. If a step is wrong, fix it anyway.
+- **Comments are on a version.** Each comment belongs to the version of the document it was made on: once you save
+  a change, the earlier comments leave the document for the Review panel ("earlier version"), and `await_reviewer`
+  marks them `onEarlierVersion`. So reply in each thread with what changed and where, since the reviewer reads the
+  answer next to a comment that is no longer on the page.
 - Move settled Open Questions into the Design.
 
 ## After the verdict

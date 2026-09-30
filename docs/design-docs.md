@@ -527,9 +527,12 @@ Sections that are present must appear in this order.
 | A step | Its text with backticks and asterisks removed, whitespace collapsed, first 80 characters |
 | A diagram | Its block id: `%% id: <name>` as the first line of the Mermaid block |
 | A diagram node or edge | The block id plus the node id (`req[Ingest request]` has id `req`) |
-| Text | The quoted text and the words around it |
+| Text | The quoted text where it was selected, with the words around it and its position (so the same words elsewhere don't take the comment) |
 
-So keep commented steps' wording stable, give every Mermaid block `%% id:`, and give nodes explicit ids.
+Comments belong to the version of the document they were made on (a hash of its content). When the document
+changes, earlier comments are no longer placed on it: they stay in the Review panel, marked **earlier version**, and
+their conversations continue there. Give every Mermaid block `%% id:` and nodes explicit ids, so comments on the
+current version find their diagram.
 
 ### The quick check
 
@@ -575,7 +578,8 @@ first line such as *"Before implementing <task>, write a design for me to review
    to the change: about 10-30 lines if small, 30-80 medium, 80-150 large. Cut what doesn't help the reviewer decide.
 3. Check it before I see it: `open_review({ dir, open: false })` lists problems in `format.warnings`. Fix every
    one and call it again until there are none. Then show it with `open_review({ reviewId })` and share the URL.
-4. Answer comments in their threads and revise the design; keep the wording of commented steps stable.
+4. Answer comments in their threads and revise the design. Comments are on the version they were made on: once
+   the document changes, they leave it for the Review panel, so say in each thread what changed.
 5. Implement only after approval: keep calling `await_reviewer` (answering comments with `reply`) until it
    returns my Submit. If the code must depart from the approved design, update the design and ask again.
 ```

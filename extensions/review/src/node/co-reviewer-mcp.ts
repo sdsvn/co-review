@@ -10,7 +10,7 @@ import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
-import { CodeLocation, Participant, Review, ReviewThread, Severity, waitsForAgent } from '../common/review-model';
+import { CodeLocation, contentVersion, Participant, Review, ReviewThread, Severity, waitsForAgent } from '../common/review-model';
 import { SyntaxSymbol } from '../common/syntax-protocol';
 import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coordination';
 import { coReviewHome, realPath, ReviewStore } from './review-store';
@@ -868,8 +868,22 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 symbol: location.symbol
             },
             code: location.kind !== 'repository' ? location.anchor?.text : undefined,
+            // Made on an earlier version of the document: what it quotes may have changed or moved since.
+            ...this.onEarlierVersion(thread) ? { onEarlierVersion: true } : {},
             messages: thread.messages.filter(m => m.body.trim()).map(m => ({ author: m.author.name, role: m.author.kind, body: m.body }))
         };
+    }
+
+    protected onEarlierVersion(thread: ReviewThread): boolean {
+        const version = thread.location.docAnchor?.version;
+        if (!version || !thread.location.uri?.startsWith('file:')) {
+            return false;
+        }
+        try {
+            return contentVersion(require('fs').readFileSync(FileUri.fsPath(thread.location.uri), 'utf8')) !== version;
+        } catch {
+            return false;
+        }
     }
 
     /** A file or folder of the repository (`.` or `/`: the repository itself). */

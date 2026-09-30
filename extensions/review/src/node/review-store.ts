@@ -2,10 +2,10 @@ import { Emitter } from '@theia/core/lib/common/event';
 import { FileUri } from '@theia/core/lib/common/file-uri';
 import { injectable } from '@theia/core/shared/inversify';
 import { createHash, randomUUID } from 'crypto';
-import { promises as fs, realpathSync } from 'fs';
+import { promises as fs, readFileSync, realpathSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { AgentConfig, AgentState, CodeLocation, Participant, Review, ReviewActivity, ReviewBundle, ReviewDecision, ReviewMessage, ReviewThread, ThreadOptions, ThreadStatus, waitsForAgent } from '../common/review-model';
+import { AgentConfig, AgentState, CodeLocation, Participant, Review, ReviewActivity, ReviewBundle, ReviewDecision, ReviewMessage, ReviewThread, ThreadOptions, ThreadStatus, contentVersion, isOverviewPage, waitsForAgent } from '../common/review-model';
 import { CreateReviewParams } from '../common/review-protocol';
 
 /** Where Co-Review keeps its state: `$CO_REVIEW_HOME`, default `~/.co-review`. */
@@ -251,6 +251,7 @@ export class ReviewStore {
     }
 
     createThread(reviewId: string, location: CodeLocation, body: string, author: Participant, options: ThreadOptions = {}): Promise<ReviewThread> {
+        location = this.versioned(location);
         return this.mutate(reviewId, (review, now) => {
             const thread: ReviewThread = {
                 id: randomUUID(),
@@ -283,6 +284,22 @@ export class ReviewStore {
             this.record(review, { kind: 'message-added', actor: author, threadId, at: now });
             this.afterWrite(() => this.onDidAddMessageEmitter.fire({ review, thread, message }));
         });
+    }
+
+    /**
+     * A comment on a document is on the version of it that is there now (see DocAnchor.version), whoever makes it (the
+     * reviewer, an agent's finding): stamped here, where every thread is created.
+     */
+    protected versioned(location: CodeLocation): CodeLocation {
+        const anchor = location.docAnchor;
+        if (location.kind !== 'document' || !anchor || anchor.version || !location.uri?.startsWith('file:') || isOverviewPage(location.uri)) {
+            return location;
+        }
+        try {
+            return { ...location, docAnchor: { ...anchor, version: contentVersion(readFileSync(FileUri.fsPath(location.uri), 'utf8')) } };
+        } catch {
+            return location;
+        }
     }
 
     /** The reviewer's latest message is for the review's MCP agent: it waits for the agent to pick it up (shown as such). */

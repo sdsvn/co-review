@@ -361,9 +361,11 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
             {thread.severity && <span className={`co-review-badge severity-${thread.severity}`}>{thread.severity}</span>}
             {thread.labels?.map(label => <span key={label} className='co-review-badge label'>{label}</span>)}
             {props.anchorState && props.anchorState !== 'exact' &&
-                <span className={`co-review-badge ${props.anchorState}`}
-                    title={props.anchorState === 'moved' ? 'The commented code moved; the comment followed it.' : 'The commented code no longer exists.'}>
-                    {props.anchorState}
+                <span className={`co-review-badge ${props.anchorState === 'earlier' ? 'outdated' : props.anchorState}`}
+                    title={props.anchorState === 'moved' ? 'The commented code moved; the comment followed it.'
+                        : props.anchorState === 'earlier' ? 'Made on an earlier version of the document, which changed since: it is shown here, not on the document.'
+                            : 'The commented code no longer exists.'}>
+                    {props.anchorState === 'earlier' ? 'earlier version' : props.anchorState}
                 </span>}
             {queued && <span className='co-review-badge queued'
                 title={listening ? `${agentName} is listening and picks this up now.` : `${agentName} is busy; it gets this the next time it checks in. Nothing is lost.`}>

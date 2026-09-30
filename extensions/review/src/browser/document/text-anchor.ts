@@ -25,15 +25,43 @@ export function plainText(root: HTMLElement, skip: string): string {
     return textNodes(root, skip).full;
 }
 
-/** A text anchor for `exact`, with 40 characters of context on each side. */
-export function textAnchor(root: HTMLElement, skip: string, exact: string): DocAnchor {
-    const full = plainText(root, skip);
-    const at = full.indexOf(exact);
-    return {
+/**
+ * A text anchor for the selected `range`, with 40 characters of context on each side: where the reviewer selected,
+ * not the first place the same words appear (the same text can be on a page several times). Undefined when the
+ * selection is outside the content's text.
+ */
+export function textAnchor(root: HTMLElement, skip: string, range: Range): DocAnchor | undefined {
+    const { nodes, starts, full } = textNodes(root, skip);
+    const offsetOf = (container: Node, offset: number): number | undefined => {
+        const index = nodes.indexOf(container as Text);
+        if (index >= 0) {
+            return starts[index] + offset;
+        }
+        // An element boundary: where the first text node at or after it starts.
+        const point = root.ownerDocument.createRange();
+        point.setStart(container, offset);
+        point.collapse(true);
+        const after = nodes.findIndex(n => point.comparePoint(n, 0) >= 0);
+        return after >= 0 ? starts[after] : full.length;
+    };
+    let start = offsetOf(range.startContainer, range.startOffset);
+    let end = offsetOf(range.endContainer, range.endOffset);
+    if (start === undefined || end === undefined || end <= start) {
+        return undefined;
+    }
+    // Without the whitespace at either end of the selection.
+    while (start < end && /\s/.test(full[start])) {
+        start++;
+    }
+    while (end > start && /\s/.test(full[end - 1])) {
+        end--;
+    }
+    const exact = full.slice(start, end);
+    return exact.length < 3 ? undefined : {
         type: 'text', exact,
-        prefix: at > 0 ? full.slice(Math.max(0, at - 40), at) : '',
-        suffix: at >= 0 ? full.slice(at + exact.length, at + exact.length + 40) : '',
-        startOffsetHint: at, endOffsetHint: at + exact.length
+        prefix: full.slice(Math.max(0, start - 40), start),
+        suffix: full.slice(end, end + 40),
+        startOffsetHint: start, endOffsetHint: end
     };
 }
 

@@ -6,7 +6,7 @@ import URI from '@theia/core/lib/common/uri';
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { OpenerService, open } from '@theia/core/lib/browser/opener-service';
-import { DocAnchor, isOverviewPage, ReviewThread, ThreadIntent } from '../../common/review-model';
+import { contentVersion, DocAnchor, isOverviewPage, ReviewThread, ThreadIntent } from '../../common/review-model';
 import { DraftEditor, ThreadView } from '../review-components';
 import { ReviewDraft, ReviewManager } from '../review-manager';
 import { ReviewNavigator } from '../review-navigator';
@@ -449,12 +449,12 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             this.hidePopup();
             return;
         }
-        const exact = selection.toString().trim();
-        if (exact.length < 3) {
+        const anchor = textAnchor(this.content, SKIP, range);
+        if (!anchor) {
             this.hidePopup();
             return;
         }
-        const anchor = textAnchor(this.content, SKIP, exact);
+        const exact = anchor.exact!;
         const rect = range.getBoundingClientRect();
         const box = this.node.getBoundingClientRect();
         this.popup.innerHTML = '';
@@ -518,10 +518,16 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         const top = document.createElement('div');
         top.className = 'co-review-slot co-review-slot-top';
         this.content.prepend(top);
+        // Comments made on another version of the document stay off it: they are in the Review panel.
+        const version = isOverviewPage(this.options.uri) ? undefined : contentVersion(this.source);
         for (const item of items) {
+            const thread = this.reviews.activeReview?.threads.find(t => t.id === item.key);
+            if (thread && version && item.anchor.version && item.anchor.version !== version) {
+                this.reviews.setAnchorState(thread.id, 'earlier');
+                continue;
+            }
             const { target, marks } = locate(this.content, item.anchor);
             marks?.forEach(m => m.setAttribute('data-thread', item.key));
-            const thread = this.reviews.activeReview?.threads.find(t => t.id === item.key);
             const outdated = item.anchor.type !== 'document' && !target;
             if (thread) {
                 this.reviews.setAnchorState(thread.id, outdated ? 'outdated' : 'exact');

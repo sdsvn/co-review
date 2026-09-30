@@ -27,6 +27,22 @@ export interface DocAnchor {
     edgeId?: string;
     /** Mermaid node source (`id[label]`) or the tree step text. */
     source?: string;
+    /**
+     * The version of the document the comment was made on ({@link contentVersion} of its file). Once the document
+     * changes, the comment is about text that may be gone or moved: it is no longer placed on the document, and shows
+     * in the Review panel as on an earlier version. Not set on generated pages (the overview), which change all the time.
+     */
+    version?: string;
+}
+
+/** A document's version: a short hash of its content (FNV-1a, with the length), the same in the backend and the browser. */
+export function contentVersion(text: string): string {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return `${hash.toString(16).padStart(8, '0')}-${text.length.toString(36)}`;
 }
 
 /** An anchor in a patch review page: the patch, a file, a line or a range. */
