@@ -15,8 +15,9 @@ In Claude Code the tools come with the Co-Review plugin (`/plugin install co-rev
 <!-- prompt: pi-tools -->
 > **In Pi or Oh My Pi** (the Co-Review package) the tools are named `co_review_start` (open_review; `dir` for a
 > review directory), `co_review_wait` (await_reviewer: questions, answers and the Submit), `co_review_reply`,
-> `co_review_add_findings`, `co_review_ask`, `co_review_map` (repo_map) and `co_review_post_github` (post_review_to_github). In an interactive session, the reviewer's
-> questions also arrive on their own as `[Co-Review]` messages.
+> `co_review_add_findings`, `co_review_ask`, `co_review_map` (repo_map) and `co_review_post_github`
+> (post_review_to_github). In an interactive session, the reviewer's questions also arrive on their own as
+> `[Co-Review]` messages.
 <!-- /prompt -->
 
 ## 1. Pick the workflow
@@ -55,19 +56,24 @@ instead of 5,000 files:
 2. Call `repo_map({ overview: true })` and `repo_map`. With [Graphify](https://graphify.net) installed, the
    overview is built from its code graph (Co-Review builds it: calls, imports, clusters, the most connected code), and
    `graphify-out/GRAPH_REPORT.md` lists import cycles and surprising connections between distant parts of the code:
-   good leads. Split the repository into 4–10 areas and read the riskiest code in each (entry points, input handling,
-   money, auth, concurrency, persistence).
+   good leads. Split the repository (or the focus I gave you) into 4–10 areas and read the riskiest code in each
+   (entry points, input handling, money, auth, concurrency, persistence).
 3. Add findings with `add_findings`: the area as the first label, `status: "proposed"`, at most three per area,
-   each with what's wrong, why it matters and what to do. Say so when an area looks fine.
-   Then write my overview of it for the review's front page and add it with `open_review({ reviewId, overview,
-   open: false })`: what it does and why (a few sentences), how it works as a ```mermaid flowchart (the path a request
-   or the data takes, 5–12 nodes), what else it affects (the blast radius: callers, data, configuration, other
-   services), and where to start reading. Plain language; no line-by-line walkthrough.
+   each with what's wrong, why it matters and what to do, with `severity`. A finding goes on the code (`path`,
+   `line`); one about a whole area on its folder (`path` without `line`); one about the repository on `path: "."`.
+   Say so in the overview when an area looks fine.
+   Then write your overview of it for the review's front page, which I read first, and add it with
+   `open_review({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
+   ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:
+   callers, data, configuration, other services), and where to start reading. Plain language; no line-by-line
+   walkthrough.
 4. Show it: `open_review({ reviewId })`. It opens on the overview page: your overview, every finding grouped by
    area, and the repository's areas, as one page I can read and comment on. Give me the URL (if there is one) and the
    areas with their finding counts, in one short message.
-5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit (act on my verdict) or says I
-   closed the review (tell me what's still open). Don't edit files while I review unless I ask in a thread.
+5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review
+   (tell me what's still open). On my Submit: approve → nothing to change unless I say so; request changes → fix
+   what I accepted and asked for, as commits, then reply in each thread with what changed and wait again. Don't
+   edit files while I review unless I ask in a thread.
 <!-- /prompt -->
 
 `repo_map({ overview: true })` says where to start and how the code clusters. When the `graphify` command is
@@ -83,24 +89,26 @@ For a change you made, before it is committed or merged. The human reads the dif
 on lines, suggests edits and submits one verdict:
 
 <!-- prompt: review-change -->
-1. Prepare the review without showing it: `open_review({ diff: "HEAD", patchName: "<short-slug>", title: "<what the
-   change does>", open: false })` for uncommitted work (new files included), or `diff: "<base>...HEAD"` for a branch
-   (`<base>` is the branch it will merge into, usually `main`). Co-Review runs the diff itself and makes it a
+1. Prepare the review without showing it: `open_review({ diff: "HEAD", patchName: "<short-slug>", title: "<what
+   the change does>", open: false })` for uncommitted work (new files included), or `diff: "<base>...HEAD"` for a
+   branch (`<base>` is the branch it will merge into, usually `main`). Co-Review runs the diff itself and makes it a
    pull-request page. Keep the `reviewId` it returns. If it says the diff is empty, tell me and stop.
 2. Add findings only for real risks and non-obvious decisions, at most five, on the changed lines:
-   `add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line, side: "new" },
-   body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines).
-   Then write my overview of it for the review's front page and add it with `open_review({ reviewId, overview,
-   open: false })`: what it does and why (a few sentences), how it works as a ```mermaid flowchart (the path a request
-   or the data takes, 5–12 nodes), what else it affects (the blast radius: callers, data, configuration, other
-   services), and where to start reading. Plain language; no line-by-line walkthrough.
+   `add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line,
+   side: "new" }, body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines). They
+   arrive proposed: I accept or dismiss each one.
+   Then write your overview of it for the review's front page, which I read first, and add it with
+   `open_review({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
+   ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:
+   callers, data, configuration, other services), and where to start reading. Plain language; no line-by-line
+   walkthrough.
 3. Show it: `open_review({ reviewId })`. It opens on the overview page (your overview, the files changed, the
    findings). Give me the URL (if there is one) and, in one sentence, what to look at first.
-4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review, then
-   act on my verdict:
-   approve → go ahead; request changes → address every comment and apply the accepted suggestions as new commits
-   (don't rewrite the reviewed diff), then reply in each thread with what changed. Don't edit files while I review
-   unless I ask in a thread.
+4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review
+   (tell me what's still open), then act on my verdict: approve → go ahead (commit, merge, continue), mentioning
+   anything still open; request changes → address every comment and apply the accepted suggestions as new commits
+   (don't rewrite the reviewed diff), then reply in each thread with what changed and wait again; comment → answer,
+   nothing to change unless I say so. Don't edit files while I review unless I ask in a thread.
 <!-- /prompt -->
 
 ### Someone else's pull request
@@ -110,26 +118,31 @@ For a pull request you didn't write. You take the first pass; the human decides 
 <!-- prompt: review-pr -->
 1. Read the pull request: `gh pr view <n> --json number,title,url,headRefName,baseRefName,commits,body`, and fetch its
    branch: `git fetch origin pull/<n>/head:co-review/pr-<n>`. Without `gh`, ask me for the branch.
-2. Write a review directory outside the repository, e.g. `$TMPDIR/co-review/pr-<n>/`, with a `PR.md`: `title: …`,
-   `pr: <n>`, `url: <the pull request's URL>`, `branch: <head>`, `base: <base>`, `commits: <count>` (one per line), a
-   blank line, then the description. The `url` lets Co-Review post the review back to the pull request.
+2. Write a review directory outside the repository, e.g. `$TMPDIR/co-review/pr-<n>/`, with a `PR.md`: one field per
+   line, `title: …`, `pr: <n>`, `url: <the pull request's URL>`, `branch: <head>`, `base: <base>`,
+   `commits: <count>`, then a blank line and the description. The `url` names the repository and the pull request,
+   which lets Co-Review post the review back to it.
 3. Prepare the review without showing it: `open_review({ dir, diff: "origin/<base>...co-review/pr-<n>",
    patchName: "pr-<n>", title: "PR #<n>: <title>", open: false })`. Co-Review writes the diff into the directory as
    the pull-request page. Keep the `reviewId` it returns.
 4. First pass: read the changed code in context (`git show co-review/pr-<n>:<path>` for whole files) and add at most
    five findings where it matters: `add_findings({ findings: [{ target: "patch:pr-<n>", anchor: { type:
-   "code-line", path, line, side: "new" }, body, severity }] })`. They arrive proposed: I accept or dismiss each one.
-   Then write my overview of it for the review's front page and add it with `open_review({ reviewId, overview,
-   open: false })`: what it does and why (a few sentences), how it works as a ```mermaid flowchart (the path a request
-   or the data takes, 5–12 nodes), what else it affects (the blast radius: callers, data, configuration, other
-   services), and where to start reading. Plain language; no line-by-line walkthrough.
+   "code-line", path, line, side: "new" }, body, severity }] })` (`type: "code-range"` with `startLine` / `endLine`
+   for several lines). They arrive proposed: I accept or dismiss each one.
+   Then write your overview of it for the review's front page, which I read first, and add it with
+   `open_review({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
+   ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:
+   callers, data, configuration, other services), and where to start reading. Plain language; no line-by-line
+   walkthrough.
 5. Show it: `open_review({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
-   changed, the findings). Give me the URL (if there is one) and two sentences: what the pull request
-   does and its riskiest part.
-6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit, or says I closed the review. It's someone else's change: don't edit it.
-   I can post the review to the pull request myself (**Also post to GitHub** when submitting). If I ask you to post
-   it, call `post_review_to_github` with `comments`: each of my open comments rewritten as my own point, in my
-   voice, without our discussion or any mention of it. Co-Review shows me what goes out and posts only when I confirm.
+   changed, the findings). Give me the URL (if there is one) and two sentences: what the pull request does and its
+   riskiest part.
+6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review (tell
+   me what's still open). It's someone else's change: don't edit it. On my Submit, tell me my verdict and what I
+   asked for; the author does the work. I can post the review to the pull request myself (**Also post to GitHub**
+   when submitting). If I ask you to post it, call `post_review_to_github` with `comments`: each of my open
+   comments rewritten as my own point, in my voice, without our discussion or any mention of it. Co-Review shows me
+   what goes out and posts only when I confirm.
 <!-- /prompt -->
 
 ### A design, before the code
