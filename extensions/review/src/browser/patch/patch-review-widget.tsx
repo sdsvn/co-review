@@ -267,7 +267,7 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
         if (thread.status === 'resolved' || (thread.status === 'open' && this.reviews.isCollapsed(thread.id))) {
             return undefined;
         }
-        return <div key={item.key} className='co-review-inline-content co-review-patch-slot'>
+        return <div key={item.key} className='co-review-inline-content co-review-patch-slot' data-thread-id={thread.id}>
             <ThreadView manager={this.reviews} thread={thread} inline label={PatchAnchor.describe(item.anchor)}
                 onHide={() => this.reviews.setCollapsed(thread.id, true)}
                 onOpenReference={(path, line, end) => this.navigator.openReference(path, line, end)} />
@@ -365,14 +365,19 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
         </div>;
     }
 
-    /** Scrolls a thread of this patch into view (expanding its file). */
+    /** Scrolls a thread of this patch into view (expanding its file and the thread itself). */
     reveal(threadId: string): void {
         const thread = this.reviews.activeReview?.threads.find(t => t.id === threadId);
         const path = thread?.location.patchAnchor?.path;
         if (path) {
             this.collapsed.delete(path);
-            this.update();
         }
-        setTimeout(() => this.node.querySelector('.co-review-patch-row.commented, .co-review-patch-slot')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 100);
+        this.reviews.setCollapsed(threadId, false);
+        this.update();
+        setTimeout(() => {
+            const slot = this.node.querySelector(`.co-review-patch-slot[data-thread-id="${CSS.escape(threadId)}"]`)
+                ?? this.node.querySelector('.co-review-patch-row.commented, .co-review-patch-slot');
+            slot?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 100);
     }
 }

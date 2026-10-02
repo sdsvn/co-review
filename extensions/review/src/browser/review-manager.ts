@@ -56,6 +56,8 @@ export class ReviewManager {
     protected saveDraftsTimer: number | undefined;
     /** Thread ids whose inline conversation is collapsed in the editor. */
     protected readonly collapsed = new Set<string>();
+    /** Thread ids the reviewer opened (expanded) this session: a proposed finding is only shown inline once opened. */
+    protected readonly opened = new Set<string>();
 
     protected readonly onDidChangeDraftsEmitter = new Emitter<void>();
     /** Fired when drafts are added or removed (not on typing). */
@@ -328,23 +330,32 @@ export class ReviewManager {
         return this.collapsed.has(threadId);
     }
 
+    /** Whether the reviewer opened the thread this session (and hasn't folded it since). */
+    isOpened(threadId: string): boolean {
+        return this.opened.has(threadId);
+    }
+
     setCollapsedMany(threadIds: string[], collapsed: boolean): void {
         for (const id of threadIds) {
             if (collapsed) {
                 this.collapsed.add(id);
+                this.opened.delete(id);
             } else {
                 this.collapsed.delete(id);
+                this.opened.add(id);
             }
         }
         this.onDidChangeCollapsedEmitter.fire();
     }
 
     setCollapsed(threadId: string, collapsed: boolean): void {
-        if (collapsed !== this.collapsed.has(threadId)) {
+        if (collapsed !== this.collapsed.has(threadId) || collapsed === this.opened.has(threadId)) {
             if (collapsed) {
                 this.collapsed.add(threadId);
+                this.opened.delete(threadId);
             } else {
                 this.collapsed.delete(threadId);
+                this.opened.add(threadId);
             }
             this.onDidChangeCollapsedEmitter.fire();
         }
@@ -533,9 +544,27 @@ export class ReviewManager {
         return relative ? (relative.toString() || '.') : new URI(uri).path.fsPath();
     }
 
+    /**
+     * The file a comment on a change review's diff is about (a file, line or range of the patch), when the review has
+     * its code: the path is relative to the code folder, which is the window's root.
+     */
+    patchFile(location: CodeLocation): { path: string; line?: number; endLine?: number; side: 'new' | 'old' } | undefined {
+        const a = location.kind === 'patch' ? location.patchAnchor : undefined;
+        if (!a?.path || a.type === 'patch' || !this.activeReview?.bundle?.code) {
+            return undefined;
+        }
+        const line = a.type === 'code-line' ? a.line : a.type === 'code-range' ? a.startLine : undefined;
+        return { path: a.path, line, endLine: a.type === 'code-range' ? a.endLine : line, side: a.side ?? 'new' };
+    }
+
     locationLabel(location: CodeLocation): string {
         if (location.kind === 'repository' || !location.uri) {
             return 'Repository';
+        }
+        const file = this.patchFile(location);
+        if (file) {
+            const lines = !file.line ? '' : file.endLine && file.endLine !== file.line ? `:${file.line}-${file.endLine}` : `:${file.line}`;
+            return `${file.path}${lines}${file.side === 'old' ? ' (old)' : ''}`;
         }
         const path = this.relativePath(location.uri);
         if (location.kind === 'patch' && location.patchAnchor) {

@@ -328,12 +328,14 @@ details[open] > summary.co-review-step-line::before { content: '▾'; }
     border: 1px solid var(--theia-editorHoverWidget-border); border-radius: 4px; font-size: var(--theia-ui-font-size1); }
 .co-review-code-hover pre { white-space: pre-wrap; margin: 4px 0; }
 
-/* Changed Files view (a change review's files, and those it affects) */
-.co-review-changed-files-root { padding: 4px 0; font-size: var(--theia-ui-font-size1); }
-.co-review-changed-files-note { padding: 4px 12px 8px; }
-.co-review-changed-files-group { padding: 6px 12px 2px; font-weight: 600; color: var(--theia-descriptionForeground); text-transform: uppercase; font-size: 0.85em; }
-.co-review-changed-file { display: flex; align-items: center; gap: 6px; padding: 2px 12px; cursor: pointer; }
-.co-review-changed-file:hover { background: var(--theia-list-hoverBackground); }
-.co-review-changed-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.co-review-changed-file .action-label { opacity: 0; }
-.co-review-changed-file:hover .action-label { opacity: 1; }
+/* The change, on a changed file opened from the review */
+.monaco-editor .co-review-change-added { background: var(--theia-diffEditor-insertedLineBackground, rgba(155, 185, 85, 0.2));
+    box-shadow: inset 3px 0 0 var(--theia-editorGutter-addedBackground); }
+.monaco-editor .co-review-change-removed-above { box-shadow: inset 0 2px 0 var(--theia-editorGutter-deletedBackground); }
+.monaco-editor .co-review-change-removed-below { box-shadow: inset 0 -2px 0 var(--theia-editorGutter-deletedBackground); }
+
+/* The explorer's "Changed files only" label stays visible while the tree is narrowed to the change. */
+.theia-view-container-part-title:has(#co-review\.explorer\.showAll) { display: flex; }
+#co-review\.explorer\.showAll { color: var(--theia-badge-foreground); font-size: var(--theia-ui-font-size0);
+    white-space: nowrap; padding: 0 4px; border-radius: 3px; background: var(--theia-badge-background); }
+#co-review\.explorer\.showAll::before { content: '\ea64'; font-family: codicon; margin-right: 4px; vertical-align: middle; }

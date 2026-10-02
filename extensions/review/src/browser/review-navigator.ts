@@ -7,6 +7,8 @@ import { ReviewManager } from './review-manager';
 import { fromMonacoRange, ReviewLocations } from './review-locations';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import { OpenerService } from '@theia/core/lib/browser/opener-service';
+import { ReviewChange } from './review-change';
+import { CodeNavigation } from './review-code';
 
 /** Id of the document review opener (kept here to avoid an import cycle with the document widget). */
 const DOCUMENT_OPENER_ID = 'co-review:document';
@@ -24,6 +26,8 @@ export class ReviewNavigator {
     @inject(ReviewManager) protected readonly reviews: ReviewManager;
     @inject(ReviewLocations) protected readonly locations: ReviewLocations;
     @inject(OpenerService) protected readonly openers: OpenerService;
+    @inject(CodeNavigation) protected readonly code: CodeNavigation;
+    @inject(ReviewChange) protected readonly change: ReviewChange;
 
     /** Opens an agent-provided `path:line[-end]` reference (relative to the repository, or absolute). */
     async openReference(path: string, line?: number, endLine?: number): Promise<void> {
@@ -36,7 +40,34 @@ export class ReviewNavigator {
         }
     }
 
-    async open(location: CodeLocation, threadId?: string): Promise<void> {
+    /**
+     * A file of the change, as the change: modified, base ↔ head side by side (at a line of either side); added, the
+     * file; deleted, its base. Comments on the diff show on the head side, where they are placed (see ReviewManager).
+     */
+    async openChangedFile(path: string, line?: number, side: 'new' | 'old' = 'new'): Promise<void> {
+        const review = this.reviews.activeReview;
+        if (!review) {
+            return;
+        }
+        const tag = this.change.file(path)?.tag;
+        if (tag === 'deleted') {
+            await this.code.openBase(review, path, line ?? 1);
+        } else if (tag === 'new file') {
+            await this.code.openHead(review, path, line ?? 1);
+        } else {
+            await this.code.compare(review, path, line, side);
+        }
+    }
+
+    /** `onPage`: a location on the patch page opens the page (a draft written there is only shown there). */
+    async open(location: CodeLocation, threadId?: string, onPage = false): Promise<void> {
+        // A comment on a new-side line of the diff opens that file's diff, where it is shown inline. One on an old-side
+        // line or on a whole file opens on the patch page, the one place that shows it.
+        const file = onPage ? undefined : this.reviews.patchFile(location);
+        if (file?.line && file.side === 'new') {
+            await this.openChangedFile(file.path, file.line);
+            return;
+        }
         // Rendered pages are Markdown; a document thread on anything else (e.g. an HTML file) opens in the editor.
         const rendered = location.kind === 'patch' || (location.kind === 'document' && /\.(md|markdown)$/i.test(location.uri ?? ''));
         if (rendered && location.uri) {

@@ -45,7 +45,10 @@
       "config": {
         "applicationName": "Co-Review",
         "preferences": {
-          "files.enableTrash": false
+          "files.enableTrash": false,
+          "[markdown]": {
+            "editor.wordWrap": "on"
+          }
         },
         "defaultTheme": {
           "light": "co-review-light",

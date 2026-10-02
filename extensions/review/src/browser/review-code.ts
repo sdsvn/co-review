@@ -10,6 +10,8 @@ import { ITextModel } from '@theia/monaco-editor-core/esm/vs/editor/common/model
 import { ILanguageFeaturesService } from '@theia/monaco-editor-core/esm/vs/editor/common/services/languageFeatures';
 import { StandaloneServices } from '@theia/monaco-editor-core/esm/vs/editor/standalone/browser/standaloneServices';
 import { EditorManager } from '@theia/editor/lib/browser/editor-manager';
+import { EditorWidget } from '@theia/editor/lib/browser/editor-widget';
+import { MonacoDiffEditor } from '@theia/monaco/lib/browser/monaco-diff-editor';
 import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-model-service';
 import { Review } from '../common/review-model';
 import { ReviewService } from '../common/review-protocol';
@@ -85,12 +87,36 @@ export class CodeNavigation {
         widget.editor.revealPosition(at, { vertical: 'center' });
     }
 
-    /** Base against head, side by side, the full editor on the head. */
-    async compare(review: Review, file: string): Promise<void> {
+    /**
+     * Base against head, side by side, the full editor on the head (where comments are), at a line of either side.
+     * `options` passes the opener's own (an explorer preview reveals without taking focus, in a preview tab).
+     */
+    async compare(review: Review, file: string, line?: number, side: 'new' | 'old' = 'new',
+        options: { mode?: 'open' | 'reveal' | 'activate'; preview?: boolean } = {}): Promise<EditorWidget | undefined> {
         const head = this.headUri(review, file);
         if (head) {
-            await open(this.openers, DiffUris.encode(this.baseUri(review, file), head, `${file} (base ↔ head)`), { mode: 'activate' });
+            const at = line && side === 'new' ? { line: line - 1, character: 0 } : undefined;
+            const widget = await open(this.openers, DiffUris.encode(this.baseUri(review, file), head, `${file} (base ↔ head)`),
+                { mode: 'activate', ...options, ...(at ? { selection: { start: at, end: at } } : {}) });
+            if (widget instanceof EditorWidget) {
+                const reveal = () => {
+                    if (at) {
+                        widget.editor.revealPosition(at, { vertical: 'center' });
+                    } else if (line && widget.editor instanceof MonacoDiffEditor) {
+                        widget.editor.diffEditor.getOriginalEditor().revealLineInCenter(line);
+                    }
+                };
+                reveal();
+                // A diff editor shown for the first time scrolls to its first change once the diff is computed, over
+                // this line: reveal it again then.
+                if (line && widget.editor instanceof MonacoDiffEditor) {
+                    const once = widget.editor.diffEditor.onDidUpdateDiff(() => { once.dispose(); setTimeout(reveal, 50); });
+                    setTimeout(() => once.dispose(), 3000);
+                }
+                return widget;
+            }
         }
+        return undefined;
     }
 
     /** Goes to the definition of what is at `line`, `column` (1-based line, 0-based column) of the head file. */

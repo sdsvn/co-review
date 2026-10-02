@@ -14,7 +14,10 @@ import { ReviewEditorDecorator } from './review-editor-decorator';
 import { ReviewManager } from './review-manager';
 import { ReviewNavigator } from './review-navigator';
 import { BaseFileResolver, CodeNavigation } from './review-code';
-import { ChangedFilesContribution, ChangedFilesWidget } from './changed-files-view';
+import { ReviewChange, ReviewChangeDecorator, ReviewChangeExplorerContribution, ReviewChangeOpenHandler, ReviewNavigatorFilter } from './review-change';
+import { FileNavigatorFilter } from '@theia/navigator/lib/browser/navigator-filter';
+import { CommandContribution } from '@theia/core/lib/common/command';
+import { TabBarToolbarContribution } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { ResourceResolver } from '@theia/core/lib/common/resource';
 import { ReviewNavigatorDecorator } from './review-navigator-decorator';
 import { NavigatorTreeDecorator } from '@theia/navigator/lib/browser/navigator-decorator-service';
@@ -31,7 +34,7 @@ import { ColorContribution } from '@theia/core/lib/browser/color-application-con
 import { CoReviewThemeContribution } from './theme/co-review-theme';
 import { SyntaxSymbols } from './syntax-symbols';
 
-export default new ContainerModule(bind => {
+export default new ContainerModule((bind, unbind, isBound, rebind) => {
     bind(FilterContribution).to(ReviewShellFilter).inSingletonScope();
     bind(ReviewClientImpl).toSelf().inSingletonScope();
     bind(ReviewService).toDynamicValue(ctx => {
@@ -53,6 +56,16 @@ export default new ContainerModule(bind => {
     bind(ReviewNavigatorDecorator).toSelf().inSingletonScope();
     bind(NavigatorTreeDecorator).toService(ReviewNavigatorDecorator);
 
+    bind(ReviewChange).toSelf().inSingletonScope();
+    bind(ReviewChangeDecorator).toSelf().inSingletonScope();
+    bind(FrontendApplicationContribution).toService(ReviewChangeDecorator);
+    bind(ReviewChangeOpenHandler).toSelf().inSingletonScope();
+    bind(OpenHandler).toService(ReviewChangeOpenHandler);
+    bind(ReviewNavigatorFilter).toSelf().inSingletonScope();
+    rebind(FileNavigatorFilter).toService(ReviewNavigatorFilter);
+    bind(ReviewChangeExplorerContribution).toSelf().inSingletonScope();
+    bind(CommandContribution).toService(ReviewChangeExplorerContribution);
+    bind(TabBarToolbarContribution).toService(ReviewChangeExplorerContribution);
     bind(ReviewEditorDecorator).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(ReviewEditorDecorator);
     bind(ReviewSelectionActions).toSelf().inSingletonScope();
@@ -92,12 +105,6 @@ export default new ContainerModule(bind => {
         createWidget: () => ctx.container.get(ReviewWidget)
     })).inSingletonScope();
     bindViewContribution(bind, ReviewContribution);
-    bind(ChangedFilesWidget).toSelf();
-    bind(WidgetFactory).toDynamicValue(ctx => ({
-        id: ChangedFilesWidget.ID,
-        createWidget: () => ctx.container.get(ChangedFilesWidget)
-    })).inSingletonScope();
-    bindViewContribution(bind, ChangedFilesContribution);
     bind(FrontendApplicationContribution).toService(ReviewContribution);
 
     bind(CoReviewThemeContribution).toSelf().inSingletonScope();

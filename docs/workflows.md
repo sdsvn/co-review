@@ -154,9 +154,16 @@ head under `~/.co-review/worktrees/` (it shares your clone's objects and leaves 
 archive or delete the review. The change's neighbourhood is checked out first, the rest follows in the background.
 Nothing heavy runs until you reach for it:
 
-- The sidebar shows **Changed Files** instead of the whole tree: the files the pull request changes, and under
-  **Related** the ones it affects (what calls, imports or implements the changed code, from the Graphify graph). The
-  explorer, search and outline are one click away.
+- The explorer shows the change: the files it adds or changes are coloured, with their lines added and removed, and
+  so are the folders holding them. A changed file opens as base and head side by side, with the review's comments on
+  the head side; a new file opens as the file, its added lines marked. For a pull request the explorer starts with
+  **Changed files only** (a label in its title bar; click it to show all files, or the pull-request icon to narrow it
+  again); your choice is remembered per review. Deleted files are on the pull-request page.
+- A comment on a line of the diff is listed in the Review panel under its file (`path:line`), and opens that file's
+  diff at the line, with the comment there. One on an old-side line or on a whole file opens on the pull-request
+  page, which shows it; so do drafts, where they were written.
+- The agent's proposed findings stay folded in the editor (a gutter icon; the panel's **Proposed** list) until you
+  open one; **Go to Comment** lists them too.
 - On the diff page, a new-side line number opens the file there, and an old-side one the base version (read-only).
   Cmd/Ctrl-click a name to go to its definition; rest the pointer on it for its type and docs. **Compare** on a
   file shows base and head side by side.

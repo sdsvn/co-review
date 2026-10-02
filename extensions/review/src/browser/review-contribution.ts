@@ -28,7 +28,6 @@ import { ReviewManager } from './review-manager';
 import { ReviewWidget } from './review-widget';
 import { ReviewEditorDecorator } from './review-editor-decorator';
 import { ReviewNavigator } from './review-navigator';
-import { ChangedFilesContribution } from './changed-files-view';
 
 export const REVIEW_CONTEXT_MENU_GROUP = [...EDITOR_CONTEXT_MENU, '0_co_review'];
 export const REVIEW_NAVIGATOR_GROUP = [...NavigatorContextMenu.NAVIGATION, '0_co_review'];
@@ -49,7 +48,6 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
     @inject(OpenerService) protected readonly openerService: OpenerService;
     @inject(ReviewEditorDecorator) protected readonly decorator: ReviewEditorDecorator;
     @inject(ReviewNavigator) protected readonly navigator: ReviewNavigator;
-    @inject(ChangedFilesContribution) protected readonly changedFiles: ChangedFilesContribution;
     @inject(ClipboardService) protected readonly clipboard: ClipboardService;
     @inject(FileNavigatorContribution) protected readonly fileNavigator: FileNavigatorContribution;
 
@@ -80,7 +78,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         update();
         // Whether the file in the editor is viewed; click to toggle.
         const viewed = () => {
-            const uri = this.editorManager.currentEditor?.editor.uri.toString();
+            const uri = this.editorManager.currentEditor?.editor.getResourceUri()?.toString();
             const review = this.reviews.activeReview;
             if (!uri || !review || review.bundle || !uri.startsWith('file:')) {
                 this.statusBar.removeElement('co-review-viewed');
@@ -152,7 +150,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
 
     /** Toggles "viewed" for a file or folder (all of its files), or the file in the editor. */
     protected async toggleViewed(uri: URI | undefined): Promise<void> {
-        const target = uri ?? this.editorManager.currentEditor?.editor.uri;
+        const target = uri ?? this.editorManager.currentEditor?.editor.getResourceUri();
         if (!target) {
             return;
         }
@@ -201,12 +199,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             return;
         }
         const review = this.reviews.activeReview;
-        // A change review with code starts on its changed files, not the whole tree (one click away).
-        if (review?.bundle?.code) {
-            await this.changedFiles.openView({ activate: false, reveal: true });
-        } else {
-            await this.fileNavigator.openView({ activate: false, reveal: true });
-        }
+        await this.fileNavigator.openView({ activate: false, reveal: true });
         // A review that starts with findings (an agent's first pass) opens on them: the panel lists them all.
         if (review?.threads.some(t => t.status !== 'resolved')) {
             await this.openView({ activate: false, reveal: true });
@@ -449,7 +442,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         }
         const selection = editor.getControl().getSelection() ?? new monaco.Selection(1, 1, 1, 1);
         const symbol = await this.locations.findEnclosingSymbol(model, selection.startLineNumber);
-        const uri = editor.uri.toString();
+        const uri = (editor.getResourceUri() ?? editor.uri).toString();
 
         if (onSymbol) {
             if (!symbol) {
@@ -517,7 +510,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
     protected async pickScope(root: string): Promise<ReviewScope | undefined> {
         type ScopeItem = QuickPickItem & { kind: ReviewScope['kind'] };
         const git = await this.service.getGitInfo(root);
-        const editorUri = this.editorManager.currentEditor?.editor.uri;
+        const editorUri = this.editorManager.currentEditor?.editor.getResourceUri();
         const items: ScopeItem[] = [
             { kind: 'repository', label: '$(repo) Entire repository', description: 'Review everything, independent of Git' },
             ...(editorUri ? [{ kind: 'paths' as const, label: '$(file) Current file', description: this.reviews.relativePath(editorUri.toString()) }] : []),
@@ -561,20 +554,20 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         return undefined;
     }
 
-    /** Every open thread of the review, searchable; picking one opens it in the editor. */
+    /** Every open thread and proposed finding of the review, searchable; picking one opens it in the editor. */
     protected async goToComment(): Promise<void> {
         const review = this.reviews.activeReview;
         if (!review) {
             return;
         }
-        const threads = review.threads.filter(t => t.status === 'open')
+        const threads = review.threads.filter(t => t.status !== 'resolved')
             .sort((a, b) => this.reviews.locationLabel(a.location).localeCompare(this.reviews.locationLabel(b.location)));
         const picked = await this.quickInput.pick(threads.map(thread => ({
             thread,
             label: `#${thread.number} ${thread.messages[0]?.body.split('\n')[0].slice(0, 80) ?? ''}`,
             description: this.reviews.locationLabel(thread.location),
-            detail: `${thread.messages.length} message${thread.messages.length === 1 ? '' : 's'} · ${thread.messages[thread.messages.length - 1]?.author.name ?? ''}`
-        })), { placeHolder: `Open threads in "${review.title}"`, matchOnDescription: true, matchOnDetail: true });
+            detail: `${thread.status === 'proposed' ? 'Proposed finding · ' : ''}${thread.messages.length} message${thread.messages.length === 1 ? '' : 's'} · ${thread.messages[thread.messages.length - 1]?.author.name ?? ''}`
+        })), { placeHolder: `Open threads and proposed findings in "${review.title}"`, matchOnDescription: true, matchOnDetail: true });
         if (picked) {
             this.reviews.setCollapsed(picked.thread.id, false);
             await this.navigator.open(picked.thread.location);

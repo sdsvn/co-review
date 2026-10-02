@@ -221,7 +221,7 @@ export class ReviewWidget extends ReactWidget {
                         </div>
                         : <div className='co-review-group-header' title={key}>
                             <span className={codicon(group[0].location.kind === 'repository' ? 'repo' : group[0].location.kind === 'directory' ? 'folder' : 'file')} />
-                            <span className='co-review-group-label' onClick={() => group[0].location.uri && this.navigator.open({ kind: 'file', uri: group[0].location.uri })}>{key}</span>
+                            <span className='co-review-group-label' onClick={() => this.openGroup(group[0])}>{key}</span>
                         </div>}
                     {group.map(thread => <ThreadView key={thread.id}
                         manager={this.reviews}
@@ -270,8 +270,18 @@ export class ReviewWidget extends ReactWidget {
         await this.navigator.open(thread.location, thread.id);
     }
 
+    /** A group's file: for comments on the diff, the file they are on (as the change); else the location's file. */
+    protected async openGroup(thread: ReviewThread): Promise<void> {
+        const file = this.reviews.patchFile(thread.location);
+        if (file) {
+            await this.navigator.openChangedFile(file.path);
+        } else if (thread.location.uri) {
+            await this.navigator.open({ kind: 'file', uri: thread.location.uri });
+        }
+    }
+
     protected async openDraft(location: CodeLocation, draftId: string): Promise<void> {
-        await this.navigator.open(location);
+        await this.navigator.open(location, undefined, true);
         this.reviews.focusDraft(draftId);
     }
 
@@ -284,13 +294,19 @@ export class ReviewWidget extends ReactWidget {
         if (location.kind === 'repository' || !location.uri) {
             return 'Repository';
         }
+        // A comment on a file of the diff is grouped with that file, not under the patch.
+        const file = this.reviews.patchFile(location);
+        if (file) {
+            return file.path;
+        }
         const path = this.reviews.relativePath(location.uri);
         return location.kind === 'directory' ? `${path}/` : path;
     }
 
     protected sortKey(thread: ReviewThread): string {
         const key = this.groupKey(thread.location);
-        const line = String(thread.location.range?.start.line ?? -1).padStart(8, '0');
+        const start = this.reviews.patchFile(thread.location)?.line ?? (thread.location.range ? thread.location.range.start.line + 1 : 0);
+        const line = String(start).padStart(8, '0');
         return (key === 'Repository' ? '' : key) + '\u0000' + line;
     }
 

@@ -50,11 +50,16 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
     }
 
     isShownInline(thread: ReviewThread): boolean {
+        // A proposed finding stays folded (its gutter glyph and the panel's Proposed list show it) until the reviewer
+        // opens it, so twenty findings don't interrupt reading the code; then it is accepted or dismissed in place.
+        if (thread.status === 'proposed') {
+            return this.reviews.isOpened(thread.id) && !this.reviews.isCollapsed(thread.id);
+        }
         return thread.status === 'open' ? !this.reviews.isCollapsed(thread.id) : this.shownResolved.has(thread.id);
     }
 
     setShownInline(thread: ReviewThread, shown: boolean): void {
-        if (thread.status === 'open') {
+        if (thread.status !== 'resolved') {
             this.reviews.setCollapsed(thread.id, !shown);
         } else {
             if (shown) {
@@ -132,7 +137,8 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
                 return;
             }
             const current = ++generation;
-            const uri = editor.uri.toString();
+            // The file itself; in a diff editor, its head (right) side, where comments are.
+            const uri = (editor.getResourceUri() ?? editor.uri).toString();
             // Out of scope (its code removed, or ambiguous) stays off the code: it is in the Review panel only.
             const threads = this.reviews.threadsForUri(uri).filter(t => t.location.range && !isOutOfScope(t));
             const drafts = this.reviews.draftsForUri(uri).filter(d => d.location.range);
@@ -324,7 +330,7 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
         const symbol = await this.locations.findEnclosingSymbol(model, range.startLineNumber);
         const intent: ThreadIntent = lastLine(range) > range.startLineNumber ? 'question' : 'comment';
         this.reviews.addDraft({
-            kind, uri: editor.uri.toString(), range: fromMonacoRange(range), symbol: symbol?.path,
+            kind, uri: (editor.getResourceUri() ?? editor.uri).toString(), range: fromMonacoRange(range), symbol: symbol?.path,
             anchor: await this.locations.captureAnchor(model, range)
         }, intent);
     }
