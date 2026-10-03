@@ -12,8 +12,9 @@ open questions, and nothing else. Full method and examples: Co-Review's `docs/de
 <!-- prompt: pi-tools -->
 > **In Pi or Oh My Pi** (the Co-Review package) the tools are named `co_review_start` (open_review; `dir` for a
 > review directory), `co_review_wait` (await_reviewer: questions, answers and the Submit), `co_review_reply`,
-> `co_review_add_findings`, `co_review_ask`, `co_review_map` (repo_map) and `co_review_post_github` (post_review_to_github). In an interactive session, the reviewer's
-> questions also arrive on their own as `[Co-Review]` messages.
+> `co_review_add_findings`, `co_review_ask`, `co_review_map` (repo_map) and `co_review_post_github`
+> (post_review_to_github). In an interactive session, the reviewer's questions also arrive on their own as
+> `[Co-Review]` messages.
 <!-- /prompt -->
 
 ## The steps
@@ -38,12 +39,15 @@ open questions, and nothing else. Full method and examples: Co-Review's `docs/de
    describe it in words. No line numbers, no file:line links, no pasted code (Mermaid is fine). Think through
    compatibility, security, failure handling and migration, but write down only what changes the design. Size it
    to the change: about 10-30 lines if small, 30-80 medium, 80-150 large. Cut what doesn't help the reviewer decide.
-3. Check it before I see it: `open_review({ dir, open: false })` lists problems in `format.warnings`. Fix every
-   one and call it again until there are none. Then show it with `open_review({ reviewId })` and share the URL.
+3. Check it before I see it: `open_review({ dir: "design/<name>", open: false })` lists problems in
+   `format.warnings`. Fix every one and call it again until there are none. Keep the `reviewId` it returns. Then
+   show it with `open_review({ reviewId })` and give me the URL (if there is one).
 4. Answer comments in their threads and revise the design; say in each thread what changed. A comment follows its
-   text through your edits (marked changed if you reword it); if you delete what it was on, it leaves the page.
+   text through your edits (marked changed if you reword it); if you delete what it was on, it leaves the page. An
+   edit I accept is written into the document by Co-Review: re-read the file before editing it.
 5. Implement only after approval: keep calling `await_reviewer` (answering comments with `reply`) until it
-   returns my Submit. If the code must depart from the approved design, update the design and ask again.
+   returns my Submit. Request changes → revise, reply in each thread, wait again. Approve → implement, and if the
+   code must depart from the approved design, update the design and ask again.
 <!-- /prompt -->
 
 Put the directory in a scratch location instead if the user doesn't want design documents committed.

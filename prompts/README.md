@@ -13,7 +13,17 @@ In a Markdown file, a copy sits between markers, and the generator rewrites what
 
 The marker names the fragment (`design.md`), optionally a harness (`mcp`, the default, or `pi`) and `fenced` (wrap
 the copy in a ```text block). In a fragment, `{{open_review}}` and the other tool names become the harness's name
-for that tool, and `{{> answer-style}}` includes another fragment.
+for that tool (the seven in `TOOLS` in `bin/gen-prompts.mjs`; `get_review` has the same name everywhere), and
+`{{> answer-style}}` includes another fragment.
+
+Conventions:
+
+- The fragments speak as the reviewer to the agent: "I" and "me" are the human, "you" is the agent. Keep that voice.
+- An include is pasted verbatim, so a fragment included inside a numbered step (`overview.md`) starts on the
+  caller's line and indents its own continuation lines by three spaces.
+- Wrap at about 115 characters, except `answer-style*.md`, which are single lines embedded as strings.
+- The tool calls and result fields a fragment names (`format.warnings`, `status: "proposed"`, anchor types) are the
+  real ones from `extensions/review/src/node/co-reviewer-mcp.ts`; check there before changing one.
 
 | Fragment | Used by |
 |---|---|

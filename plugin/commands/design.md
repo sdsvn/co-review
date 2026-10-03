@@ -24,10 +24,13 @@ Design this before writing code, following the `co-review-design` skill: $ARGUME
    describe it in words. No line numbers, no file:line links, no pasted code (Mermaid is fine). Think through
    compatibility, security, failure handling and migration, but write down only what changes the design. Size it
    to the change: about 10-30 lines if small, 30-80 medium, 80-150 large. Cut what doesn't help the reviewer decide.
-3. Check it before I see it: `open_review({ dir, open: false })` lists problems in `format.warnings`. Fix every
-   one and call it again until there are none. Then show it with `open_review({ reviewId })` and share the URL.
+3. Check it before I see it: `open_review({ dir: "design/<name>", open: false })` lists problems in
+   `format.warnings`. Fix every one and call it again until there are none. Keep the `reviewId` it returns. Then
+   show it with `open_review({ reviewId })` and give me the URL (if there is one).
 4. Answer comments in their threads and revise the design; say in each thread what changed. A comment follows its
-   text through your edits (marked changed if you reword it); if you delete what it was on, it leaves the page.
+   text through your edits (marked changed if you reword it); if you delete what it was on, it leaves the page. An
+   edit I accept is written into the document by Co-Review: re-read the file before editing it.
 5. Implement only after approval: keep calling `await_reviewer` (answering comments with `reply`) until it
-   returns my Submit. If the code must depart from the approved design, update the design and ask again.
+   returns my Submit. Request changes → revise, reply in each thread, wait again. Approve → implement, and if the
+   code must depart from the approved design, update the design and ask again.
 <!-- /prompt -->
