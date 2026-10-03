@@ -14,6 +14,32 @@ In any other agent (Codex, Cursor, VS Code, …), ask in plain words, e.g. *"Rev
 Co-Review: #42"*; the `co-review` skill (or the Co-Review MCP server's instructions) has the same steps. Setup for
 each agent: [Connect your agent](agent-setup.md).
 
+## A new feature, end to end
+
+The reviews chain together. A new feature goes through three of them, each ending in one verdict:
+
+```mermaid
+flowchart LR
+    D["Design: /co-review:design"] -->|Approve| B["Build: the agent"]
+    D -.->|Request changes, it revises| D
+    B --> C["Your change: /co-review:review"]
+    C -.->|Request changes, new commits| C
+    C -->|Approve| P["Pull request: the agent opens it"]
+    P --> T["Teammate: /co-review:pr"]
+    T -->|Also post to GitHub| G["GitHub review"]
+```
+
+1. **[Design](#a-design-before-the-code).** Describe the task; the agent writes a plan. Comment on any step or diagram
+   node until it's right, then approve. Nothing is built before you do.
+2. **Build.** The agent implements only what you agreed.
+3. **[Your change](#your-change).** Review its diff like a pull request. Request changes until you approve; each
+   round arrives as new commits, with a reply in every thread.
+4. **Pull request.** The agent opens it.
+5. **[Someone else's pull request](#someone-elses-pull-request).** A teammate reviews it the same way and posts the
+   review to GitHub.
+
+New to the codebase, or haven't read it in a while? Start with [the whole repository](#the-whole-repository).
+
 ## The shape of every review
 
 ```mermaid

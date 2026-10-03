@@ -34,10 +34,15 @@ const agents: { name: string; installNote?: string; install?: string; use: { cmd
 ];
 const slug = (name: string) => name.toLowerCase().replace(/\W+/g, '-');
 const worksWith = ['Claude Code', 'Pi', 'Oh My Pi', 'Codex', 'Cursor', 'Copilot', 'Gemini CLI', 'OpenCode'];
+const ideForReview = [
+	['IDE', 'Built for writing code', 'Go to definition, search and the file tree, but nowhere to hold a review: no threads, no verdict, no reviewer in the loop.'],
+	['Review app', 'Built for commenting', 'Threads and a verdict, but on a flat diff. You can\'t follow a call, search the repository or open the file around the change.'],
+	['Co-Review', 'Built for reviewing', 'Both at once: comment, ask the agent and decide, while you go to definition, find references, search and walk the whole repository.']
+];
 const story = [
-	['01', 'It starts as your code', 'You know where everything lives and why, because you wrote it or read every line.'],
-	['02', 'Then it drifts', 'Hundreds of agent changes later, every diff looked fine. The whole? It works, but it no longer feels like yours.'],
-	['03', 'So you review it together', 'Once in a while, open the entire repository in Co-Review and read it with the agent that built it. Ask anything; it answers from the code.']
+	['01', 'Code you didn\'t write', 'Repositories from other teams, contractors or open source: you have to work in them, and you\'ve never read them.'],
+	['02', 'Your own code drifts too', 'Written by agents and teammates, reviewed mostly by agents. Every diff looked fine; the whole works, but you no longer know it.'],
+	['03', 'So review the whole repository', 'Review tools only show diffs. Co-Review opens the entire repository like an IDE: ask the agent about any code, leave remarks anywhere, come back to them later.']
 ];
 const steps = [
 	['01', 'Start from the overview', 'An overview page shows where to start, the areas of the code and how they connect. Let the agent go first with proposed findings, grouped by area.'],
@@ -96,7 +101,7 @@ const plugin = [
 				<div class="pitch">
 					<div class="pill"><span class="dot"></span>Review code and designs with your agent</div>
 					<h1>You built it with <span class="word" id="agent-word">{words[0]}</span>. Make it yours again.</h1>
-					<p class="lede">Months of agent-written changes later, the code works, but you no longer know it. Co-Review opens the entire repository as a review: read it like a pull request, ask the agent why anything is the way it is, and come away knowing your codebase again.</p>
+					<p class="lede">Repositories you didn't write, and your own after months of agent-written changes: the code works, but you don't know it. Co-Review opens the entire repository as a review, the way you'd open it in an IDE. Ask the agent about any code, leave remarks like comments on a diff, and come back to them later.</p>
 					<div class="install-block">
 						<div class="cmdbar">
 							<span class="prompt">$</span>
@@ -143,6 +148,30 @@ const plugin = [
 				</div>
 			</div>
 
+			<section id="why" class="wrap how">
+				<div class="head">
+					<span class="label accent">Why Co-Review exists</span>
+					<h2>Code you work in, but don't know.</h2>
+					<p>Most of the code you work in, you didn't write, and there was no tool for reviewing an entire repository, with an agent or without one. Co-Review is built for that.</p>
+				</div>
+				<ol class="steps">
+					{story.map(([n, title, body], i) =>
+						<li><span class={i === 2 ? 'num done' : 'num'}>{n}</span><h3>{title}</h3><p>{body}</p></li>)}
+				</ol>
+			</section>
+
+			<section id="ide" class="wrap how">
+				<div class="head wide">
+					<span class="label accent">An IDE for review</span>
+					<h2>Review with everything an IDE gives you.</h2>
+					<p>An IDE is made for writing code; a review app gives you a diff and a comment box. Co-Review is made for reading code and deciding on it: the review lives in a real editor, built on Eclipse Theia, with everything that isn't about reviewing removed.</p>
+				</div>
+				<ol class="steps">
+					{ideForReview.map(([tag, title, body], i) =>
+						<li><span class={i === 2 ? 'num done' : 'num'}>{tag}</span><h3>{title}</h3><p>{body}</p></li>)}
+				</ol>
+			</section>
+
 			<section id="ways" class="wrap how">
 				<div class="head wide">
 					<span class="label accent">Three ways to review</span>
@@ -152,18 +181,6 @@ const plugin = [
 				<ol class="steps">
 					{uses.map(([tag, title, body, linkText, href]) =>
 						<li><span class="num">{tag}</span><h3>{title}</h3><p>{body}</p><a class="more" href={href}>{linkText}</a></li>)}
-				</ol>
-			</section>
-
-			<section id="why" class="wrap how">
-				<div class="head">
-					<span class="label accent">Why Co-Review exists</span>
-					<h2>Code you shipped, but no longer know.</h2>
-					<p>Building with an agent is fast. Change by change, one diff at a time, the codebase grows past what you hold in your head. Reviewing the whole thing together, once in a while, is how you get it back.</p>
-				</div>
-				<ol class="steps">
-					{story.map(([n, title, body], i) =>
-						<li><span class={i === 2 ? 'num done' : 'num'}>{n}</span><h3>{title}</h3><p>{body}</p></li>)}
 				</ol>
 			</section>
 

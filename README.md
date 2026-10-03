@@ -17,14 +17,26 @@ Made for Claude Code. Native packages for Pi and Oh My Pi. Works with any MCP ag
 
 </div>
 
-Building with an agent is fast. Change by change, each diff looks fine, and months later the codebase works but no
-longer feels like yours: you don't know where things live or why they're built the way they are. Co-Review is for
-getting it back. Once in a while, open the **entire repository** as a review and read it with the agent that built it,
-the way you'd read a pull request. Comment on a line, a function, a file or a folder, and ask why; the agent answers in
-the thread, from the code. An overview shows where to start, the agent can take a first pass with findings grouped by
-area, and coverage tracks what you've read.
+Most of the code you work in, you didn't write. There are repositories from other teams you've never read, and your
+own projects drift too: more and more of the code is written by agents and teammates, and reviewed mostly by agents.
+It works, but you no longer know where things live or why they're built the way they are.
 
-Whole-repository review is one of four jobs, each one command away. In every one the agent sets up the review and takes
+Review tools don't help here, because they only show diffs. There is no tool for reviewing an entire repository, with an
+agent or without one, short of workarounds like a pull request against an empty branch.
+
+Co-Review is built for that. Open the **entire repository** the way you'd open it in an IDE and read it as a review:
+comment on a line, a function, a file or a folder, like comments on a diff; ask the agent about any code, and it answers
+in the thread, from the code; come back to your remarks weeks later. An overview shows where to start, the agent can
+take a first pass with findings grouped by area, and coverage tracks what you've read.
+
+**An IDE for review.** An IDE is made for writing code, and a review app gives you a flat diff and a comment box.
+Co-Review is made for reviewing: you comment, ask the agent and submit a verdict in a real editor, so you can go to
+definition, find references, search the repository and walk the file tree while you review. It's built on
+[Eclipse Theia](https://theia-ide.org), so navigation, search, Git and language servers are the real thing;
+everything that isn't about reviewing is removed.
+
+Reviewing the whole repository is its main job. The same tool also reviews your agent's change, a teammate's pull
+request or a design before any code, each one command away. In every one the agent sets up the review and takes
 a first pass before you see it, so it opens on what to look at ([how each workflow goes](docs/workflows.md)):
 
 | Review | Claude Code | Pi / Oh My Pi |
@@ -33,9 +45,6 @@ a first pass before you see it, so it opens on what to look at ([how each workfl
 | **Your change**: the agent's diff as a pull-request page, with line comments, suggested edits and one verdict | `/co-review:review` | `/co-review-change` |
 | **Someone else's pull request**: the agent takes the first pass, you decide what goes back to the author, and post it to GitHub as a review with line comments | `/co-review:pr <n>` | `/co-review-pr <n>` |
 | **A design, before the code**: an L1 · L2 · L3 plan with Mermaid diagrams, revised from your comments before anything is built | `/co-review:design <task>` | `/co-review-design <task>` |
-
-Co-Review is a review tool with IDE features, not an IDE. It's built on [Eclipse Theia](https://theia-ide.org),
-so navigation, search, Git and language servers are the real thing; everything unrelated to reviewing is removed.
 
 ```
  you ── inline threads, Ask Agent, Submit review ──┐
