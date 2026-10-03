@@ -51,10 +51,12 @@ An **entire repository** review shows your progress as you read. Reach for it to
 
 Between repository reviews, review one change at a time — the way you'd review a pull request.
 
-- Pick a **branch** against its base, or a single **commit**, when you start the review (above). Or let the agent open the change for you: `/co-review:review` in Claude Code, `/co-review` in Pi.
+- Pick a **branch** against its base, or a single **commit**, when you start the review (above). Or let the agent open the change for you: `/co-review:review` in Claude Code, `/co-review-change` in Pi and Oh My Pi. What you review is the diff taken when the review opened, so editing files meanwhile doesn't change it.
 - A **`.patch` or `.diff` file** opens as a pull-request page, with line comments and suggested edits.
+- **The code around the diff** is there too: the explorer colours the changed files and folders, a changed file opens as base and head side by side, and from the diff page a line number opens the file there. Go to definition and hover work as in the repository.
 - Findings the agent proposes appear as **Proposed** (Accept / Dismiss). Your verdict returns every open comment and any accepted suggestions in one batch, and the agent commits accepted edits on the branch.
-- **Someone else's pull request?** Co-Review reviews local code, so bring the change to your machine first: check out its branch (`gh pr checkout <number>`) and review the branch against its base, or save the diff and open it as a patch — `gh pr diff <number> > pr.patch`, then open `pr.patch`.
+- **Someone else's pull request:** `/co-review:pr <number>` in Claude Code, `/co-review-pr <number>` in Pi and Oh My Pi. The agent reads the pull request with the GitHub CLI, checks out its code in a worktree outside your clone, and takes the first pass. When you submit, tick **Also post to GitHub** and your decision, message, line comments and accepted suggestions go to the pull request as one review. Details: [Someone else's pull request](/co-review/docs/guides/workflows/#someone-elses-pull-request).
+- **When the code changes under a comment**, the comment says so. One whose code is gone or ambiguous moves to the panel's **Out of scope** tab instead of drifting to the wrong line.
 
 ## Design before the code
 

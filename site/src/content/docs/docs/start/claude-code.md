@@ -32,7 +32,8 @@ Check it with `/mcp` -- `plugin:co-review:co-review` should be connected.
 
 The plugin gives you several ways to start and run a review:
 
-- **`/co-review:review [focus]`** -- Claude opens its change in Co-Review, flags what deserves attention, answers your comments in their threads, and acts on your verdict.
+- **`/co-review:review [base]`** -- Claude opens its change as a pull-request page, flags what deserves attention, answers your comments in their threads, and acts on your verdict.
+- **`/co-review:pr <n>`** -- Claude reviews someone else's pull request with you: its first pass, your verdict, then posted to the pull request as a review with line comments and suggestions when you choose to.
 - **`/co-review:design <task>`** -- Claude writes a design doc, you review it, and it implements what you approved.
 - **`/co-review:audit [focus]`** -- Claude reviews the whole repository first: a few proposed findings per area, for you to accept or dismiss, then it answers your questions.
 - **Live comments** -- With channels on, your questions reach the running session the moment you ask them.

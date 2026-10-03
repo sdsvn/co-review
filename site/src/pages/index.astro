@@ -8,24 +8,27 @@ import logo from '../assets/logo.svg?url';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const docs = (path: string) => `${base}/docs/${path}/`;
 const github = 'https://github.com/sdsvn/co-review';
+// The explainer video on YouTube: the page shows its poster and loads the player only when it is played.
+const video = { id: 'b0szZE7_4do', title: 'Review an entire repository like a pull request' };
+const videoUrl = `https://youtu.be/${video.id}`;
 const installLine = `curl -fsSL https://sdsvn.github.io${base}/install.sh | bash`;
 
 const words = ['your coding agent', 'Claude Code', 'Pi', 'Oh My Pi', 'Codex', 'Cursor', 'Copilot', 'Gemini CLI', 'OpenCode'];
-const question = "repo.Save doesn't take tx. If the charge below fails, does the deferred rollback undo the saved order?";
 const guide = docs('guides/connect-your-agent');
 const ask = '"Review this entire repository with me in Co-Review."';
 const mcpNote = (name: string) => `Add the co-review mcp server to ${name}'s MCP config. Adding the skills is optional.`;
 const agents: { name: string; installNote?: string; install?: string; use: { cmd: string; desc: string }[]; guide: string }[] = [
 	{ name: 'Claude Code', installNote: 'In Claude Code:', install: '/plugin marketplace add sdsvn/co-review\n/plugin install co-review@co-review', use: [
 		{ cmd: '/co-review:audit [focus]', desc: 'Reviews the whole repository with you: splits it into areas, proposes findings in each, then answers your questions.' },
-		{ cmd: '/co-review:review', desc: 'When a change is ready: it opens the review and stays in it until you submit.' },
+		{ cmd: '/co-review:review', desc: 'When a change is ready: it opens the diff as a pull-request page and stays in the review until you submit.' },
+		{ cmd: '/co-review:pr <n>', desc: 'Someone else\'s pull request: its first pass, your verdict, posted to GitHub as a review when you choose to.' },
 		{ cmd: '/co-review:design <task>', desc: 'To design first: it writes a design doc, you review it, it builds what you approved.' }], guide: docs('start/claude-code') },
 	{ name: 'Pi', installNote: 'Pi has a native package that ships with Co-Review:', install: 'co-review setup pi', use: [
 		{ cmd: '/co-review-audit [focus]', desc: 'Reviews the whole repository with you, area by area.' },
-		{ cmd: '/co-review', desc: 'Opens a review; your questions arrive in the session as you ask them.' }], guide: `${guide}#pi-and-oh-my-pi` },
+		{ cmd: '/co-review-change · /co-review-pr <n> · /co-review-design <task>', desc: 'Your change, someone else\'s pull request, or a design first. Your questions arrive in the session as you ask them.' }], guide: `${guide}#pi-and-oh-my-pi` },
 	{ name: 'Oh My Pi', installNote: 'Oh My Pi has a native package that ships with Co-Review:', install: 'co-review setup omp', use: [
 		{ cmd: '/co-review-audit [focus]', desc: 'Reviews the whole repository with you, area by area.' },
-		{ cmd: '/co-review', desc: 'Only the main session listens; spawn a task subagent to keep answering while you work.' }], guide: `${guide}#pi-and-oh-my-pi` },
+		{ cmd: '/co-review-change · /co-review-pr <n> · /co-review-design <task>', desc: 'Your change, someone else\'s pull request, or a design first. Only the main session listens for your questions.' }], guide: `${guide}#pi-and-oh-my-pi` },
 	{ name: 'Codex', use: [{ cmd: ask, desc: 'Codex opens the review, answers your comments and waits for your verdict.' }], guide: `${guide}#codex` },
 	{ name: 'Cursor', use: [{ cmd: ask, desc: 'In Agent mode, Cursor opens the review and answers in the threads.' }], guide: `${guide}#cursor` },
 	{ name: 'Copilot', use: [{ cmd: ask, desc: 'In VS Code agent mode.' }], guide: `${guide}#vs-code-copilot-agent-mode` },
@@ -47,18 +50,20 @@ const steps = [
 ];
 const uses = [
 	['Repository', 'A whole repository', 'Open the entire codebase as one review, to get it back in your head or to check your own work. The overview shows where to start, the agent takes a first pass with findings grouped by area, and coverage tracks what you have read.', 'Review a repository →', docs('start/using') + '#review-a-whole-repository'],
-	['Change', 'A change or pull request', 'A single change, a branch against its base, a commit, or a .patch / .diff file opened as a pull-request page — with line comments, suggested edits and one verdict. The review you would do on a PR, wherever the change lives.', 'Review a change →', docs('start/using') + '#review-a-change-or-pull-request'],
+	['Change', 'Your change', 'The agent\'s diff, a branch against its base or a commit, opened as a pull-request page with the code around it: line comments, suggested edits and one verdict. The review you would do on a PR, before anything is committed or merged.', 'Review a change →', docs('start/using') + '#review-a-change-or-pull-request'],
+	['Pull request', 'Someone else\'s pull request', 'The agent reads the pull request, checks out its code and takes the first pass. You decide what goes back to the author, and your verdict posts to GitHub as one review with line comments and suggestions.', 'Review a pull request →', docs('guides/workflows') + '#someone-elses-pull-request'],
 	['Design', 'A design, before the code', 'Review the plan, not the source: a design written as an L1 · L2 · L3 tree with Mermaid diagrams. Comment on the step or node that worries you; the agent revises and only builds what you approved.', 'Design before code →', docs('guides/design-docs')]
 ];
 const kinds = [
-	['Code', 'Lines, ranges, functions, files or the whole repo. Comments follow the code through edits.'],
+	['Code', 'Lines, ranges, functions, files or the whole repo. Comments follow the code through edits and say when it changed.'],
 	['Designs', 'Markdown with a foldable step tree and a checked format.'],
 	['Diagrams', 'Mermaid, down to a single node or edge.'],
-	['Patches', 'Pull-request pages with line comments and suggested edits.']
+	['Pull requests', 'Diffs and .patch files as pull-request pages; verdicts post to GitHub.']
 ];
 const plugin = [
 	{ term: '/co-review:audit', code: true, body: 'The whole repository: Claude splits it into areas, proposes findings for you to accept or dismiss, then answers your questions.' },
-	{ term: '/co-review:review', code: true, body: 'When a change is ready: Claude opens it for review and stays in it until you submit.' },
+	{ term: '/co-review:review', code: true, body: 'When a change is ready: Claude opens it as a pull-request page and stays in the review until you submit.' },
+	{ term: '/co-review:pr', code: true, body: 'Someone else\'s pull request: Claude takes the first pass, you decide what goes back to the author, and it posts to GitHub.' },
 	{ term: '/co-review:design', code: true, body: 'Before there is code: Claude writes a design doc, you review it, it builds what you approved.' },
 	{ term: 'Live comments', body: 'With channels on, your question reaches the running session the moment you ask it.' },
 	{ term: 'co-reviewer subagent', body: 'Keeps answering your review in the background while the main conversation works.' },
@@ -107,31 +112,11 @@ const plugin = [
 					</div>
 				</div>
 
-				<div class="window" id="demo" aria-label="A review thread in Co-Review">
-					<div class="window-bar">
-						<span class="lights"><span></span><span></span><span></span></span>
-						<span class="file">internal/orders/service.go</span>
-						<span class="listening"><span class="dot"></span>Claude Code is listening</span>
-					</div>
-					<div class="code">
-						<div class="ln"><span class="n">28</span><span class="src"><span class="k">if</span> err := tx.ReserveInventory(ctx, o.Items); err != <span class="k">nil</span> {'{'}</span></div>
-						<div class="ln"><span class="n">29</span><span class="src">    <span class="k">return</span> fmt.Errorf(<span class="s">"reserve: %w"</span>, err)</span></div>
-						<div class="ln"><span class="n">30</span><span class="src">{'}'}</span></div>
-						<div class="ln line31 selected"><span class="n">31</span><span class="src"><span class="k">if</span> err := s.repo.Save(ctx, o); err != <span class="k">nil</span> {'{'}</span></div>
-						<div class="thread">
-							<div class="msg">
-								<span class="avatar you">You</span>
-								<div class="msg-body"><span class="author">You</span><span class="text"><span id="question">{question}</span><span class="caret" hidden></span></span></div>
-							</div>
-							<div class="typing" hidden><span class="avatar agent"></span>Claude Code is answering…</div>
-							<div class="msg answer">
-								<span class="avatar agent">C</span>
-								<div class="msg-body"><span class="author">Claude Code</span><span class="text muted">No. <code>repo.Save</code> writes through the repository's own connection, so the order is committed as soon as it returns. The deferred <code>tx.Rollback()</code> at <a href="#demo">service.go:26</a> only undoes the reservation. Pass the transaction in: <code>s.repo.WithTx(tx).Save(ctx, o)</code>.</span></div>
-							</div>
-						</div>
-						<div class="ln"><span class="n">32</span><span class="src">    <span class="k">return</span> fmt.Errorf(<span class="s">"save: %w"</span>, err)</span></div>
-						<div class="ln"><span class="n">33</span><span class="src">{'}'}</span></div>
-					</div>
+				<div class="video" id="video" data-video-id={video.id} data-video-title={video.title}>
+					<button type="button" class="video-poster" aria-label={`Play the video: ${video.title}`}>
+						<img src={`https://i.ytimg.com/vi/${video.id}/maxresdefault.jpg`} alt="" width="1280" height="720" fetchpriority="high" decoding="async" />
+						<span class="play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg></span>
+					</button>
 				</div>
 			</section>
 
@@ -145,9 +130,9 @@ const plugin = [
 
 			<section id="ways" class="wrap how">
 				<div class="head wide">
-					<span class="label accent">Three ways to review</span>
-					<h2>A repository, a change, or the design before it.</h2>
-					<p>The same review tool, whichever you reach for: read a whole codebase, review a single change the way you'd review a pull request, or review the plan before any code exists.</p>
+					<span class="label accent">Four ways to review</span>
+					<h2>A repository, a change, a pull request, or the design before it.</h2>
+					<p>The same review tool, whichever you reach for. In every one the agent sets up the review and takes a first pass before you see it, so it opens on what to look at.</p>
 				</div>
 				<ol class="steps">
 					{uses.map(([tag, title, body, linkText, href]) =>
@@ -181,9 +166,9 @@ const plugin = [
 			<section class="wrap block">
 				<div class="design-card">
 					<div class="design-copy">
-						<span class="label accent">Changes and designs too</span>
+						<span class="label accent">Changes, pull requests and designs too</span>
 						<h2 class="h2-sm">Review each change, or the plan before the code.</h2>
-						<p>Between repository reviews, your agent hands over a change, a branch or a commit when it's done. Or it writes the plan first, as a design tree: what happens, then how, then the edge cases. You comment on the step that worries you, it answers or revises, and it only builds what you approved.</p>
+						<p>Between repository reviews, your agent hands over its change as a pull-request page, with the code around it in the explorer. A teammate's pull request opens the same way, and your verdict goes back to GitHub. Or the agent writes the plan first, as a design tree: what happens, then how, then the edge cases. You comment on the step that worries you, it answers or revises, and it only builds what you approved.</p>
 						<div class="kinds">
 							{kinds.map(([title, body]) => <div><span class="kind-title">{title}</span><span>{body}</span></div>)}
 						</div>
@@ -272,7 +257,7 @@ const plugin = [
 			</footer>
 		</div>
 
-		<script define:vars={{ words, question }}>
+		<script define:vars={{ words }}>
 			const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 			// Copy the install command.
@@ -293,30 +278,17 @@ const plugin = [
 				setInterval(() => { w = (w + 1) % words.length; word.textContent = words[w]; }, 2200);
 			}
 
-			// The hero loop (70 ms ticks, 200 per loop): the line is selected, the question is typed, the agent answers.
-			const demo = document.getElementById('demo');
-			const line = demo.querySelector('.line31');
-			const thread = demo.querySelector('.thread');
-			const q = document.getElementById('question');
-			const caret = demo.querySelector('.caret');
-			const typing = demo.querySelector('.typing');
-			const answer = demo.querySelector('.answer');
-			const LOOP = 200, qStart = 22, qDone = qStart + Math.ceil(question.length / 2);
-			const render = t => {
-				line.classList.toggle('selected', t >= 12);
-				thread.hidden = t < qStart;
-				q.textContent = question.slice(0, Math.max(0, Math.min(question.length, (t - qStart) * 2)));
-				caret.hidden = !(t >= qStart && t < qDone + 6);
-				typing.hidden = !(t >= qDone + 6 && t < qDone + 26);
-				answer.hidden = !(t >= qDone + 26);
-			};
-			if (reduced) {
-				render(LOOP - 1);
-			} else {
-				let t = 0;
-				render(t);
-				setInterval(() => { t = (t + 1) % LOOP; render(t); }, 70);
-			}
+			// The explainer video: swap the poster for the YouTube player when it is played.
+			const videoBox = document.getElementById('video');
+			videoBox.querySelector('.video-poster').addEventListener('click', () => {
+				const frame = document.createElement('iframe');
+				frame.src = `https://www.youtube-nocookie.com/embed/${videoBox.dataset.videoId}?autoplay=1&rel=0`;
+				frame.title = videoBox.dataset.videoTitle;
+				frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+				frame.allowFullscreen = true;
+				frame.referrerPolicy = 'strict-origin-when-cross-origin';
+				videoBox.replaceChildren(frame);
+			});
 
 			// Set up your agent: tabs.
 			const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -367,7 +339,6 @@ const plugin = [
 	* { box-sizing: border-box; }
 	:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; border-radius: 4px; }
 	code, pre { font-variant-ligatures: none; font-feature-settings: 'liga' 0, 'calt' 0; }
-	@keyframes crBlink { 50% { opacity: 0; } }
 	[hidden] { display: none !important; }
 </style>
 
@@ -403,34 +374,10 @@ const plugin = [
 	.install-note code { font-family: var(--mono); color: var(--ink); }
 	.install-note a { font-weight: 500; }
 
-	.window { background: #fff; border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 1px 2px rgba(30, 27, 75, 0.04), 0 24px 48px -24px rgba(30, 27, 75, 0.18); overflow: hidden; min-width: 0; }
-	.window-bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--rule); background: #fafafc; }
-	.lights { display: flex; gap: 6px; }
-	.lights span { width: 10px; height: 10px; border-radius: 50%; background: var(--rule); }
 	.file { font: 500 12.5px var(--mono); color: var(--ink-2); }
-	.listening { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--green); }
-	.code { font: 400 13px/1.75 var(--mono); padding: 10px 0; color: var(--ink); overflow-x: auto; }
-	.ln { display: flex; padding: 0 16px; }
-	.ln .n { width: 28px; color: var(--faint); flex: none; }
-	.ln .src { white-space: pre; }
-	.ln.selected { padding: 0 16px 0 13px; background: var(--indigo-tint); border-left: 3px solid var(--indigo); }
-	.ln.selected .n { color: var(--indigo); }
-	.k { color: var(--indigo); }
-	.s { color: var(--green); }
-	.thread { margin: 8px 16px 8px 44px; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); font-family: var(--sans); font-size: 14px; line-height: 1.55; white-space: normal; }
-	.msg { padding: 12px 14px; display: flex; gap: 10px; }
-	.msg + .typing, .msg + .msg, .typing + .msg { border-top: 1px solid var(--rule); }
 	.avatar { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; }
 	.avatar.you { background: var(--indigo-tint); color: var(--indigo); font: 600 11px var(--sans); }
 	.avatar.you.small { width: 22px; height: 22px; font-size: 10px; }
-	.avatar.agent { background: var(--mint); color: var(--mint-ink); font: 700 11px var(--sans); }
-	.msg-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-	.author { font-weight: 600; font-size: 13px; }
-	.text { color: var(--ink); }
-	.text.muted { color: var(--ink-2); text-wrap: pretty; }
-	.text code, .step code { font: 500 12.5px var(--mono); color: var(--ink); background: var(--indigo-tint); padding: 1px 4px; border-radius: 4px; }
-	.caret { display: inline-block; width: 2px; height: 15px; background: var(--indigo); vertical-align: -2px; margin-left: 1px; animation: crBlink 1s steps(1) infinite; }
-	.typing { padding: 10px 14px; display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; }
 
 	.band { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); background: #fff; }
 	.band-row { padding: 18px 24px; display: flex; align-items: center; gap: 12px 28px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
@@ -453,6 +400,15 @@ const plugin = [
 	.steps p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink-2); text-wrap: pretty; }
 
 	.block { padding: 72px 24px; }
+
+	.video { position: relative; aspect-ratio: 16 / 9; background: var(--ink); border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; box-shadow: 0 1px 2px rgba(30, 27, 75, 0.04), 0 24px 48px -24px rgba(30, 27, 75, 0.18); }
+	.video :global(iframe) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+	.video-poster { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--ink); cursor: pointer; display: grid; place-items: center; }
+	.video-poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease, opacity 0.4s ease; }
+	.video-poster:hover img { transform: scale(1.02); opacity: 0.92; }
+	.play { position: relative; width: 72px; height: 72px; border-radius: 50%; background: var(--mint); color: var(--mint-ink); display: grid; place-items: center; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); transition: transform 0.2s ease; }
+	.play svg { margin-left: 3px; }
+	.video-poster:hover .play { transform: scale(1.06); }
 	.design-card { background: #fff; border: 1px solid var(--rule); border-radius: 18px; padding: clamp(24px, 4vw, 48px); display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 48px; align-items: start; }
 	.design-copy { display: flex; flex-direction: column; gap: 20px; }
 	.design-copy > p, .claude-copy p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--ink-2); text-wrap: pretty; }
