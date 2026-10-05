@@ -14,6 +14,7 @@
 #   CO_REVIEW_INSTALL_DIR  where the Linux app goes (default: ~/.local/share/co-review)
 #   PREFIX                 where the commands go: $PREFIX/bin
 #   CO_REVIEW_DOWNLOAD_URL where the release files are (default: the GitHub release)
+#   CO_REVIEW_FORCE=1      reinstall even when that version is already installed
 set -euo pipefail
 
 repo="sdsvn/co-review"
@@ -37,6 +38,50 @@ case "$arch" in
     *) fail "unsupported CPU: $arch" ;;
 esac
 
+# Where the app is (or goes), so an install of the version already there can be skipped.
+case "$os" in
+Darwin)
+    apps="${CO_REVIEW_APPS_DIR:-}"
+    if [ -z "$apps" ]; then
+        if [ -w /Applications ]; then apps=/Applications; else apps="$HOME/Applications"; fi
+    fi
+    app_res="$apps/Co-Review.app/Contents/Resources/app"
+    ;;
+Linux)
+    dir="${CO_REVIEW_INSTALL_DIR:-$HOME/.local/share/co-review}"
+    app_res="$dir/resources/app"
+    ;;
+*)
+    app_res=""
+    ;;
+esac
+
+# The installed version (the app's package.json) and the one this would install (the release tag; the latest
+# release's tag is where GitHub redirects /releases/latest). Unknown for a custom download URL: then it installs.
+installed=""
+if [ -n "$app_res" ] && [ -f "$app_res/package.json" ]; then
+    installed=$(sed -n 's/^  "version": "\(.*\)",*$/\1/p' "$app_res/package.json" | head -n 1)
+fi
+wanted=""
+if [ -z "${CO_REVIEW_DOWNLOAD_URL:-}" ]; then
+    if [ "$version" = latest ]; then
+        wanted=$(curl -fsSI "https://github.com/$repo/releases/latest" 2>/dev/null \
+            | sed -n 's|^[Ll]ocation: .*/releases/tag/\([^[:space:]]*\).*|\1|p' | tail -n 1)
+    else
+        wanted="$version"
+    fi
+    wanted="${wanted#v}"
+fi
+if [ -n "$installed" ] && [ "$installed" = "$wanted" ] && [ "${CO_REVIEW_FORCE:-}" != 1 ]; then
+    say "Co-Review $installed is already installed and up to date (CO_REVIEW_FORCE=1 reinstalls it)."
+    # The commands may be missing (or point at an old place): installing them is quick and idempotent.
+    "$app_res/bin/install-cli.sh"
+    exit 0
+fi
+if [ -n "$installed" ]; then
+    say "Updating Co-Review $installed to ${wanted:-the release at $base}"
+fi
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -50,10 +95,6 @@ Darwin)
     [ "$arch" = arm64 ] || fail "only Apple silicon Macs have a prebuilt app; build from source: https://sdsvn.github.io/co-review/docs/start/install/"
     fetch "Co-Review-mac-arm64.zip"
     ditto -x -k "$tmp/Co-Review-mac-arm64.zip" "$tmp/app"
-    apps="${CO_REVIEW_APPS_DIR:-}"
-    if [ -z "$apps" ]; then
-        if [ -w /Applications ]; then apps=/Applications; else apps="$HOME/Applications"; fi
-    fi
     mkdir -p "$apps"
     if pgrep -f "$apps/Co-Review.app/Contents/MacOS/Co-Review" >/dev/null 2>&1; then
         say "Co-Review is running; quit it to use the new version."
@@ -68,7 +109,6 @@ Darwin)
     ;;
 Linux)
     fetch "Co-Review-linux-$arch.tar.gz"
-    dir="${CO_REVIEW_INSTALL_DIR:-$HOME/.local/share/co-review}"
     mkdir -p "$tmp/app"
     tar -xzf "$tmp/Co-Review-linux-$arch.tar.gz" -C "$tmp/app"
     root=$(find "$tmp/app" -mindepth 1 -maxdepth 1 -type d | head -n 1)

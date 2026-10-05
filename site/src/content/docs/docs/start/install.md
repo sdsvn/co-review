@@ -21,7 +21,8 @@ This installs two things:
 - **The `co-review` and `co-review-server` commands.**
   They go to `/usr/local/bin` when writable, otherwise `~/.local/bin`.
 
-Run the same command again to update.
+Run the same command again to update. When the latest release is already installed, it downloads nothing and only
+re-installs the commands.
 The script is [install.sh](https://github.com/sdsvn/co-review/blob/main/install.sh) -- read it before piping it to a shell if you prefer.
 
 You can override the defaults with environment variables:
@@ -32,6 +33,7 @@ You can override the defaults with environment variables:
 | `CO_REVIEW_APPS_DIR` | Where the macOS app goes |
 | `CO_REVIEW_INSTALL_DIR` | Where the Linux app goes |
 | `PREFIX` | Where the commands go (`$PREFIX/bin`) |
+| `CO_REVIEW_FORCE=1` | Reinstall even when that version is already installed |
 
 Once installed, try it:
 
