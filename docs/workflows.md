@@ -184,12 +184,13 @@ the pull request as one GitHub review, through the GitHub CLI (so `gh auth login
 | Open threads on diff lines (your comments, findings you accepted) | Line comments: your point only, not the discussion (the agent can reword each in your voice when it posts) |
 | Suggested edits you accepted | GitHub suggestions the author can commit with one click |
 | Comments on the pull request or its description | Listed in the summary |
-| Proposed findings you didn't accept, resolved threads, the agent's own questions | Not posted |
+| Agents' replies, questions you asked an agent (**Ask Agent**), proposed findings you didn't accept, resolved threads, the agent's own questions | Not posted |
 
 If a line has left the diff since (the author pushed), its comment goes into the summary instead of failing the post.
-The panel then links to the posted review. You can also post later with **⋯ → Post review to GitHub…** (it asks for
-the decision and confirms first), or ask the agent to (`post_review_to_github`): Co-Review shows you what goes out and
-posts only when you click **Post to GitHub**.
+Before anything goes out, Co-Review shows you exactly what will be posted: the decision, the summary and each line
+comment where it lands, word for word, and each part is editable: what you change there is what's posted, and a line
+comment you empty is left out. It posts only when you click **Post to GitHub**; cancel and the submit form stays open. The panel then links to the posted review. You can also post later with **⋯ → Post review to GitHub…**
+(it asks for the decision first), or ask the agent to (`post_review_to_github`): the same preview appears in a thread.
 
 ## A design, before the code
 

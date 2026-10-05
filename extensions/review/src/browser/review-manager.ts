@@ -7,7 +7,7 @@ import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
 import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewCoverage, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus, isOverviewPage } from '../common/review-model';
-import { GitHubPost, GitHubTarget, ReviewService } from '../common/review-protocol';
+import { GitHubEdits, GitHubPost, GitHubPreview, GitHubTarget, ReviewService } from '../common/review-protocol';
 import { ReviewClientImpl } from './review-client';
 import { AnchorState } from './review-locations';
 
@@ -402,10 +402,16 @@ export class ReviewManager {
         return review?.bundle ? this.service.getGitHubTarget(review.id).catch(() => undefined) : Promise.resolve(undefined);
     }
 
-    /** Posts the active review to its GitHub pull request (the latest verdict unless given). */
-    postToGitHub(decision?: ReviewDecision, summary?: string): Promise<GitHubPost> {
+    /** What posting the active review to GitHub would send (the latest verdict unless given). */
+    previewGitHubPost(decision?: ReviewDecision, summary?: string): Promise<GitHubPreview> {
         const review = this.activeReview;
-        return review ? this.service.postToGitHub(review.id, decision, summary) : Promise.reject(new Error('No review.'));
+        return review ? this.service.previewGitHubPost(review.id, decision, summary) : Promise.reject(new Error('No review.'));
+    }
+
+    /** Posts the active review to its GitHub pull request (the latest verdict unless given), with the reviewer's edits to its preview. */
+    postToGitHub(decision?: ReviewDecision, summary?: string, edits?: GitHubEdits): Promise<GitHubPost> {
+        const review = this.activeReview;
+        return review ? this.service.postToGitHub(review.id, decision, summary, edits) : Promise.reject(new Error('No review.'));
     }
 
     /** Pulls in pre-seeded findings of the review directory (idempotent). */

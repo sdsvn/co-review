@@ -5,7 +5,8 @@ import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
 import { codicon } from '@theia/core/lib/browser/widgets/widget';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { AgentConfig, CodeLocation, isOutOfScope, Review, ReviewCoverage, ReviewDecision, ReviewScope, ReviewThread } from '../common/review-model';
-import { GitHubTarget } from '../common/review-protocol';
+import { GitHubEdits, GitHubTarget } from '../common/review-protocol';
+import { confirmGitHubPost } from './github-preview';
 import { ReviewManager } from './review-manager';
 import { ReviewCommands } from './review-commands';
 import { ReviewNavigator } from './review-navigator';
@@ -354,6 +355,21 @@ function SubmitReview({ review, manager }: { review: Review; manager: ReviewMana
     const submit = async () => {
         setBusy(true);
         try {
+            // Posting too: the reviewer sees exactly what goes to GitHub first; cancelling keeps the form open to edit.
+            let edits: GitHubEdits | undefined;
+            if (post && github) {
+                let preview;
+                try {
+                    preview = await manager.previewGitHubPost(decision, summary.trim());
+                } catch (e) {
+                    setNote({ text: String(e instanceof Error ? e.message : e).replace(/^Error: /, ''), error: true });
+                    return;
+                }
+                edits = await confirmGitHubPost(github, preview);
+                if (!edits) {
+                    return;
+                }
+            }
             await manager.submitReview(decision, summary.trim());
             setSummary('');
             setOpen(false);
@@ -361,7 +377,7 @@ function SubmitReview({ review, manager }: { review: Review; manager: ReviewMana
             if (post && github) {
                 setNote({ text: `Posting to ${github.repo}#${github.number}…` });
                 try {
-                    const posted = await manager.postToGitHub(decision, summary.trim());
+                    const posted = await manager.postToGitHub(decision, summary.trim(), edits);
                     setNote({
                         text: `Posted to GitHub: ${posted.comments} line comment${posted.comments === 1 ? '' : 's'}`
                             + `${posted.inBody ? `, ${posted.inBody} in the body` : ''}.${posted.notes.length ? ` ${posted.notes.join(' ')}` : ''}`,
@@ -382,7 +398,7 @@ function SubmitReview({ review, manager }: { review: Review; manager: ReviewMana
         </div>
         <textarea className='theia-input' rows={3} value={summary} placeholder={post ? 'Message to the agent and on GitHub (optional)' : 'Message to the agent (optional)'}
             onChange={e => setSummary(e.currentTarget.value)} />
-        {github && <label className='co-review-github-post' title='Your open comments on diff lines become line comments; the rest goes into the review. Proposed findings you did not accept are left out.'>
+        {github && <label className='co-review-github-post' title='Your open comments on diff lines become line comments; the rest goes into the review. You see exactly what will be posted, and can edit it, before it goes.'>
             <input type='checkbox' checked={post} onChange={e => setPost(e.currentTarget.checked)} />
             Also post to GitHub: {github.repo}#{github.number}
             {github.postedRound !== undefined && <span className='co-review-muted'> (round {github.postedRound} was posted)</span>}

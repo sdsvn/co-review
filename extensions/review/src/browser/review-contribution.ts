@@ -4,6 +4,7 @@ import { FrontendApplicationContribution } from '@theia/core/lib/browser/fronten
 import { KeybindingRegistry } from '@theia/core/lib/browser/keybinding';
 import { QuickInputService, QuickPickItem } from '@theia/core/lib/browser/quick-input';
 import { ConfirmDialog } from '@theia/core/lib/browser/dialogs';
+import { confirmGitHubPost } from './github-preview';
 import { CommandRegistry, CommandService } from '@theia/core/lib/common/command';
 import { MenuModelRegistry } from '@theia/core/lib/common/menu';
 import { MessageService } from '@theia/core/lib/common/message-service';
@@ -113,19 +114,19 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         if (!picked) {
             return;
         }
-        const open = review.threads.filter(t => t.status === 'open').length;
-        const again = github.postedRound !== undefined ? `\n\nRound ${github.postedRound} was already posted (${github.postedUrl}).` : '';
-        const ok = await new ConfirmDialog({
-            title: 'Post to GitHub',
-            msg: `Post this review to ${github.url} as "${picked.label}", with its ${open} open comment${open === 1 ? '' : 's'}`
-                + ` and your summary? Proposed findings you didn't accept and resolved threads are left out.${again}`,
-            ok: 'Post to GitHub'
-        }).open();
-        if (!ok) {
+        let preview;
+        try {
+            preview = await this.reviews.previewGitHubPost(picked.id as keyof typeof label, review.verdict?.summary);
+        } catch (e) {
+            this.messages.error(String(e instanceof Error ? e.message : e));
+            return;
+        }
+        const edits = await confirmGitHubPost(github, preview);
+        if (!edits) {
             return;
         }
         try {
-            const posted = await this.reviews.postToGitHub(picked.id as keyof typeof label, review.verdict?.summary);
+            const posted = await this.reviews.postToGitHub(picked.id as keyof typeof label, review.verdict?.summary, edits);
             const action = await this.messages.info(`Posted to GitHub: ${posted.comments} line comment${posted.comments === 1 ? '' : 's'}`
                 + `${posted.inBody ? `, ${posted.inBody} in the body` : ''}.${posted.notes.length ? ` ${posted.notes.join(' ')}` : ''}`, 'Open on GitHub');
             if (action) {

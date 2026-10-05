@@ -82,6 +82,20 @@ export interface GitHubPost {
     notes: string[];
 }
 
+/** Exactly what posting a review to GitHub would send: the review's event and body, and its line comments. */
+export interface GitHubPreview {
+    event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
+    body: string;
+    /** Each line comment and the thread it comes from. */
+    comments: { threadId: string; path: string; line: number; startLine?: number; side: 'RIGHT' | 'LEFT'; body: string }[];
+}
+
+/** The reviewer's edits to a preview: the review's body and line comments by thread (an empty comment is left out). */
+export interface GitHubEdits {
+    body: string;
+    comments: Record<string, string>;
+}
+
 export interface ReviewService extends RpcServer<ReviewClient> {
     /** This frontend (window) shows `workspaceRoot`: its agents are told when the reviewer closes it. */
     showWorkspace(workspaceRoot: string): Promise<void>;
@@ -122,7 +136,9 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     /** The GitHub pull request the review belongs to, if any. */
     getGitHubTarget(reviewId: string): Promise<GitHubTarget | undefined>;
     /** Posts the review to its GitHub pull request (the latest verdict unless given). */
-    postToGitHub(reviewId: string, decision?: ReviewDecision, summary?: string): Promise<GitHubPost>;
+    /** What `postToGitHub` would send with this decision and summary, without posting it. */
+    previewGitHubPost(reviewId: string, decision?: ReviewDecision, summary?: string): Promise<GitHubPreview>;
+    postToGitHub(reviewId: string, decision?: ReviewDecision, summary?: string, edits?: GitHubEdits): Promise<GitHubPost>;
     /** Opens a local HTML page in the system's default browser (pages are not rendered inside Co-Review). */
     openInBrowser(uri: string): Promise<void>;
     /**

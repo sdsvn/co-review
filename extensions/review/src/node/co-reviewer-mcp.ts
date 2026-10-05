@@ -16,7 +16,7 @@ import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coo
 import { coReviewHome, realPath, ReviewStore } from './review-store';
 import { SyntaxServiceImpl } from './syntax-service-impl';
 import { BundleService } from './bundle-service';
-import { GitHubReviews } from './github';
+import { GitHubReviews, previewMarkdown } from './github';
 import { documentFormat, DocumentFormat } from '../common/design-format';
 import { acceptedSuggestions, commentOf, findThread, threadRef } from './review-payloads';
 import { ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT } from './prompts.gen';
@@ -576,7 +576,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             const agent = this.agentOf(session);
             const thread = await this.store.createThread(review.id, { kind: 'repository' }, question, agent);
             const request = { id: randomUUID(), title: question, options: [{ id: 'post', name: 'Post to GitHub', kind: 'allow_once' }, { id: 'skip', name: 'Don\'t post', kind: 'reject_once' }] };
-            const messageId = await this.store.startMessage(review.id, thread.id, agent, { body: '', permission: request, status: 'done' });
+            // Exactly what goes out, so the reviewer confirms the words, not just the counts.
+            const preview = previewMarkdown(await this.github.preview(review.id, decision, summary, reworded));
+            const messageId = await this.store.startMessage(review.id, thread.id, agent, { body: `This is what will be posted:\n\n${preview}`, permission: request, status: 'done' });
             await this.store.setAgentState(review.id, thread.id, 'waiting_for_human');
             const choice = await this.decisions.wait(request.id, 15 * 60 * 1000);
             await this.store.updateMessage(review.id, thread.id, messageId, { permission: { ...request, outcome: choice ?? 'cancelled' } });

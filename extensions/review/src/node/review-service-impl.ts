@@ -7,7 +7,7 @@ import { AcpAgentService } from './acp-agent-service';
 import { BundleService } from './bundle-service';
 import { currentUser } from './participants';
 import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coordination';
-import { AgentSetupInfo, CreateReviewParams, GitHubPost, GitHubTarget, GitInfo, ReviewClient, ReviewService } from '../common/review-protocol';
+import { AgentSetupInfo, CreateReviewParams, GitHubEdits, GitHubPost, GitHubPreview, GitHubTarget, GitInfo, ReviewClient, ReviewService } from '../common/review-protocol';
 import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
 import { OverviewPages } from './overview-page';
@@ -191,8 +191,12 @@ export class ReviewServiceImpl implements ReviewService {
         return this.github.target(await this.store.get(reviewId));
     }
 
-    postToGitHub(reviewId: string, decision?: ReviewDecision, summary?: string): Promise<GitHubPost> {
-        return this.github.publish(reviewId, decision, summary);
+    previewGitHubPost(reviewId: string, decision?: ReviewDecision, summary?: string): Promise<GitHubPreview> {
+        return this.github.preview(reviewId, decision, summary);
+    }
+
+    postToGitHub(reviewId: string, decision?: ReviewDecision, summary?: string, edits?: GitHubEdits): Promise<GitHubPost> {
+        return this.github.publish(reviewId, decision, summary, undefined, edits);
     }
 
 
