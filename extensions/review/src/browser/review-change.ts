@@ -1,6 +1,6 @@
 import { DiffUris } from '@theia/core/lib/browser/diff-uris';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
-import { codicon, Widget } from '@theia/core/lib/browser/widgets/widget';
+import { Widget } from '@theia/core/lib/browser/widgets/widget';
 import { TabBarToolbarContribution, TabBarToolbarRegistry } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { Command, CommandContribution, CommandRegistry } from '@theia/core/lib/common/command';
 import { OpenHandler, OpenerOptions } from '@theia/core/lib/browser/opener-service';
@@ -289,9 +289,9 @@ export namespace ReviewChangeCommands {
 }
 
 /**
- * The explorer's "Changed files only" switch during a change review: an icon in its title bar while off, and while on a
- * labelled "Changed files only" button that stays visible (CSS), so the narrowed tree is never mistaken for missing
- * files. Both are commands too.
+ * The explorer's "Changed files only" switch during a change review: a labelled button in its title bar that stays
+ * visible (CSS) in both states, "Changed files only" while narrowed and "All files" while not, so the narrowed tree is
+ * never mistaken for missing files and the way back to it is never hidden behind a hover. Both are commands too.
  */
 @injectable()
 export class ReviewChangeExplorerContribution implements CommandContribution, TabBarToolbarContribution {
@@ -319,8 +319,9 @@ export class ReviewChangeExplorerContribution implements CommandContribution, Ta
         registry.registerItem({
             id: ReviewChangeCommands.CHANGED_ONLY.id,
             command: ReviewChangeCommands.CHANGED_ONLY.id,
-            tooltip: 'Show only the files the change adds or modifies',
-            icon: codicon('git-pull-request'),
+            tooltip: 'Showing all files. Click to show only the files the change adds or modifies.',
+            // Text only, as below.
+            text: 'All files',
             priority: -1,
             onDidChange
         });

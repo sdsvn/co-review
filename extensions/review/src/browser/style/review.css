@@ -334,8 +334,11 @@ details[open] > summary.co-review-step-line::before { content: '▾'; }
 .monaco-editor .co-review-change-removed-above { box-shadow: inset 0 2px 0 var(--theia-editorGutter-deletedBackground); }
 .monaco-editor .co-review-change-removed-below { box-shadow: inset 0 -2px 0 var(--theia-editorGutter-deletedBackground); }
 
-/* The explorer's "Changed files only" label stays visible while the tree is narrowed to the change. */
-.theia-view-container-part-title:has(#co-review\.explorer\.showAll) { display: flex; }
-#co-review\.explorer\.showAll { color: var(--theia-badge-foreground); font-size: var(--theia-ui-font-size0);
-    white-space: nowrap; padding: 0 4px; border-radius: 3px; background: var(--theia-badge-background); }
-#co-review\.explorer\.showAll::before { content: '\ea64'; font-family: codicon; margin-right: 4px; vertical-align: middle; }
+/* The explorer's "Changed files only" / "All files" switch stays visible in both states during a change review. */
+.theia-view-container-part-title:has(#co-review\.explorer\.showAll, #co-review\.explorer\.changedOnly) { display: flex; }
+#co-review\.explorer\.showAll, #co-review\.explorer\.changedOnly { font-size: var(--theia-ui-font-size0);
+    white-space: nowrap; padding: 0 4px; border-radius: 3px; }
+#co-review\.explorer\.showAll { color: var(--theia-badge-foreground); background: var(--theia-badge-background); }
+#co-review\.explorer\.changedOnly { color: var(--theia-foreground); box-shadow: inset 0 0 0 1px var(--theia-badge-background); }
+#co-review\.explorer\.showAll::before, #co-review\.explorer\.changedOnly::before { content: '\ea64'; font-family: codicon;
+    margin-right: 4px; vertical-align: middle; }
