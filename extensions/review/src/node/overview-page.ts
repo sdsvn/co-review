@@ -69,6 +69,8 @@ export interface OverviewParts {
     repository?: string;
     /** A change review with a repository: its blast radius ('no graph': Graphify isn't installed or has no graph). */
     radius?: BlastRadius | 'no graph';
+    /** The slow section (`repository` or `radius`) is still being built: the page is written again when it is. */
+    building?: boolean;
 }
 
 /** A definition as a link into the code (the window's folder is the code). */
@@ -170,6 +172,9 @@ export function overviewPage(review: Review, root: string, parts: OverviewParts)
 
     if (parts.radius) {
         lines.push(...radiusSection(parts.radius));
+    } else if (parts.building && review.bundle?.repo) {
+        lines.push('', '## Blast radius', '', '_Co-Review is building the code graph of the repository (Graphify). '
+            + 'What else the change affects appears here when it is ready._');
     }
 
     lines.push('', `## Findings and comments (${threads.length})`);
@@ -200,6 +205,9 @@ export function overviewPage(review: Review, root: string, parts: OverviewParts)
 
     if (parts.repository) {
         lines.push('', '## The repository', '', ...nest(parts.repository));
+    } else if (parts.building && !review.bundle) {
+        lines.push('', '## The repository', '', '_Co-Review is indexing the repository. Where to start, the areas of the code and how '
+            + 'they connect appear here when it is ready._');
     }
     return lines.join('\n') + '\n';
 }
@@ -217,6 +225,12 @@ export class OverviewPages {
     protected readonly repositories = new Map<string, string>();
     /** Blast radii by review, the same way. */
     protected readonly radii = new Map<string, BlastRadius | 'no graph'>();
+    /**
+     * The slow section being built, by review. Building it (a Graphify run, the Tree-sitter index of the repository)
+     * takes seconds on a small repository and half a minute on a large one, so the page never waits for it: it is
+     * written with what is cheap and written again when the section is ready.
+     */
+    protected readonly building = new Map<string, Promise<void>>();
 
     @postConstruct()
     protected init(): void {
@@ -225,6 +239,7 @@ export class OverviewPages {
                 clearTimeout(this.timers.get(change.reviewId));
                 this.timers.delete(change.reviewId);
                 this.repositories.delete(change.reviewId);
+                this.radii.delete(change.reviewId);
                 fs.rm(path.dirname(this.fileOf(change.workspaceRoot, change.reviewId)), { recursive: true, force: true }).catch(() => undefined);
             } else {
                 // A page that was written (in this run or an earlier one) follows the review. Changes come in bursts
@@ -247,7 +262,9 @@ export class OverviewPages {
 
     /**
      * Writes the review's overview page; returns its file URI. Undefined for a review directory without patches (a
-     * design or a knowledge bundle): its document is its front page. `fresh`: rebuild the repository section.
+     * design or a knowledge bundle): its document is its front page. `fresh`: rebuild the slow section (the
+     * repository overview, or a change's blast radius) in the background; until it is ready the page shows the one
+     * built before, or says it is being built.
      */
     async write(reviewId: string, fresh = true): Promise<string | undefined> {
         const review = await this.store.get(reviewId);
@@ -271,26 +288,53 @@ export class OverviewPages {
             if (repo) {
                 // The graph is built or refreshed when the page is opened; rewrites after review changes reuse it.
                 if (fresh || !this.radii.has(review.id)) {
-                    const state = await buildGraph(repo).catch(() => 'failed' as const);
-                    const radius = state === 'built' ? await blastRadius(repo, changedLines(all)).catch(() => undefined) : undefined;
-                    this.radii.set(review.id, radius ?? 'no graph');
-                    // The Related files follow the graph, e.g. once Graphify built one the open didn't have.
-                    if (radius && review.bundle && JSON.stringify(radius.files) !== JSON.stringify(review.bundle.related ?? [])) {
-                        await this.store.setBundle(review.id, { ...review.bundle, related: radius.files });
-                    }
+                    this.build(review.id, () => this.radii.set(review.id, 'no graph'), async () => {
+                        const state = await buildGraph(repo).catch(() => 'failed' as const);
+                        const radius = state === 'built' ? await blastRadius(repo, changedLines(all)).catch(() => undefined) : undefined;
+                        this.radii.set(review.id, radius ?? 'no graph');
+                        // The Related files follow the graph, e.g. once Graphify built one the open didn't have.
+                        const current = await this.store.get(review.id);
+                        if (radius && current?.bundle && JSON.stringify(radius.files) !== JSON.stringify(current.bundle.related ?? [])) {
+                            await this.store.setBundle(review.id, { ...current.bundle, related: radius.files });
+                        }
+                    });
                 }
                 parts.radius = this.radii.get(review.id);
             }
         } else {
             const root = FileUri.fsPath(review.workspaceRoot);
             if (fresh || !this.repositories.has(review.id)) {
-                this.repositories.set(review.id, await this.index.overview(root, review.viewed).catch(() => ''));
+                this.build(review.id, () => this.repositories.set(review.id, ''), async () => {
+                    this.repositories.set(review.id, await this.index.overview(root, review.viewed));
+                });
             }
             parts.repository = this.repositories.get(review.id) || undefined;
         }
+        parts.building = this.building.has(review.id);
         const file = this.fileOf(review.workspaceRoot, review.id);
         await fs.mkdir(path.dirname(file), { recursive: true });
         await fs.writeFile(file, overviewPage(review, dir ?? FileUri.fsPath(review.workspaceRoot), parts));
         return FileUri.create(file).toString();
+    }
+
+    /**
+     * Builds a review's slow section in the background, one build per review at a time (a page opened again while
+     * one runs waits for that one), then writes the page again so the section shows. The window opens meanwhile.
+     * `fallback` settles the section when the build fails, so the page stops saying it is being built.
+     */
+    protected build(reviewId: string, fallback: () => void, section: () => Promise<void>): void {
+        if (this.building.has(reviewId)) {
+            return;
+        }
+        const done = section()
+            .catch(e => {
+                console.error('[co-review] overview section failed', e);
+                fallback();
+            })
+            .finally(() => this.building.delete(reviewId))
+            // A deleted review is not written again: write returns before writing when the store has no review.
+            .then(() => this.write(reviewId, false))
+            .then(() => undefined, e => console.error('[co-review] overview page failed', e));
+        this.building.set(reviewId, done);
     }
 }
