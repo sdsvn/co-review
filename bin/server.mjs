@@ -1,6 +1,6 @@
 // Finds a running Co-Review (desktop or browser) or starts the browser app in the background.
 import { spawn } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +54,10 @@ export async function findServer({ port }) {
  * (recorded in ~/.co-review/server.json) is reused; otherwise the browser app is started.
  */
 export async function ensureServer({ port, root, open }) {
+    if (desktopApp) {
+        // An app of another version, or one left without a backend, is not reused: stopped, and started afresh.
+        stopStaleDesktop();
+    }
     if (desktopApp && open) {
         return startDesktop(root);
     }
@@ -67,7 +71,16 @@ export async function ensureServer({ port, root, open }) {
     }
     const base = `http://127.0.0.1:${port || 3000}`;
     mkdirSync(home, { recursive: true });
-    const out = openSync(join(home, 'server.log'), 'a');
+    // The server's output, kept from growing without bound: moved aside once it passes 5 MB.
+    const logFile = join(home, 'server.log');
+    try {
+        if (statSync(logFile).size > 5 * 1024 * 1024) {
+            renameSync(logFile, join(home, 'server.1.log'));
+        }
+    } catch {
+        /* no log yet */
+    }
+    const out = openSync(logFile, 'a');
     log(`starting Co-Review on ${base} (log: ${join(home, 'server.log')})`);
     const child = spawn(process.execPath, [join(appDir, 'lib', 'backend', 'main.js'),
         '--hostname', '127.0.0.1', '--port', String(port || 3000), `--plugins=local-dir:${pluginsDir}`, root], {
@@ -108,6 +121,77 @@ async function startDesktop(root) {
         await new Promise(r => setTimeout(r, 500));
     }
     throw new Error('The Co-Review desktop app did not start.');
+}
+
+/** The version of the Co-Review this command is part of (the app's package.json), or undefined in a checkout. */
+function ownVersion() {
+    try {
+        return JSON.parse(readFileSync(resolve(here, '..', 'package.json'), 'utf8')).version;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Stops a running desktop app that must not be used: one of another version than this command's (an update was
+ * installed while it ran; the old one would keep serving, with the new one's agents and command), or one that runs
+ * without a backend (its files were replaced under it; macOS kills the helper processes, not the app). Either holds
+ * the single-instance lock, so a launch would be handed to it and nothing would start. The app records its process
+ * and version in logs/app.json, the backend its process in server.json. Returns whether one was stopped. Exported
+ * for its test; `version` stands in for this command's own.
+ */
+export function stopStaleDesktop({ now = Date.now(), graceMs = 90_000, version = ownVersion() } = {}) {
+    const read = file => {
+        try {
+            return JSON.parse(readFileSync(file, 'utf8'));
+        } catch {
+            return undefined;
+        }
+    };
+    const alive = pid => {
+        try {
+            process.kill(pid, 0);
+            return true;
+        } catch (e) {
+            return e.code === 'EPERM';
+        }
+    };
+    const app = read(join(logsDir, 'app.json'));
+    if (!app?.pid || !alive(app.pid)) {
+        return false;
+    }
+    let why;
+    if (version && app.version && app.version !== version) {
+        why = `it is version ${app.version}, and ${version} is installed`;
+    } else if (now - Date.parse(app.started ?? 0) < graceMs) {
+        // Still starting (its backend registers within seconds): leave it be.
+        return false;
+    } else {
+        const server = read(join(home, 'server.json'));
+        if (server?.pid && alive(server.pid)) {
+            return false;
+        }
+        why = 'it runs without a backend, so nothing could start';
+    }
+    log(`stopping Co-Review (process ${app.pid}): ${why}`);
+    try {
+        process.kill(app.pid, 'SIGTERM');
+    } catch {
+        return false;
+    }
+    // Ten seconds for it to go; then without ceremony, as a start waits on this.
+    const until = Date.now() + 10_000;
+    while (alive(app.pid) && Date.now() < until) {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+    }
+    if (alive(app.pid)) {
+        try {
+            process.kill(app.pid, 'SIGKILL');
+        } catch {
+            /* gone meanwhile */
+        }
+    }
+    return true;
 }
 
 export function openUrl(url) {

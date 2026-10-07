@@ -53,12 +53,14 @@
         "defaultTheme": {
           "light": "co-review-light",
           "dark": "co-review-dark"
-        }
+        },
+        "reloadOnReconnect": true
       }
     },
     "backend": {
       "config": {
-        "startupTimeout": -1
+        "startupTimeout": -1,
+        "frontendConnectionTimeout": 600000
       }
     }
   }

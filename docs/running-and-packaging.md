@@ -105,6 +105,14 @@ Asset names carry no version (`Co-Review-mac-arm64.zip`, `Co-Review-linux-x64.ta
 curl -fsSL https://sdsvn.github.io/co-review/install.sh | bash
 ```
 
+An update stops the Co-Review that is running, three ways, so an old version never keeps serving the new
+command and agents (its files replaced under it, macOS kills its helper processes but not the app, which then
+holds the single-instance lock: nothing can start). `install.sh` and `make install-app` quit it before replacing
+its files; the running app quits itself once the version on disk is not its own, or once its backend is gone;
+and the `co-review` command stops a running app of another version, or one without a backend, before starting
+one (`co-review logs` shows each as "stopping Co-Review (process …)"). Reviews are saved; the next
+`co-review` call starts the new version.
+
 ### Installing on macOS
 
 ```bash

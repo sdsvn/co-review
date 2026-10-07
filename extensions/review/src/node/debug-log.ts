@@ -9,8 +9,8 @@ import * as path from 'path';
  * prints the end of them merged by time, with whether Co-Review answers.
  *
  * A log can never grow without bound, whatever floods it (a loop logging an error millions of times): a file is moved
- * to `<name>.1.log` once it passes 5 MB, an entry repeated right after itself is counted instead of written again,
- * and an entry is cut at 4 KB.
+ * to `<name>.1.log` once it passes 5 MB, an entry repeated right after itself (the same but for its numbers: an id, a
+ * count) is counted instead of written again, at most 50 entries a second are written, and an entry is cut at 4 KB.
  */
 export function logsDir(): string {
     return path.join(process.env.CO_REVIEW_HOME || path.join(os.homedir(), '.co-review'), 'logs');
@@ -18,6 +18,7 @@ export function logsDir(): string {
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_ENTRY = 4 * 1024;
+const MAX_PER_SECOND = 50;
 
 export class DebugLog {
 
@@ -25,8 +26,12 @@ export class DebugLog {
     protected fd: number | undefined;
     protected readonly file: string;
     protected written = 0;
-    /** The last entry, without its time stamp, and how many times it came again since. */
-    protected last: { level: string; text: string; repeats: number; since: number } | undefined;
+    /** The last entry written, with its numbers taken out, how many times it came again since, and the latest of those. */
+    protected last: { level: string; text: string; repeats: number; since: number; latest: string } | undefined;
+    /** The current second, how many entries it has, and how many more were dropped. */
+    protected second = 0;
+    protected inSecond = 0;
+    protected dropped = 0;
 
     constructor(readonly name: string) {
         this.file = path.join(logsDir(), `${name}.log`);
@@ -56,28 +61,63 @@ export class DebugLog {
         if (body.length > MAX_ENTRY) {
             body = `${body.slice(0, MAX_ENTRY)} … (${body.length - MAX_ENTRY} more characters)`;
         }
-        // The same entry again (a loop): counted, and written once it stops or every 10 seconds.
-        const key = body.replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '');
+        // The same entry again (a loop), but for its numbers (a time, an id, a count: a loop's entries differ in
+        // those): counted, and written once it stops or every 10 seconds.
+        const key = body.replace(/\d+/g, 'N');
         if (this.last && this.last.level === level && this.last.text === key) {
             this.last.repeats++;
+            this.last.latest = body;
             if (Date.now() - this.last.since < 10_000) {
                 return;
             }
         }
+        // Different entries faster than anyone reads them (a loop logging varying errors): at most 50 a second,
+        // and how many were dropped.
+        const second = Math.floor(Date.now() / 1000);
+        if (second !== this.second) {
+            this.flushDropped();
+            this.second = second;
+            this.inSecond = 0;
+        }
+        if (++this.inSecond > MAX_PER_SECOND) {
+            if (!this.dropped++) {
+                // Said within the second even if nothing else comes (the process may be about to exit).
+                setTimeout(() => this.flushDropped(), 1000).unref();
+            }
+            return;
+        }
         this.flushRepeats();
-        this.last = { level, text: key, repeats: 0, since: Date.now() };
+        this.last = { level, text: key, repeats: 0, since: Date.now(), latest: body };
         this.append(level, body);
     }
 
+    protected flushDropped(): void {
+        if (this.dropped) {
+            this.flushRepeats();
+            this.last = undefined;
+            this.append('warn', `(${this.dropped} more entries dropped in a second: too many)`);
+            this.dropped = 0;
+        }
+    }
+
+    /** The count of repeats, with the latest of them when they differed in their numbers (how long, which id). */
     protected flushRepeats(): void {
         if (this.last?.repeats) {
-            this.append(this.last.level as 'info', `(the entry above came ${this.last.repeats} more times)`);
+            const { level, repeats, latest } = this.last;
+            const differed = latest !== this.lastBody;
+            this.append(level as 'info', `(the entry above came ${repeats} more time${repeats === 1 ? '' : 's'}${differed ? `, the last: ${latest}` : ''})`);
             this.last.repeats = 0;
             this.last.since = Date.now();
         }
     }
 
+    /** The body of the last entry written (not a count), to tell whether repeats differed from it. */
+    protected lastBody = '';
+
     protected append(level: 'info' | 'warn' | 'error', body: string): void {
+        if (!body.startsWith('(the entry above came')) {
+            this.lastBody = body;
+        }
         const line = `${new Date().toISOString()} ${process.pid} ${level.toUpperCase().padEnd(5)} ${body.split('\n').join('\n    ')}\n`;
         if (this.fd === undefined) {
             return;
@@ -131,7 +171,8 @@ export function captureOutput(log: DebugLog): void {
 
 /**
  * Logs when this process's event loop was blocked for longer than `thresholdMs`: a window that stops responding, or a
- * backend that stops answering, shows up here with when and for how long.
+ * backend that stops answering, shows up here with when and for how long. A gap of over a minute is almost always
+ * the computer asleep (every process shows the same gap then), so it is told as a pause, not a problem.
  */
 export function watchEventLoop(log: DebugLog, thresholdMs = 1000): void {
     const interval = 500;
@@ -139,7 +180,9 @@ export function watchEventLoop(log: DebugLog, thresholdMs = 1000): void {
     setInterval(() => {
         const now = Date.now();
         const blocked = now - last - interval;
-        if (blocked > thresholdMs) {
+        if (blocked > 60_000) {
+            log.info(`paused for ${Math.round(blocked / 1000)} s: the computer slept, or the event loop was blocked that long`);
+        } else if (blocked > thresholdMs) {
             log.warn(`event loop blocked for ${blocked} ms`);
         }
         last = now;

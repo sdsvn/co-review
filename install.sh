@@ -96,8 +96,16 @@ Darwin)
     fetch "Co-Review-mac-arm64.zip"
     ditto -x -k "$tmp/Co-Review-mac-arm64.zip" "$tmp/app"
     mkdir -p "$apps"
+    # Replacing the app's files under a running app leaves it alive without its backend (macOS kills the helper
+    # processes, not the app), holding the single-instance lock: nothing can start until it is quit. Quit it.
     if pgrep -f "$apps/Co-Review.app/Contents/MacOS/Co-Review" >/dev/null 2>&1; then
-        say "Co-Review is running; quit it to use the new version."
+        say "Quitting the running Co-Review for the update (reviews are saved; it starts again on the next co-review call)"
+        pkill -TERM -f "$apps/Co-Review.app/Contents/MacOS/Co-Review" || true
+        for _ in $(seq 1 50); do
+            pgrep -f "$apps/Co-Review.app/Contents/MacOS/Co-Review" >/dev/null 2>&1 || break
+            sleep 0.2
+        done
+        pkill -KILL -f "$apps/Co-Review.app/Contents/MacOS/Co-Review" 2>/dev/null || true
     fi
     rm -rf "$apps/Co-Review.app"
     mv "$tmp/app/Co-Review.app" "$apps/"
@@ -113,6 +121,15 @@ Linux)
     tar -xzf "$tmp/Co-Review-linux-$arch.tar.gz" -C "$tmp/app"
     root=$(find "$tmp/app" -mindepth 1 -maxdepth 1 -type d | head -n 1)
     [ -x "$root/co-review" ] || fail "unexpected archive layout"
+    if pgrep -f "$dir/co-review" >/dev/null 2>&1; then
+        say "Quitting the running Co-Review for the update (reviews are saved; it starts again on the next co-review call)"
+        pkill -TERM -f "$dir/co-review" || true
+        for _ in $(seq 1 50); do
+            pgrep -f "$dir/co-review" >/dev/null 2>&1 || break
+            sleep 0.2
+        done
+        pkill -KILL -f "$dir/co-review" 2>/dev/null || true
+    fi
     rm -rf "$dir"
     mkdir -p "$(dirname "$dir")"
     mv "$root" "$dir"

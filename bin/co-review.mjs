@@ -111,8 +111,10 @@ async function mcp() {
     let init;
     /** The review the agent last opened: a new Co-Review session rejoins it, so waits and replies stay on it. */
     let reviewId;
-    /** Agent requests forwarded to Co-Review and not answered yet. */
-    const inflight = new Set();
+    /** Agent requests forwarded to Co-Review and not answered yet, by id: sent again when the session is gone. */
+    const inflight = new Map();
+    /** Requests sent again once already: a second failure is an error to the agent, not a loop. */
+    const retried = new WeakSet();
     const watched = new Map();
     const internal = new Map();
     let nextId = 0;
@@ -135,15 +137,56 @@ async function mcp() {
         http = undefined;
         connection = undefined;
         dead.close().catch(() => undefined);
-        for (const id of inflight) {
-            stdio.send({ jsonrpc: '2.0', id, error: { code: -32603, message: `Co-Review closed (${why}). Call the tool again: it reconnects. `
-                + 'If it keeps failing or Co-Review seems stuck, run `co-review logs` and show the user what it says.' } });
-        }
-        inflight.clear();
-        watched.clear();
         for (const reply of [...internal.values()]) {
             reply({ error: { message: why } });
         }
+        const pending = [...inflight.values()];
+        inflight.clear();
+        // Co-Review answers, but not for this session (it was restarted, or let the session go): a new session, and
+        // the agent's unanswered calls again, without it noticing. None runs twice: the old session never got them.
+        const again = /No valid MCP session/.test(why) ? pending.filter(message => !retried.has(message)) : [];
+        for (const message of pending) {
+            if (!again.includes(message)) {
+                watched.delete(message.id);
+                stdio.send({ jsonrpc: '2.0', id: message.id, error: { code: -32603, message: `Co-Review closed (${why}). Call the tool again: it reconnects. `
+                    + 'If it keeps failing or Co-Review seems stuck, run `co-review logs` and show the user what it says.' } });
+            }
+        }
+        if (again.length) {
+            log(`sending ${again.length} call(s) again on a new session`);
+            connection = connect(true);
+            connection.catch(() => (connection = undefined));
+            for (const message of again) {
+                retried.add(message);
+                forward(message);
+            }
+        }
+    };
+    /** Sends the agent's message to Co-Review once connected; a failure is told to the agent, or the call sent again. */
+    const forward = message => {
+        const isRequest = 'id' in message && 'method' in message;
+        if (isRequest) {
+            inflight.set(message.id, message);
+        }
+        let used;
+        connection.then(() => {
+            used = http;
+            return used.send(message);
+        }).catch(e => {
+            if (!used) {
+                log(e.message);
+            } else if (http === used) {
+                lost(e.message);
+            }
+            // Sent again on a new session (see lost): not failed.
+            if (isRequest && retried.has(message) && inflight.get(message.id) === message) {
+                return;
+            }
+            if (isRequest && inflight.delete(message.id)) {
+                stdio.send({ jsonrpc: '2.0', id: message.id, error: { code: -32603, message: `Co-Review is not reachable: ${e.message}. `
+                    + 'Run `co-review logs` and show the user what it says.' } });
+            }
+        });
     };
     // Transport errors are also reported for streams the SDK resumes by itself: check that the session still answers.
     let checking = false;
@@ -242,26 +285,12 @@ async function mcp() {
             // Try again on the next call if Co-Review did not start.
             connection.catch(() => (connection = undefined));
         }
-        const isRequest = 'id' in message && 'method' in message;
-        if (isRequest) {
-            inflight.add(message.id);
-        }
         if (handshake || message.method === 'tools/list') {
             watched.set(message.id, handshake ? 'initialize' : 'tools');
         } else if (message.method === 'tools/call' && message.params?.name === 'open_review') {
             watched.set(message.id, 'review');
         }
-        connection.then(() => http.send(message)).catch(e => {
-            if (http) {
-                lost(e.message);
-            } else {
-                log(e.message);
-            }
-            if (isRequest && inflight.delete(message.id)) {
-                stdio.send({ jsonrpc: '2.0', id: message.id, error: { code: -32603, message: `Co-Review is not reachable: ${e.message}. `
-                    + 'Run `co-review logs` and show the user what it says.' } });
-            }
-        });
+        forward(message);
     };
     // The agent's session ended (the harness closed stdin, which the stdio transport does not report): end ours
     // too, so Co-Review knows this agent is done, and exit instead of lingering on the open HTTP stream.
