@@ -98,14 +98,41 @@ Darwin)
     mkdir -p "$apps"
     # Replacing the app's files under a running app leaves it alive without its backend (macOS kills the helper
     # processes, not the app), holding the single-instance lock: nothing can start until it is quit. Quit it.
-    if pgrep -f "$apps/Co-Review.app/Contents/MacOS/Co-Review" >/dev/null 2>&1; then
-        say "Quitting the running Co-Review for the update (reviews are saved; it starts again on the next co-review call)"
-        pkill -TERM -f "$apps/Co-Review.app/Contents/MacOS/Co-Review" || true
-        for _ in $(seq 1 50); do
-            pgrep -f "$apps/Co-Review.app/Contents/MacOS/Co-Review" >/dev/null 2>&1 || break
+    # The app's main process only: the agents' `co-review mcp` run on the app's executable too (as Node), and
+    # stopping them would cut every agent session off Co-Review; they start the new app when next needed.
+    # Asked to quit first (windows close and agents are told, as when the reviewer quits), then SIGTERM, then
+    # SIGKILL: one without its backend may not answer the first two.
+    running="$apps/Co-Review.app/Contents/MacOS/Co-Review"
+    app_pids() {
+        for pid in $(pgrep -f "$running"); do
+            case "$(ps -o command= -p "$pid" 2>/dev/null)" in
+            *bin/co-review.mjs*) ;;
+            ?*) echo "$pid" ;;
+            esac
+        done
+    }
+    quit_wait() {
+        for _ in $(seq 1 "$1"); do
+            [ -z "$(app_pids)" ] && return 0
             sleep 0.2
         done
-        pkill -KILL -f "$apps/Co-Review.app/Contents/MacOS/Co-Review" 2>/dev/null || true
+        return 1
+    }
+    pids=$(app_pids)
+    if [ -n "$pids" ]; then
+        say "Quitting the running Co-Review (process $(echo $pids)) for the update (reviews are saved; it starts again on the next co-review call)"
+        # Bounded: an app without its backend may never answer the request.
+        osascript -e 'with timeout of 5 seconds' -e 'quit app "Co-Review"' -e 'end timeout' >/dev/null 2>&1 || true
+        if ! quit_wait 25; then
+            say "Co-Review did not quit when asked; stopping it"
+            kill -TERM $(app_pids) 2>/dev/null || true
+            if ! quit_wait 25; then
+                say "Co-Review did not stop; killing it"
+                kill -KILL $(app_pids) 2>/dev/null || true
+                quit_wait 10 || fail "could not stop the running Co-Review; quit it and run this again"
+            fi
+        fi
+        say "Co-Review quit"
     fi
     rm -rf "$apps/Co-Review.app"
     mv "$tmp/app/Co-Review.app" "$apps/"

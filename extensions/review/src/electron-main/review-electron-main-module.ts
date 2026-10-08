@@ -26,6 +26,25 @@ process.env.CO_REVIEW_APP_LAUNCH = JSON.stringify([
     ...process.argv.filter(arg => arg.startsWith('--user-data-dir='))
 ]);
 
+function alive(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (e) {
+        return (e as NodeJS.ErrnoException).code === 'EPERM';
+    }
+}
+
+/** Whether a Co-Review backend answers at `url` (its MCP endpoint, as `co-review mcp` checks it). */
+async function answers(url: string): Promise<boolean> {
+    try {
+        const res = await fetch(`${url}/mcp`, { method: 'GET', signal: AbortSignal.timeout(3000) });
+        return res.status === 400 || res.status === 404 || res.ok;
+    } catch {
+        return false;
+    }
+}
+
 /**
  * The desktop app's windows:
  * - `--background` (how `co-review mcp` starts it for an agent): no window until a review is shown or the
@@ -86,7 +105,10 @@ export class ReviewElectronMainApplication extends ElectronMainApplication {
             });
         });
         app.on('child-process-gone', (_event, details) => log.error(`${details.type} process gone: ${details.reason} (exit code ${details.exitCode})`));
-        app.on('second-instance', (_event, argv) => log.info(`launched again: ${argv.slice(1).join(' ')}`));
+        app.on('second-instance', (_event, argv) => {
+            log.info(`launched again: ${argv.slice(1).join(' ')}`);
+            this.relaunchIfStale(argv);
+        });
         app.on('window-all-closed', () => log.info('all windows closed'));
         app.on('will-quit', () => log.info('quitting'));
         // Sleep and wake, so the gaps every process shows then (see watchEventLoop) are read as what they are.
@@ -112,45 +134,86 @@ export class ReviewElectronMainApplication extends ElectronMainApplication {
      * - the version on disk (the app's own package.json): once it is not the one running, an update replaced it.
      */
     protected watchBackend(): void {
-        const registry = path.join(path.dirname(logsDir()), 'server.json');
         const manifest = path.join(app.getAppPath(), 'package.json');
         let backendPid: number | undefined;
-        let quitting = false;
-        const quit = (why: string) => {
-            if (quitting) {
-                return;
-            }
-            quitting = true;
-            log.error(`${why}: quitting, so the next launch starts a whole, current app`);
-            app.quit();
-            setTimeout(() => app.exit(1), 5000).unref();
-        };
         setInterval(() => {
             try {
                 const onDisk = JSON.parse(fs.readFileSync(manifest, 'utf8')).version;
                 if (onDisk && onDisk !== app.getVersion()) {
-                    quit(`Co-Review ${app.getVersion()} was replaced on disk by ${onDisk}`);
+                    this.quitStale(`Co-Review ${app.getVersion()} was replaced on disk by ${onDisk}`);
                     return;
                 }
             } catch {
                 /* being replaced right now, or not a packaged app: nothing to tell yet */
             }
             if (backendPid === undefined) {
-                try {
-                    backendPid = JSON.parse(fs.readFileSync(registry, 'utf8')).pid;
-                } catch {
-                    /* not registered yet */
-                }
+                backendPid = this.registeredBackend()?.pid;
                 return;
             }
-            try {
-                process.kill(backendPid, 0);
-            } catch (e) {
-                if ((e as NodeJS.ErrnoException).code === 'ESRCH') {
-                    quit(`the backend (process ${backendPid}) is gone`);
-                }
+            if (!alive(backendPid)) {
+                this.quitStale(`the backend (process ${backendPid}) is gone`);
             }
         }, 10_000).unref();
+    }
+
+    protected readonly startedAt = Date.now();
+    protected quitting = false;
+
+    protected quitStale(why: string): void {
+        if (this.quitting) {
+            return;
+        }
+        this.quitting = true;
+        log.error(`${why}: quitting, so the next launch starts a whole, current app`);
+        app.quit();
+        setTimeout(() => app.exit(1), 5000).unref();
+    }
+
+    /**
+     * The backend this app started, as it registered itself in server.json: only a registration written since this
+     * app started is its own (an older one is a previous run's, whose process may be dead or another's).
+     */
+    protected registeredBackend(): { url: string, pid: number } | undefined {
+        const registry = path.join(path.dirname(logsDir()), 'server.json');
+        try {
+            if (fs.statSync(registry).mtimeMs < this.startedAt - 1000) {
+                return undefined;
+            }
+            const { url, pid } = JSON.parse(fs.readFileSync(registry, 'utf8'));
+            return typeof url === 'string' && typeof pid === 'number' ? { url, pid } : undefined;
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
+     * A launch handed to this app (the single-instance lock) is only served if this app still has a backend. One
+     * without (its files replaced under it, its backend crashed) would swallow every launch: the `co-review mcp`
+     * of every agent session waits for a backend that never comes. Then the launch is not lost: this app quits and
+     * starts again with the launch's arguments (`app.relaunch`, from the executable on disk, so after an update the
+     * new version), which takes the lock once this one is gone. Restarting is simpler and surer than starting a
+     * backend again from here: Theia starts its backend once, while the app starts, and windows connect to it.
+     * Checked right away rather than at the next 10-second watch, as the launching command is waiting.
+     */
+    protected async relaunchIfStale(argv: string[]): Promise<void> {
+        // Still starting: its backend registers within seconds of the start, and a launch now is just early.
+        if (this.quitting || Date.now() - this.startedAt < 30_000) {
+            return;
+        }
+        const backend = this.registeredBackend();
+        let why: string | undefined;
+        if (!backend) {
+            why = 'no backend registered by this app';
+        } else if (!alive(backend.pid)) {
+            why = `the backend (process ${backend.pid}) is gone`;
+        } else if (!await answers(backend.url)) {
+            why = `the backend at ${backend.url} does not answer`;
+        }
+        if (why) {
+            log.error(`launched again without a backend (${why}): starting again with that launch's arguments`);
+            app.relaunch({ args: argv.slice(1) });
+            this.quitStale(why);
+        }
     }
 
     protected override async openWindowWithWorkspace(workspacePath: string): Promise<BrowserWindow> {
