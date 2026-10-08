@@ -1,6 +1,6 @@
 {
   "name": "co-review-omp",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "description": "Co-Review for Oh My Pi: open a review, stay as co-reviewer, plus the co-review / co-review-design skills and slash commands",
   "keywords": [
