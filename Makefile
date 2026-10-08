@@ -72,6 +72,8 @@ MAC_APP = $(ELECTRON)/dist/mac-$(shell uname -m | sed 's/x86_64/x64/')/Co-Review
 
 install-app: package ## macOS: install Co-Review.app into /Applications (or ~/Applications) and the `co-review` command
 	@test "$$(uname)" = Darwin || { echo "make install-app is macOS-only; use make install-cli"; exit 1; }
+	@# A running app must quit before its files go (else it lives on without its backend, blocking every launch).
+	pkill -TERM -f "$(APPS)/Co-Review.app/Contents/MacOS/Co-Review" 2>/dev/null; sleep 2; pkill -KILL -f "$(APPS)/Co-Review.app/Contents/MacOS/Co-Review" 2>/dev/null; true
 	mkdir -p "$(APPS)" && rm -rf "$(APPS)/Co-Review.app" && cp -R "$(MAC_APP)" "$(APPS)/"
 	"$(APPS)/Co-Review.app/Contents/Resources/app/bin/install-cli.sh"
 

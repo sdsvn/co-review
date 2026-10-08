@@ -2,11 +2,11 @@
   "private": true,
   "name": "@co-review/electron-app",
   "productName": "Co-Review",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Agent-native repository review application",
   "main": "scripts/electron-main.js",
   "dependencies": {
-    "@co-review/review": "0.6.1",
+    "@co-review/review": "0.6.2",
     "@theia/core": "1.75.0",
     "@theia/editor": "1.75.0",
     "@theia/electron": "1.75.0",
@@ -53,12 +53,14 @@
         "defaultTheme": {
           "light": "co-review-light",
           "dark": "co-review-dark"
-        }
+        },
+        "reloadOnReconnect": true
       }
     },
     "backend": {
       "config": {
-        "startupTimeout": -1
+        "startupTimeout": -1,
+        "frontendConnectionTimeout": 600000
       }
     }
   }
