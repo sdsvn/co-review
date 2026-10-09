@@ -1,9 +1,9 @@
 {
   "private": true,
   "name": "@co-review/browser-app",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "dependencies": {
-    "@co-review/review": "0.6.2",
+    "@co-review/review": "0.6.3",
     "@theia/core": "1.75.0",
     "@theia/editor": "1.75.0",
     "@theia/file-search": "1.75.0",
