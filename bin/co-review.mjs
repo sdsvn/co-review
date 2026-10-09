@@ -3,6 +3,7 @@
 import { dirname, join, resolve } from 'node:path';
 import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { ensureServer, findServer, home, log, logsDir, openUrl } from './server.mjs';
 
@@ -12,7 +13,8 @@ Commands:
   (none) [dir]       start Co-Review (or reuse a running one) and open dir (default: the current directory)
   mcp [dir]          MCP server on stdio for agent harnesses; bridges to Co-Review's /mcp endpoint with dir
                      (default: cwd) as repository, starting Co-Review on the first tool call
-  status [dir]       open reviews of dir in a running Co-Review; never starts it
+  status [dir]       this Co-Review's version and each agent integration's (flagging any that differ), then
+                     the open reviews of dir in a running Co-Review; never starts it
                      (--claude-hook: as Claude Code SessionStart context, or nothing)
   setup <pi|omp>     install the Pi or Oh My Pi package that ships with this Co-Review
   logs               whether Co-Review answers, and its recent debug log (windows, backend, agent bridges),
@@ -312,16 +314,88 @@ async function mcp() {
     await stdio.start();
 }
 
-/** Open reviews of `root`, from a running Co-Review only: never starts it (for hooks and scripts). */
+/** Agent packages shipped next to this CLI (in the desktop app and in a checkout): harness -> package dir. */
+const PACKAGES = { pi: 'pi', omp: 'omp' };
+
+/** Where this Co-Review's package for `harness` is. */
+function bundled(harness) {
+    return resolve(dirname(fileURLToPath(import.meta.url)), '..', 'integrations', PACKAGES[harness]);
+}
+
+/**
+ * The Co-Review integrations each agent harness has installed, read from the harness's own records:
+ * { harness, version, where, fix } per install (none when the harness or its integration is missing).
+ */
+function integrations() {
+    const read = file => {
+        try {
+            return JSON.parse(readFileSync(file, 'utf8'));
+        } catch {
+            return undefined;
+        }
+    };
+    const found = [];
+    // Claude Code: the plugin from the co-review marketplace, per scope it is installed in.
+    const claudeDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+    for (const p of read(join(claudeDir, 'plugins', 'installed_plugins.json'))?.plugins?.['co-review@co-review'] ?? []) {
+        found.push({
+            harness: `Claude Code plugin (${p.scope})`, version: p.version,
+            fix: 'claude plugin marketplace update co-review && claude plugin update co-review@co-review'
+        });
+    }
+    // Oh My Pi: the version omp recorded when the package was installed (what `omp plugin list` shows).
+    const omp = read(join(homedir(), '.omp', 'plugins', 'omp-plugins.lock.json'))?.plugins?.['co-review-omp'];
+    if (omp) {
+        found.push({ harness: 'Oh My Pi package', version: omp.version, fix: 'co-review setup omp' });
+    }
+    // Pi: packages are paths (relative to the agent dir) read live, so the version is that path's package.json.
+    const piDir = process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi', 'agent');
+    for (const entry of read(join(piDir, 'settings.json'))?.packages ?? []) {
+        const source = typeof entry === 'string' ? entry : entry?.source;
+        if (typeof source !== 'string' || /^(npm|git|https?):/.test(source)) {
+            continue;
+        }
+        const dir = resolve(piDir, source.replace(/^~(?=\/)/, homedir()));
+        const pkg = read(join(dir, 'package.json'));
+        if (pkg?.name === 'co-review-pi') {
+            const fix = dir === bundled('pi') ? 'update Co-Review (the package it ships is out of date)' : `pi remove ${source} && co-review setup pi`;
+            found.push({ harness: 'Pi package', version: pkg.version, where: dir, fix });
+        }
+    }
+    return found;
+}
+
+/**
+ * This Co-Review's version and each installed integration's (flagging any that differ), then the open reviews of
+ * `root` from a running Co-Review only: never starts it. With --claude-hook, only the reviews (for the hook).
+ */
 async function status() {
+    if (!claudeHook) {
+        const app = version();
+        console.log(`co-review ${app}`);
+        const found = integrations();
+        for (const i of found) {
+            const where = i.where ? ` (${i.where})` : '';
+            console.log(i.version === app
+                ? `  ${i.harness}: ${i.version}${where}`
+                : `  ${i.harness}: ${i.version ?? 'unknown'}${where}  ← differs from the app; update it with: ${i.fix}`);
+        }
+        if (!found.length) {
+            console.log('  no agent integrations installed (see https://sdsvn.github.io/co-review/#setup)');
+        }
+    }
     try {
         const { url } = JSON.parse(readFileSync(join(home, 'server.json'), 'utf8'));
         const res = await fetch(`${url}/api/m/status?root=${encodeURIComponent(root)}${claudeHook ? '&format=claude-hook' : ''}`, { signal: AbortSignal.timeout(1500) });
         if (res.status === 200) {
-            console.log(claudeHook ? await res.text() : JSON.stringify(await res.json(), undefined, 2));
+            console.log(claudeHook ? await res.text() : `Open reviews of ${root}:\n${JSON.stringify(await res.json(), undefined, 2)}`);
+            return;
         }
     } catch {
         /* Co-Review isn't running */
+    }
+    if (!claudeHook) {
+        console.log('Co-Review is not running.');
     }
 }
 
@@ -406,8 +480,6 @@ async function logs() {
     console.log(out.join('\n'));
 }
 
-/** Agent packages shipped next to this CLI (in the desktop app and in a checkout): harness -> package dir. */
-const PACKAGES = { pi: 'pi', omp: 'omp' };
 
 /** Installs a bundled agent package with the harness's own installer. */
 async function setup() {
@@ -415,7 +487,7 @@ async function setup() {
     if (!PACKAGES[harness]) {
         throw new Error(`usage: co-review setup <${Object.keys(PACKAGES).join('|')}>`);
     }
-    const dir = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'integrations', PACKAGES[harness]);
+    const dir = bundled(harness);
     if (!existsSync(join(dir, 'package.json'))) {
         throw new Error(`this Co-Review has no ${harness} package (${dir}); update Co-Review`);
     }

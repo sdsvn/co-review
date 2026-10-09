@@ -90,7 +90,9 @@ sign on macOS, set `CSC_LINK` and `CSC_KEY_PASSWORD` and remove `identity: null`
 `.github/workflows/release.yml` builds the app for macOS (arm64), Linux (x64, arm64) and Windows (x64). For a `v*`
 tag, it also publishes a GitHub release.
 
-To release, tag and push. The workflow takes the version from the tag:
+To release, bump the version everywhere it is recorded (the app, the review extension, the Claude Code plugin
+manifests and the Pi/omp packages), then tag and push. `make check-versions` (part of `make test`) fails when any of
+them differs from `extensions/review/package.json`, and the workflow fails when the tag differs too:
 
 ```bash
 git tag v0.2.0 && git push origin v0.2.0
@@ -104,6 +106,12 @@ Asset names carry no version (`Co-Review-mac-arm64.zip`, `Co-Review-linux-x64.ta
 ```bash
 curl -fsSL https://sdsvn.github.io/co-review/install.sh | bash
 ```
+
+After installing (or finding that version already installed), `install.sh` brings the agent integrations that are
+already installed to the app's version: the Claude Code plugin (`claude plugin marketplace update co-review`, then
+`claude plugin update co-review@co-review`), and the Oh My Pi and Pi packages when they come from this app
+(`omp install` / `pi install` of its `integrations/` path, which refreshes the version they recorded). It skips a
+harness or plugin that isn't installed and never fails the install over them.
 
 An update stops the Co-Review that is running, three ways, so an old version never keeps serving the new
 command and agents (its files replaced under it, macOS kills its helper processes but not the app, which then
@@ -131,7 +139,9 @@ writable, otherwise to `~/.local/bin`. Set `PREFIX=…` to choose another place.
   the agent is done with the review (you approve it, or its session ends): it says why and closes after 10 seconds
   unless you keep it open; with no window left the app quits. Closing a window yourself is told to the agent. If
   Co-Review goes away mid-session, the agent's call fails instead of waiting, and its next call starts Co-Review again.
-- `co-review status [dir]` lists the open reviews of `dir` in a running Co-Review (it never starts one).
+- `co-review status [dir]` prints this Co-Review's version and each installed agent integration's (the Claude Code
+  plugin, the Oh My Pi and Pi packages), flags any that differ with the command that updates it, then lists the open
+  reviews of `dir` in a running Co-Review (it never starts one).
 - `co-review setup <pi|omp>` installs the Pi or Oh My Pi package that ships with the app.
 - `co-review logs` is for when something hangs or fails: whether Co-Review answers (and how fast), then the recent
   debug log of every Co-Review process merged by time (`--lines <n>`, default 80). The logs are in

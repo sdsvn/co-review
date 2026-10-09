@@ -56,6 +56,66 @@ Linux)
     ;;
 esac
 
+# After an install (or when it is already up to date): bring every agent integration that is already installed to
+# this app's version, so they never lag behind it. Each step is skipped quietly when its harness or plugin is
+# missing, and none of them can fail the install.
+refresh_integrations() {
+    local pkgs="$1" out before after link p
+    real() { (cd -P "$1" 2>/dev/null && pwd); }
+    plugin_version() {
+        claude plugin list --json </dev/null 2>/dev/null \
+            | sed -n '/"id": "co-review@co-review"/{n;s/.*"version": "\(.*\)".*/\1/p;}' | head -n 1
+    }
+    # Claude Code: its clone of the co-review marketplace only refreshes when asked, so the plugin stays behind.
+    if command -v claude >/dev/null 2>&1; then
+        out=$(claude plugin marketplace list --json </dev/null 2>/dev/null || true)
+        before=$(plugin_version || true)
+        if printf '%s\n' "$out" | grep '"name": "co-review"' >/dev/null && [ -n "$before" ]; then
+            if claude plugin marketplace update co-review </dev/null >/dev/null 2>&1 \
+                && claude plugin update co-review@co-review </dev/null >/dev/null 2>&1; then
+                after=$(plugin_version || true)
+                if [ "$after" = "$before" ]; then
+                    say "Claude Code plugin: $after, up to date"
+                else
+                    say "Claude Code plugin: updated $before to ${after:-the latest} (restart Claude Code to use it)"
+                fi
+            else
+                say "Claude Code plugin: could not update $before; run: claude plugin marketplace update co-review && claude plugin update co-review@co-review"
+            fi
+        fi
+    fi
+    # Oh My Pi links the package but records its version at install time: reinstall to refresh it. Only when it is
+    # linked to this app's package; a link to a checkout is left as it is.
+    if command -v omp >/dev/null 2>&1 && [ -f "$pkgs/omp/package.json" ]; then
+        out=$(omp plugin list --json </dev/null 2>/dev/null || true)
+        link=$(printf '%s\n' "$out" | sed -n 's|^ *"path": "\(.*/co-review-omp\)",*$|\1|p' | head -n 1)
+        if [ -n "$link" ] && [ "$(real "$link")" = "$(real "$pkgs/omp")" ]; then
+            if omp install "$pkgs/omp" </dev/null >/dev/null 2>&1; then
+                say "Oh My Pi package: refreshed to $(sed -n 's/^  "version": "\(.*\)",*$/\1/p' "$pkgs/omp/package.json" | head -n 1)"
+            else
+                say "Oh My Pi package: could not refresh; run: co-review setup omp"
+            fi
+        fi
+    fi
+    # Pi reads the package from its path at each start; reinstalling this app's path keeps it registered.
+    if command -v pi >/dev/null 2>&1 && [ -f "$pkgs/pi/package.json" ]; then
+        out=$(pi list </dev/null 2>/dev/null || true)
+        while IFS= read -r p; do
+            if [ -n "$p" ] && [ "$(real "$p")" = "$(real "$pkgs/pi")" ]; then
+                if pi install "$pkgs/pi" </dev/null >/dev/null 2>&1; then
+                    say "Pi package: refreshed to $(sed -n 's/^  "version": "\(.*\)",*$/\1/p' "$pkgs/pi/package.json" | head -n 1)"
+                else
+                    say "Pi package: could not refresh; run: co-review setup pi"
+                fi
+                break
+            fi
+        done <<EOF
+$(printf '%s\n' "$out" | sed -n 's|^    \(/.*/integrations/pi\)$|\1|p')
+EOF
+    fi
+    return 0
+}
+
 # The installed version (the app's package.json) and the one this would install (the release tag; the latest
 # release's tag is where GitHub redirects /releases/latest). Unknown for a custom download URL: then it installs.
 installed=""
@@ -76,6 +136,7 @@ if [ -n "$installed" ] && [ "$installed" = "$wanted" ] && [ "${CO_REVIEW_FORCE:-
     say "Co-Review $installed is already installed and up to date (CO_REVIEW_FORCE=1 reinstalls it)."
     # The commands may be missing (or point at an old place): installing them is quick and idempotent.
     "$app_res/bin/install-cli.sh"
+    refresh_integrations "$app_res/integrations" || true
     exit 0
 fi
 if [ -n "$installed" ]; then
@@ -179,6 +240,7 @@ EOF
     fail "unsupported system: $os (on Windows, use the installer from https://github.com/$repo/releases/latest)"
     ;;
 esac
+refresh_integrations "$app_res/integrations" || true
 
 cat <<'EOF'
 

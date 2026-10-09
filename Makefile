@@ -19,7 +19,7 @@ THEIA := $(CURDIR)/node_modules/.bin/theia
 BROWSER := applications/browser
 ELECTRON := applications/electron
 
-.PHONY: help install plugins prompts check-prompts extension test browser start dev desktop-build desktop package package-dir install-app install-cli mcp-claude clean distclean
+.PHONY: help install plugins prompts check-prompts check-versions extension test browser start dev desktop-build desktop package package-dir install-app install-cli mcp-claude clean distclean
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2}'
@@ -37,10 +37,13 @@ prompts: ## Copy the shared agent prompts in prompts/ everywhere agents read the
 check-prompts: ## Fail if a copy of the shared agent prompts is out of date
 	node bin/gen-prompts.mjs --check
 
+check-versions: ## Fail if the plugin manifests or the Pi/omp packages differ from the app's version
+	node bin/check-versions.mjs
+
 extension: prompts ## Compile the review extension (TypeScript)
 	npm run -w @co-review/review build
 
-test: extension ## Run the unit tests (Node's test runner, on the compiled extension)
+test: check-versions extension ## Run the unit tests (Node's test runner, on the compiled extension)
 	node --test extensions/review/test/*.test.mjs
 
 browser: extension ## Build the browser app
