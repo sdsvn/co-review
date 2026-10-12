@@ -1,0 +1,37 @@
+[package]
+name = "review_agents"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "EPL-2.0"
+
+[lib]
+path = "src/review_agents.rs"
+
+# A scripted ACP agent for the tests (and the TypeScript recorder in tests/gen).
+[[bin]]
+name = "fake-acp-agent"
+path = "tests/support/fake_agent.rs"
+test = false
+doc = false
+
+[dependencies]
+agent-client-protocol = "3.3.0"
+anyhow.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+review_index.workspace = true
+review_mcp = { path = "../review_mcp" }
+review_model.workspace = true
+review_store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+smol.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

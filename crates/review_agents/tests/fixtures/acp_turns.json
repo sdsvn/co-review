@@ -1,0 +1,702 @@
+{
+  "steps": [
+    {
+      "op": "connect"
+    },
+    {
+      "op": "question",
+      "name": "answer",
+      "body": "What does add do?"
+    },
+    {
+      "op": "reply",
+      "name": "follow-up",
+      "thread": "answer",
+      "body": "And what are the settings?"
+    },
+    {
+      "op": "settings",
+      "settings": {
+        "model": "opus",
+        "effort": "high"
+      }
+    },
+    {
+      "op": "question",
+      "name": "settings-new",
+      "body": "What are the settings?"
+    },
+    {
+      "op": "reply",
+      "name": "settings-open",
+      "thread": "answer",
+      "body": "settings again?"
+    },
+    {
+      "op": "question",
+      "name": "permission",
+      "body": "Fix it, permission needed",
+      "decide": "allow"
+    },
+    {
+      "op": "reply",
+      "name": "permission-stop",
+      "thread": "permission",
+      "body": "Again, permission needed",
+      "decide": null
+    },
+    {
+      "op": "question",
+      "name": "slow-stop",
+      "body": "Take it slow",
+      "stopAfter": "Working on it"
+    },
+    {
+      "op": "question",
+      "name": "read",
+      "body": "read:src/lib.rs"
+    },
+    {
+      "op": "reply",
+      "name": "read-outside",
+      "thread": "read",
+      "body": "read:../outside.txt"
+    },
+    {
+      "op": "reply",
+      "name": "write",
+      "thread": "read",
+      "body": "write:notes/../written.txt"
+    },
+    {
+      "op": "reply",
+      "name": "write-outside",
+      "thread": "read",
+      "body": "write:{outside}"
+    },
+    {
+      "op": "question",
+      "name": "refuse",
+      "body": "Please refuse"
+    },
+    {
+      "op": "question",
+      "name": "repository",
+      "body": "How is the repository laid out?",
+      "repository": true
+    },
+    {
+      "op": "options"
+    }
+  ],
+  "results": [
+    {
+      "name": "answer",
+      "message": {
+        "body": "It adds two numbers.",
+        "status": "done",
+        "activity": [
+          {
+            "id": "read-1",
+            "title": "Read src/lib.rs",
+            "kind": "read",
+            "status": "completed"
+          },
+          {
+            "id": "search-1",
+            "title": "Search for add",
+            "status": "in_progress"
+          },
+          {
+            "id": "message:m1",
+            "title": "Let me look at the code.",
+            "kind": "think",
+            "status": "completed"
+          }
+        ]
+      },
+      "prompts": [
+        {
+          "sessionId": "session-1",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "You are a participant in a code review of the repository at {repo} (\"Calculator\").\nA reviewer asked you about src/lib.rs:1-3 (add) in review thread #1.\nLook at the code you need, then answer in the thread. A map of the repository follows; use it to go straight to the right files.\nDo not modify files unless the reviewer explicitly asks you to change code.\n\nHow to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.\n- Answer the question in the first sentence, in plain language.\n- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.\n- Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.\n- Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything."
+            },
+            {
+              "type": "text",
+              "text": "Repository map: 1 source files, each with the classes, functions and methods it defines (Tree-sitter outline).\nsrc/lib.rs: add, Calculator, Calculator { total }"
+            },
+            {
+              "type": "text",
+              "text": "The code in question (lines 1-3):\n```\npub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n```"
+            },
+            {
+              "type": "resource_link",
+              "uri": "file://{repo}/src/lib.rs",
+              "name": "src/lib.rs"
+            },
+            {
+              "type": "text",
+              "text": "Conversation:\n\nReviewer (Reviewer): What does add do?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "follow-up",
+      "message": {
+        "body": "model=sonnet effort=low",
+        "status": "done",
+        "activity": []
+      },
+      "prompts": [
+        {
+          "sessionId": "session-1",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "And what are the settings?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "settings-new",
+      "message": {
+        "body": "model=opus effort=high",
+        "status": "done",
+        "activity": []
+      },
+      "prompts": [
+        {
+          "sessionId": "session-2",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "You are a participant in a code review of the repository at {repo} (\"Calculator\").\nA reviewer asked you about src/lib.rs:1-3 (add) in review thread #2.\nLook at the code you need, then answer in the thread. A map of the repository follows; use it to go straight to the right files.\nDo not modify files unless the reviewer explicitly asks you to change code.\n\nHow to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.\n- Answer the question in the first sentence, in plain language.\n- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.\n- Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.\n- Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything."
+            },
+            {
+              "type": "text",
+              "text": "Repository map: 1 source files, each with the classes, functions and methods it defines (Tree-sitter outline).\nsrc/lib.rs: add, Calculator, Calculator { total }"
+            },
+            {
+              "type": "text",
+              "text": "The code in question (lines 1-3):\n```\npub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n```"
+            },
+            {
+              "type": "resource_link",
+              "uri": "file://{repo}/src/lib.rs",
+              "name": "src/lib.rs"
+            },
+            {
+              "type": "text",
+              "text": "Conversation:\n\nReviewer (Reviewer): What are the settings?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "settings-open",
+      "message": {
+        "body": "model=opus effort=high",
+        "status": "done",
+        "activity": []
+      },
+      "prompts": [
+        {
+          "sessionId": "session-1",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "settings again?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "permission",
+      "message": {
+        "body": "You chose allow.",
+        "status": "done",
+        "activity": [],
+        "permission": {
+          "id": "{id}",
+          "title": "Edit src/lib.rs",
+          "options": [
+            {
+              "id": "allow",
+              "name": "Allow",
+              "kind": "allow_once"
+            },
+            {
+              "id": "reject",
+              "name": "Reject",
+              "kind": "reject_once"
+            }
+          ],
+          "outcome": "allow"
+        }
+      },
+      "prompts": [
+        {
+          "sessionId": "session-3",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "You are a participant in a code review of the repository at {repo} (\"Calculator\").\nA reviewer asked you about src/lib.rs:1-3 (add) in review thread #3.\nLook at the code you need, then answer in the thread. A map of the repository follows; use it to go straight to the right files.\nDo not modify files unless the reviewer explicitly asks you to change code.\n\nHow to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.\n- Answer the question in the first sentence, in plain language.\n- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.\n- Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.\n- Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything."
+            },
+            {
+              "type": "text",
+              "text": "Repository map: 1 source files, each with the classes, functions and methods it defines (Tree-sitter outline).\nsrc/lib.rs: add, Calculator, Calculator { total }"
+            },
+            {
+              "type": "text",
+              "text": "The code in question (lines 1-3):\n```\npub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n```"
+            },
+            {
+              "type": "resource_link",
+              "uri": "file://{repo}/src/lib.rs",
+              "name": "src/lib.rs"
+            },
+            {
+              "type": "text",
+              "text": "Conversation:\n\nReviewer (Reviewer): Fix it, permission needed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "permission-stop",
+      "message": {
+        "body": "The permission request was cancelled.",
+        "status": "cancelled",
+        "activity": [],
+        "permission": {
+          "id": "{id}",
+          "title": "Edit src/lib.rs",
+          "options": [
+            {
+              "id": "allow",
+              "name": "Allow",
+              "kind": "allow_once"
+            },
+            {
+              "id": "reject",
+              "name": "Reject",
+              "kind": "reject_once"
+            }
+          ],
+          "outcome": "cancelled"
+        }
+      },
+      "prompts": [
+        {
+          "sessionId": "session-3",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "Again, permission needed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "slow-stop",
+      "message": {
+        "body": "Working on it",
+        "status": "cancelled",
+        "activity": []
+      },
+      "prompts": [
+        {
+          "sessionId": "session-4",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "You are a participant in a code review of the repository at {repo} (\"Calculator\").\nA reviewer asked you about src/lib.rs:1-3 (add) in review thread #4.\nLook at the code you need, then answer in the thread. A map of the repository follows; use it to go straight to the right files.\nDo not modify files unless the reviewer explicitly asks you to change code.\n\nHow to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.\n- Answer the question in the first sentence, in plain language.\n- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.\n- Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.\n- Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything."
+            },
+            {
+              "type": "text",
+              "text": "Repository map: 1 source files, each with the classes, functions and methods it defines (Tree-sitter outline).\nsrc/lib.rs: add, Calculator, Calculator { total }"
+            },
+            {
+              "type": "text",
+              "text": "The code in question (lines 1-3):\n```\npub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n```"
+            },
+            {
+              "type": "resource_link",
+              "uri": "file://{repo}/src/lib.rs",
+              "name": "src/lib.rs"
+            },
+            {
+              "type": "text",
+              "text": "Conversation:\n\nReviewer (Reviewer): Take it slow"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "read",
+      "message": {
+        "body": "Line 2 is:     a + b",
+        "status": "done",
+        "activity": []
+      },
+      "prompts": [
+        {
+          "sessionId": "session-5",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "You are a participant in a code review of the repository at {repo} (\"Calculator\").\nA reviewer asked you about src/lib.rs:1-3 (add) in review thread #5.\nLook at the code you need, then answer in the thread. A map of the repository follows; use it to go straight to the right files.\nDo not modify files unless the reviewer explicitly asks you to change code.\n\nHow to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.\n- Answer the question in the first sentence, in plain language.\n- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.\n- Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.\n- Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything."
+            },
+            {
+              "type": "text",
+              "text": "Repository map: 1 source files, each with the classes, functions and methods it defines (Tree-sitter outline).\nsrc/lib.rs: add, Calculator, Calculator { total }"
+            },
+            {
+              "type": "text",
+              "text": "The code in question (lines 1-3):\n```\npub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n```"
+            },
+            {
+              "type": "resource_link",
+              "uri": "file://{repo}/src/lib.rs",
+              "name": "src/lib.rs"
+            },
+            {
+              "type": "text",
+              "text": "Conversation:\n\nReviewer (Reviewer): read:src/lib.rs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "read-outside",
+      "message": {
+        "body": "Read failed: Internal error",
+        "status": "done",
+        "activity": []
+      },
+      "prompts": [
+        {
+          "sessionId": "session-5",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "read:../outside.txt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "write",
+      "message": {
+        "body": "Written.",
+        "status": "done",
+        "activity": []
+      },
+      "prompts": [
+        {
+          "sessionId": "session-5",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "write:notes/../written.txt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "write-outside",
+      "message": {
+        "body": "Write failed: Internal error",
+        "status": "done",
+        "activity": []
+      },
+      "prompts": [
+        {
+          "sessionId": "session-5",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "write:{outside}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "refuse",
+      "message": {
+        "body": "_The agent declined to answer._",
+        "status": "done",
+        "activity": []
+      },
+      "prompts": [
+        {
+          "sessionId": "session-6",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "You are a participant in a code review of the repository at {repo} (\"Calculator\").\nA reviewer asked you about src/lib.rs:1-3 (add) in review thread #6.\nLook at the code you need, then answer in the thread. A map of the repository follows; use it to go straight to the right files.\nDo not modify files unless the reviewer explicitly asks you to change code.\n\nHow to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.\n- Answer the question in the first sentence, in plain language.\n- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.\n- Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.\n- Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything."
+            },
+            {
+              "type": "text",
+              "text": "Repository map: 1 source files, each with the classes, functions and methods it defines (Tree-sitter outline).\nsrc/lib.rs: add, Calculator, Calculator { total }"
+            },
+            {
+              "type": "text",
+              "text": "The code in question (lines 1-3):\n```\npub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n```"
+            },
+            {
+              "type": "resource_link",
+              "uri": "file://{repo}/src/lib.rs",
+              "name": "src/lib.rs"
+            },
+            {
+              "type": "text",
+              "text": "Conversation:\n\nReviewer (Reviewer): Please refuse"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "repository",
+      "message": {
+        "body": "It adds two numbers.",
+        "status": "done",
+        "activity": [
+          {
+            "id": "read-1",
+            "title": "Read src/lib.rs",
+            "kind": "read",
+            "status": "completed"
+          },
+          {
+            "id": "search-1",
+            "title": "Search for add",
+            "status": "in_progress"
+          },
+          {
+            "id": "message:m1",
+            "title": "Let me look at the code.",
+            "kind": "think",
+            "status": "completed"
+          }
+        ]
+      },
+      "prompts": [
+        {
+          "sessionId": "session-7",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "You are a participant in a code review of the repository at {repo} (\"Calculator\").\nA reviewer asked you about the repository as a whole in review thread #7.\nLook at the code you need, then answer in the thread. A map of the repository follows; use it to go straight to the right files.\nDo not modify files unless the reviewer explicitly asks you to change code.\n\nHow to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.\n- Answer the question in the first sentence, in plain language.\n- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.\n- Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.\n- Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything."
+            },
+            {
+              "type": "text",
+              "text": "Repository map: 1 source files, each with the classes, functions and methods it defines (Tree-sitter outline).\nsrc/lib.rs: add, Calculator, Calculator { total }"
+            },
+            {
+              "type": "text",
+              "text": "Conversation:\n\nReviewer (Reviewer): How is the repository laid out?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "options",
+      "settings": [
+        {
+          "id": "model",
+          "name": "Model",
+          "category": "model",
+          "current": "sonnet",
+          "options": [
+            {
+              "value": "sonnet",
+              "name": "Sonnet",
+              "description": "Fast"
+            },
+            {
+              "value": "opus",
+              "name": "Opus"
+            }
+          ]
+        },
+        {
+          "id": "effort",
+          "name": "Reasoning effort",
+          "category": "thought_level",
+          "current": "low",
+          "options": [
+            {
+              "value": "low",
+              "name": "Low"
+            },
+            {
+              "value": "high",
+              "name": "High"
+            }
+          ]
+        },
+        {
+          "id": "mode",
+          "name": "Mode",
+          "category": "mode",
+          "current": "ask",
+          "options": [
+            {
+              "value": "ask",
+              "name": "Ask"
+            },
+            {
+              "value": "yolo",
+              "name": "Bypass permissions"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "initialize": {
+    "protocolVersion": 1,
+    "clientCapabilities": {
+      "fs": {
+        "readTextFile": true,
+        "writeTextFile": true
+      }
+    },
+    "clientInfo": {
+      "name": "co-review",
+      "version": "0.1.0"
+    }
+  },
+  "sessionNew": [
+    {
+      "cwd": "{repo}",
+      "mcpServers": []
+    },
+    {
+      "cwd": "{repo}",
+      "mcpServers": []
+    },
+    {
+      "cwd": "{repo}",
+      "mcpServers": []
+    },
+    {
+      "cwd": "{repo}",
+      "mcpServers": []
+    },
+    {
+      "cwd": "{repo}",
+      "mcpServers": []
+    },
+    {
+      "cwd": "{repo}",
+      "mcpServers": []
+    },
+    {
+      "cwd": "{repo}",
+      "mcpServers": []
+    },
+    {
+      "cwd": "{repo}",
+      "mcpServers": []
+    }
+  ],
+  "setConfigOption": [
+    {
+      "sessionId": "session-1",
+      "configId": "model",
+      "value": "opus"
+    },
+    {
+      "sessionId": "session-1",
+      "configId": "effort",
+      "value": "high"
+    },
+    {
+      "sessionId": "session-2",
+      "configId": "model",
+      "value": "opus"
+    },
+    {
+      "sessionId": "session-2",
+      "configId": "effort",
+      "value": "high"
+    },
+    {
+      "sessionId": "session-3",
+      "configId": "model",
+      "value": "opus"
+    },
+    {
+      "sessionId": "session-3",
+      "configId": "effort",
+      "value": "high"
+    },
+    {
+      "sessionId": "session-4",
+      "configId": "model",
+      "value": "opus"
+    },
+    {
+      "sessionId": "session-4",
+      "configId": "effort",
+      "value": "high"
+    },
+    {
+      "sessionId": "session-5",
+      "configId": "model",
+      "value": "opus"
+    },
+    {
+      "sessionId": "session-5",
+      "configId": "effort",
+      "value": "high"
+    },
+    {
+      "sessionId": "session-6",
+      "configId": "model",
+      "value": "opus"
+    },
+    {
+      "sessionId": "session-6",
+      "configId": "effort",
+      "value": "high"
+    },
+    {
+      "sessionId": "session-7",
+      "configId": "model",
+      "value": "opus"
+    },
+    {
+      "sessionId": "session-7",
+      "configId": "effort",
+      "value": "high"
+    }
+  ],
+  "cancel": [
+    {
+      "sessionId": "session-3"
+    },
+    {
+      "sessionId": "session-4"
+    }
+  ]
+}
