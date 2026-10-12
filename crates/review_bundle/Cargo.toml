@@ -9,12 +9,20 @@ license.workspace = true
 path = "src/review_bundle.rs"
 
 [dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+log.workspace = true
 regex.workspace = true
+review_anchor.workspace = true
+review_model.workspace = true
+review_store.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

@@ -1,0 +1,89 @@
+[
+  {
+    "name": "design",
+    "input": "design",
+    "steps": [
+      { "op": "open" },
+      { "op": "snapshot", "label": "opened" },
+      { "op": "addFinding", "finding": { "id": "d-1", "target": "doc", "severity": "medium", "labels": ["clarity"],
+        "anchor": { "type": "text", "exact": "The bucket size defaults to 100 tokens.", "prefix": "The bucket size is configurable.", "suffix": "Résumé" },
+        "body": "100 is too many.", "proposal": { "before": "defaults to 100 tokens", "after": "defaults to 50 tokens" } } },
+      { "op": "addFinding", "finding": { "id": "d-2", "severity": "low",
+        "anchor": { "type": "text", "exact": "The bucket size", "prefix": "is configurable. ", "suffix": " defaults to" },
+        "body": "Say which bucket.", "proposal": { "before": "The bucket size", "after": "The default bucket size" } } },
+      { "op": "addFinding", "finding": { "id": "d-3", "anchor": { "type": "text", "exact": "naïve clients retry immediately" }, "body": "Which clients?" } },
+      { "op": "addFinding", "finding": { "id": "d-4", "anchor": { "type": "tree-node", "nodeId": "Keep a token bucket per client key" }, "body": "Per key or per IP?", "verdict": "Question" } },
+      { "op": "addFinding", "finding": { "id": "d-5", "anchor": { "type": "mermaid-node", "blockId": "flow", "nodeId": "A" }, "body": "Gone text.", "proposal": { "before": "This sentence is not in the document.", "after": "Replacement." } } },
+      { "op": "addFinding", "finding": { "id": "d-6", "anchor": { "type": "text", "exact": "Reject over-limit requests with 429" }, "body": "Use 503?", "proposal": { "before": "429", "after": "503" } } },
+      { "op": "snapshot", "label": "findings added" },
+      { "op": "decide", "sourceId": "d-2", "accept": true },
+      { "op": "snapshot", "label": "tracked edit accepted" },
+      { "op": "decide", "sourceId": "d-1", "accept": true },
+      { "op": "decide", "sourceId": "d-5", "accept": true },
+      { "op": "decide", "sourceId": "d-6", "accept": false },
+      { "op": "decide", "sourceId": "d-6", "accept": true },
+      { "op": "decide", "sourceId": "d-3", "accept": true },
+      { "op": "export" },
+      { "op": "snapshot", "label": "decided" }
+    ]
+  },
+  {
+    "name": "change",
+    "input": "change",
+    "steps": [
+      { "op": "open", "title": "Refill review", "storePath": "out/state.json" },
+      { "op": "snapshot", "label": "opened" },
+      { "op": "decide", "sourceId": "f-2", "accept": true },
+      { "op": "decide", "sourceId": "f-1", "accept": true },
+      { "op": "append", "file": "change.comments.jsonl", "text": "{\"id\":\"f-1\",\"anchor\":{\"type\":\"patch\"},\"body\":\"Edited duplicate.\"}\n{\"id\":\"f-4\",\"severity\":\"medium\",\"anchor\":{\"type\":\"code-file\",\"path\":\"src/limiter.go\"},\"body\":\"Add a test file.\"}\n" },
+      { "op": "sync" },
+      { "op": "sync" },
+      { "op": "open" },
+      { "op": "export" },
+      { "op": "snapshot", "label": "resynced" }
+    ]
+  },
+  {
+    "name": "okf",
+    "input": "okf",
+    "steps": [
+      { "op": "open" },
+      { "op": "addFinding", "finding": { "id": "okf-3", "target": "doc:concepts/bucket.md", "severity": "medium", "labels": ["docs"],
+        "anchor": { "type": "text", "exact": "Each request takes one token.", "prefix": "A bucket holds tokens.", "suffix": "A bucket holds" }, "body": "And when it is empty?" } },
+      { "op": "addFinding", "finding": { "id": "okf-4", "target": "doc:../design/index.md", "anchor": { "type": "text", "exact": "Token bucket" }, "body": "Escapes the directory." } },
+      { "op": "addFinding", "finding": { "id": "okf-5", "anchor": { "type": "document" }, "body": "Whole document." } },
+      { "op": "addFinding", "finding": { "id": "okf-6", "target": "doc:concepts/bucket.md",
+        "anchor": { "type": "text", "exact": "A bucket holds tokens up to its size." }, "body": "Name the limit.",
+        "proposal": { "before": "A bucket holds tokens up to its size.", "after": "A bucket holds at most `size` tokens." } } },
+      { "op": "addFinding", "finding": { "id": "okf-7", "target": "patch:okf", "anchor": { "type": "code-line", "path": "concepts/bucket.md", "line": 1, "side": "new" }, "body": "Title case." } },
+      { "op": "snapshot", "label": "findings added" },
+      { "op": "decide", "sourceId": "okf-6", "accept": true },
+      { "op": "export" },
+      { "op": "snapshot", "label": "page edit accepted" }
+    ]
+  },
+  {
+    "name": "openspec",
+    "input": "openspec_change",
+    "steps": [
+      { "op": "open" },
+      { "op": "export" },
+      { "op": "snapshot", "label": "detected" },
+      { "op": "open", "openspec": "openspec/specs/../" },
+      { "op": "snapshot", "label": "explicit" }
+    ]
+  },
+  {
+    "name": "inline",
+    "input": null,
+    "steps": [
+      { "op": "open", "markdown": "Text without a heading.\n", "title": "Inline design", "patch": "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n" },
+      { "op": "export" },
+      { "op": "snapshot", "label": "inline with title" },
+      { "op": "open", "markdown": "# Own heading\n\nBody.\n", "title": "Ignored", "patch": "diff --git a/y b/y\n", "patchName": "fix" },
+      { "op": "snapshot", "label": "inline with heading" },
+      { "op": "open", "markdown": "No heading, no title.\n" },
+      { "op": "snapshot", "label": "inline untitled" }
+    ]
+  }
+]

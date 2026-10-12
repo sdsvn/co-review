@@ -1,0 +1,5 @@
+{"id":"f-1","severity":"high","labels":["correctness"],"anchor":{"type":"code-line","path":"src/limiter.go","line":5,"side":"new","source":"\trefill int"},"body":"`refill` is never validated.","verdict":"Must fix"}
+{"id":"f-2","severity":"low","anchor":{"type":"code-range","path":"src/limiter.go","startLine":9,"endLine":10,"side":"new","source":"\treturn &Limiter{size: size, refill: size}"},"body":"Use a named default.","proposal":{"before":"refill: size","after":"refill: defaultRefill(size)","path":"src/limiter.go","startLine":9}}
+
+{"id":"f-3","anchor":{"type":"patch"},"body":"The patch has no tests."}
+{"body":"A finding without an id is skipped.","anchor":{"type":"patch"}}

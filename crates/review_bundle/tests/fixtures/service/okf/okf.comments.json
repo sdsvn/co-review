@@ -1,0 +1,4 @@
+[
+  {"id":"okf-1","target":"doc:concepts/bucket.md","severity":"medium","labels":["docs"],"anchor":{"type":"code-line","path":"concepts/bucket.md","line":1,"side":"new","source":"# Token bucket"},"body":"The target is the patch the findings file belongs to."},
+  {"id":"okf-2","anchor":{"type":"code-file","path":"concepts/bucket.md"},"body":"New page; link it from the index."}
+]

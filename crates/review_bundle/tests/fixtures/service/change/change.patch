@@ -1,0 +1,19 @@
+diff --git a/src/limiter.go b/src/limiter.go
+index 1111111..2222222 100644
+--- a/src/limiter.go
++++ b/src/limiter.go
+@@ -1,7 +1,10 @@
+ package limiter
+ 
+ type Limiter struct {
+-	size int
++	size   int
++	refill int
+ }
+ 
+ func New(size int) *Limiter {
+-	return &Limiter{size: size}
++	return &Limiter{size: size, refill: size}
+ }
++
++// Allow reports whether a request may proceed.
