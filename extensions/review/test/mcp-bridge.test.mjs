@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
@@ -111,4 +111,43 @@ test('a call after Co-Review forgot the session is answered on a new session, on
     server.forget();
     assert.deepEqual(await Promise.all([a.call('four'), a.call('five')]), ['echo:four', 'echo:five']);
     assert.deepEqual(server.stats, { initializes: 3, calls: 5 });
+});
+
+test('a probe before initialize (Claude Code sends server/discover) is not found, and does not cost the session', async t => {
+    const home = mkdtempSync(join(tmpdir(), 'co-review-bridge-'));
+    const server = await fakeCoReview();
+    const a = agent(server.port, home);
+    t.after(() => {
+        a.end();
+        server.close();
+        rmSync(home, { recursive: true, force: true });
+    });
+    assert.equal((await a.send('server/discover', {})).error?.code, -32601);
+    await a.send('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'test', version: '0' } });
+    a.notify('notifications/initialized');
+    assert.equal(await a.call('one'), 'echo:one');
+    assert.deepEqual(server.stats, { initializes: 1, calls: 1 });
+});
+
+test('a probe before initialize does not start Co-Review; the handshake comes from the cache', async t => {
+    const home = mkdtempSync(join(tmpdir(), 'co-review-bridge-'));
+    writeFileSync(join(home, 'mcp-handshake.json'), JSON.stringify({
+        initialize: { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'co-review', version: '0.1.0' } },
+        tools: { tools: [] }
+    }));
+    // Nothing listens on this port: the bridge would start Co-Review there.
+    const server = await fakeCoReview();
+    server.close();
+    const a = agent(server.port, home);
+    t.after(() => {
+        a.end();
+        rmSync(home, { recursive: true, force: true });
+    });
+    assert.equal((await a.send('server/discover', {})).error?.code, -32601);
+    const init = await a.send('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'test', version: '0' } });
+    assert.equal(init.result?.serverInfo?.name, 'co-review');
+    a.notify('notifications/initialized');
+    assert.deepEqual((await a.send('tools/list', {})).result, { tools: [] });
+    const log = join(home, 'logs', 'cli.log');
+    assert.doesNotMatch(existsSync(log) ? readFileSync(log, 'utf8') : '', /starting Co-Review|lost Co-Review/);
 });

@@ -268,6 +268,18 @@ async function mcp() {
         if (handshake) {
             init = message;
         }
+        // Before `initialize` there is no session to forward to: Co-Review would refuse it, which looked like Co-Review
+        // going away (and, with Co-Review not running, started it). Clients probe first (Claude Code sends
+        // `server/discover`) and fall back to `initialize` when the method is not found.
+        if (!init) {
+            if (message.method === 'ping') {
+                return answer(message, {});
+            }
+            if ('id' in message && 'method' in message) {
+                stdio.send({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: `Method not found: ${message.method}` } });
+            }
+            return;
+        }
         if (!connection && cached?.initialize && cached?.tools) {
             if (handshake) {
                 return answer(message, { ...cached.initialize, protocolVersion: message.params.protocolVersion });
@@ -283,7 +295,7 @@ async function mcp() {
             }
         }
         if (!connection) {
-            connection = connect(!!init && !handshake);
+            connection = connect(!handshake);
             // Try again on the next call if Co-Review did not start.
             connection.catch(() => (connection = undefined));
         }
