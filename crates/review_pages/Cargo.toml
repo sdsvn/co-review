@@ -14,8 +14,8 @@ log.workspace = true
 parking_lot.workspace = true
 regex.workspace = true
 review_bundle.workspace = true
-review_graph = { path = "../review_graph" }
-review_index = { path = "../review_index" }
+review_graph.workspace = true
+review_index.workspace = true
 review_model.workspace = true
 review_store.workspace = true
 serde.workspace = true

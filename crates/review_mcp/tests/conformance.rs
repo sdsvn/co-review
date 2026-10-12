@@ -195,12 +195,6 @@ impl Replay {
                 .unwrap();
                 let options: ThreadOptions =
                     serde_json::from_value(step["options"].clone()).unwrap_or_default();
-                // As the app does for the reviewer's comments: the target is tracked from here on.
-                let review = store.get(&review_id).unwrap();
-                let location = review_bundle::tracking::track_new(
-                    &store.workspace_dir(&review.workspace_root),
-                    location,
-                );
                 store
                     .create_thread(&review_id, location, text("body"), reviewer(), options)
                     .unwrap();
@@ -239,7 +233,7 @@ impl Replay {
     }
 
     fn compare(&mut self, what: &str, expected: &Value, actual: &Value) {
-        let expected = normalize(expected, None);
+        let expected = normalize(&reworded(expected), None);
         let actual = normalize(actual, Some(&tmp()));
         if expected != actual {
             self.mismatches
@@ -265,6 +259,43 @@ fn window_root(review: &Review) -> String {
             review_store::path_to_file_uri(bundle.code.as_deref().unwrap_or(&bundle.dir))
         }
         None => review.workspace_root.clone(),
+    }
+}
+
+/// The one deliberate contract change (design decision 11: no browser app, `open_review` returns a `note` and never a
+/// `url`): where the Theia app told agents to give the reviewer the URL, review_mcp tells them the review is open in
+/// Co-Review. Applied to the recorded side only, so the old wording can't come back unnoticed.
+const DECISION_11: [(&str, &str); 3] = [
+    (
+        "tell the reviewer the URL.",
+        "tell the reviewer the review is open in Co-Review.",
+    ),
+    (
+        "returns the URL to give the reviewer.",
+        "tell the reviewer it is open in Co-Review.",
+    ),
+    (
+        "Share the URL with the reviewer,",
+        "Tell the reviewer the review is open in Co-Review,",
+    ),
+];
+
+fn reworded(value: &Value) -> Value {
+    match value {
+        Value::String(text) => Value::String(
+            DECISION_11
+                .iter()
+                .fold(text.clone(), |text, (theia, rust)| {
+                    text.replace(theia, rust)
+                }),
+        ),
+        Value::Array(items) => Value::Array(items.iter().map(reworded).collect()),
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, value)| (key.clone(), reworded(value)))
+                .collect(),
+        ),
+        other => other.clone(),
     }
 }
 
@@ -318,9 +349,8 @@ fn normalize_with(value: &Value, tmp: Option<&str>, ids: &mut HashMap<String, St
         ),
         Value::Object(map) => Value::Object(
             map.iter()
-                // `symbol`: Tree-sitter (review_syntax) is not ported yet. `next` (coverage): review_index picks an
-                // area's next unviewed file in hash order, not path order as the TypeScript does.
-                .filter(|(key, _)| !matches!(key.as_str(), "symbol" | "next"))
+                // `symbol`: Tree-sitter (review_syntax) is not ported yet.
+                .filter(|(key, _)| key.as_str() != "symbol")
                 .map(|(key, value)| (key.clone(), normalize_with(value, tmp, ids)))
                 .collect::<Map<String, Value>>(),
         ),
@@ -497,7 +527,7 @@ async fn replay(name: &str) {
                     .collect();
                 let mut expected: Vec<Value> = expected
                     .iter()
-                    .map(|value| normalize(value, None))
+                    .map(|value| normalize(&reworded(value), None))
                     .collect();
                 // Ids are numbered per notification; order by the normalized text.
                 actual.sort_by_key(|value| value.to_string());

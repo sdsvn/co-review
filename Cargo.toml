@@ -25,10 +25,15 @@ smol = "2.0"
 tempfile = "3.20.0"
 uuid = { version = "1.1", features = ["serde", "v4"] }
 
-review_model = { path = "crates/review_model" }
 review_anchor = { path = "crates/review_anchor" }
-review_design = { path = "crates/review_design" }
 review_bundle = { path = "crates/review_bundle" }
+review_code = { path = "crates/review_code" }
+review_design = { path = "crates/review_design" }
+review_github = { path = "crates/review_github" }
+review_graph = { path = "crates/review_graph" }
+review_index = { path = "crates/review_index" }
+review_model = { path = "crates/review_model" }
+review_pages = { path = "crates/review_pages" }
 review_store = { path = "crates/review_store" }
 
 [workspace.lints.clippy]

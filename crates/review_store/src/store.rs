@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::file_uri::{file_uri_to_path, path_to_file_uri, real_uri};
+use crate::snapshots;
 
 // Re-export the Review type from review_model
 pub use review_model::Review;
@@ -441,6 +442,9 @@ impl ReviewStore {
                 choice: None,
                 extra: serde_json::Map::new(),
             };
+            // Every new thread's target is tracked from here on, whoever makes it.
+            let location =
+                snapshots::track_new(&self.workspace_dir(&review.workspace_root), location);
             let thread = ReviewThread {
                 id: thread_id.clone(),
                 number: review.next_thread_number,
@@ -1147,6 +1151,53 @@ mod tests {
             .unwrap();
         assert_eq!(thread2.messages.len(), 2);
         assert_eq!(thread2.messages[1].body, "Reply");
+    }
+
+    #[test]
+    fn test_create_thread_tracks_its_target() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = setup_store(&tmp);
+        let repository = tmp.path().join("repository");
+        fs::create_dir_all(&repository).unwrap();
+        let file = repository.join("main.rs");
+        fs::write(&file, "fn main() {\n    run();\n}\n").unwrap();
+        let workspace_root = path_to_file_uri(&repository.to_string_lossy());
+        let review = store
+            .create(CreateReviewParams {
+                workspace_root: workspace_root.clone(),
+                title: "Tracked".into(),
+                scope: ReviewScope::Repository,
+                author: test_author(),
+            })
+            .unwrap();
+        let position = |line, character| review_model::Position { line, character };
+        let location = CodeLocation {
+            kind: LocationKind::Line,
+            uri: Some(path_to_file_uri(&file.to_string_lossy())),
+            range: Some(review_model::Range {
+                start: position(1, 4),
+                end: position(1, 10),
+            }),
+            anchor: Some(review_model::CodeAnchor {
+                text: "run();".into(),
+                before: None,
+                after: None,
+                syntax: None,
+            }),
+            ..test_location()
+        };
+        let (_, thread) = store
+            .create_thread(&review.id, location, "Why?".into(), test_author(), Default::default())
+            .unwrap();
+        let tracked = thread.location.tracked.expect("a new line thread is tracked");
+        assert_eq!((tracked.from, tracked.to), (16, 22));
+        assert_eq!(tracked.text, "run();");
+        let snapshot = snapshots::snapshots_dir(&store.workspace_dir(&workspace_root))
+            .join(&tracked.version);
+        assert_eq!(
+            fs::read_to_string(snapshot).unwrap(),
+            "fn main() {\n    run();\n}\n"
+        );
     }
 
     #[test]

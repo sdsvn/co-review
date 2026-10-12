@@ -160,7 +160,7 @@ fn open_review_description() -> String {
     format!(
         "{}{}",
         concat!(
-            "Open a review and join it as co-reviewer; returns the URL to give the reviewer. Either a repository (`root`, ",
+            "Open a review and join it as co-reviewer; tell the reviewer it is open in Co-Review. Either a repository (`root`, ",
             "default: the one Co-Review was started for) or a review directory / inline content: `dir` (index.markdown + assets + *.patch), ",
             "`markdown` and/or `patch` strings. A `dir` can also be a knowledge bundle such as OKF (`<repo>/okf`): every Markdown page ",
             "is a review page, `/x.md` links resolve from the bundle root and `path:line` links open the code. ",
@@ -262,4 +262,22 @@ fn schema(properties: Value, required: &[&str]) -> Value {
         );
     }
     schema
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::prompts::SERVER_INSTRUCTIONS;
+
+    /// Design decision 11: there is no URL to give; the review is open in Co-Review.
+    #[test]
+    fn agents_are_told_the_review_is_open_in_co_review_not_given_a_url() {
+        assert!(SERVER_INSTRUCTIONS.contains("tell the reviewer the review is open in Co-Review"));
+        assert!(!SERVER_INSTRUCTIONS.contains("URL"));
+        // Up to the design prompt, which is a copy of prompts/design.md.
+        let description = open_review_description();
+        let summary = description.split("\n\n").next().unwrap_or_default();
+        assert!(summary.contains("tell the reviewer it is open in Co-Review"));
+        assert!(!summary.contains("URL"));
+    }
 }

@@ -29,7 +29,8 @@ use crate::patch::{DOCUMENT_NAMES, parse_patch_meta};
 use crate::payloads::{
     StateDocument, file_uri_to_path, location_from_anchor, patch_slug, resolve_path, to_state_file,
 };
-use crate::tracking::{self, AppliedEdit, index_of};
+use crate::tracking::{self, AppliedEdit};
+use review_store::snapshots::index_of;
 
 /// How long findings files must be quiet before they are synced again.
 const SYNC_DEBOUNCE: Duration = Duration::from_millis(300);
@@ -482,19 +483,14 @@ impl Shared {
         finding: &Finding,
         author: Option<Participant>,
     ) -> Result<()> {
-        let review = self
-            .store
-            .get(review_id)
-            .ok_or_else(|| anyhow!("No review {review_id}."))?;
+        if self.store.get(review_id).is_none() {
+            return Err(anyhow!("No review {review_id}."));
+        }
         let anchor = match &finding.anchor {
             serde_json::Value::Null => serde_json::Value::Object(serde_json::Map::new()),
             anchor => anchor.clone(),
         };
         let location = location_from_anchor(dir, doc_file, finding.target.as_deref(), &anchor);
-        // Whoever makes it (the reviewer, an agent's finding, a findings file): its target is
-        // tracked from here on.
-        let location =
-            tracking::track_new(&self.store.workspace_dir(&review.workspace_root), location);
         let body = match &finding.verdict {
             Some(verdict) => format!("{}\n\n_{verdict}_", finding.body),
             None => finding.body.clone(),

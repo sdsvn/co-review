@@ -8,12 +8,14 @@
 
 mod file_uri;
 mod participants;
+pub mod snapshots;
 mod store;
 
 pub use file_uri::{file_uri_to_path, path_to_file_uri, real_path, real_uri};
 pub use participants::current_user;
 pub use store::{
-    CreateReviewParams, MessageAdded, ReviewChange, ReviewStore, ReviewStoreError,
+    CreateReviewParams, MessageAdded, MessagePatch, PartialMessage, ReviewChange, ReviewStore,
+    ReviewStoreError,
 };
 
 /// Where Co-Review keeps its state: `$CO_REVIEW_HOME`, default `~/.co-review`.

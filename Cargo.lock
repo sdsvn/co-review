@@ -1417,7 +1417,10 @@ name = "review_store"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "log",
  "parking_lot",
+ "regex",
+ "review_anchor",
  "review_model",
  "serde",
  "serde_json",

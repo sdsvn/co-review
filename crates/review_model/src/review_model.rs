@@ -82,6 +82,8 @@ pub struct CodeAnchor {
     pub syntax: Option<SyntaxAnchor>,
 }
 
+/// The `type` of a document anchor. Anchors are stored verbatim (whatever a finding carried), so a
+/// missing or unknown `type` deserializes to `Other` and its original value stays in `extra`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DocAnchorType {
     #[serde(rename = "document")]
@@ -96,35 +98,97 @@ pub enum DocAnchorType {
     MermaidEdge,
     #[serde(rename = "tree-node")]
     TreeNode,
+    #[serde(skip)]
+    Other,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+impl DocAnchorType {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "document" => Some(Self::Document),
+            "text" => Some(Self::Text),
+            "mermaid-block" => Some(Self::MermaidBlock),
+            "mermaid-node" => Some(Self::MermaidNode),
+            "mermaid-edge" => Some(Self::MermaidEdge),
+            "tree-node" => Some(Self::TreeNode),
+            _ => None,
+        }
+    }
+
+    fn is_other(&self) -> bool {
+        *self == Self::Other
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocAnchor {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", skip_serializing_if = "DocAnchorType::is_other")]
     pub anchor_type: DocAnchorType,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub exact: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub prefix: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub suffix: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub start_offset_hint: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub end_offset_hint: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub block_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub node_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub edge_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub occurrence: Option<u32>,
+    /// Every field that is not one of the above or does not have its type (e.g. `"line": "12"`),
+    /// kept as it was so the anchor round-trips exactly.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+impl<'de> Deserialize<'de> for DocAnchor {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut fields = serde_json::Map::deserialize(deserializer)?;
+        Ok(Self {
+            anchor_type: take_anchor_type(&mut fields, DocAnchorType::from_name)
+                .unwrap_or(DocAnchorType::Other),
+            exact: take_field(&mut fields, "exact"),
+            prefix: take_field(&mut fields, "prefix"),
+            suffix: take_field(&mut fields, "suffix"),
+            start_offset_hint: take_field(&mut fields, "startOffsetHint"),
+            end_offset_hint: take_field(&mut fields, "endOffsetHint"),
+            block_id: take_field(&mut fields, "blockId"),
+            node_id: take_field(&mut fields, "nodeId"),
+            edge_id: take_field(&mut fields, "edgeId"),
+            source: take_field(&mut fields, "source"),
+            occurrence: take_field(&mut fields, "occurrence"),
+            extra: fields,
+        })
+    }
+}
+
+/// Removes `key` from `fields` when it holds a `T`; anything else (`null` too) stays for `extra`.
+fn take_field<T: serde::de::DeserializeOwned>(
+    fields: &mut serde_json::Map<String, serde_json::Value>,
+    key: &str,
+) -> Option<T> {
+    let value = T::deserialize(fields.get(key)?).ok()?;
+    fields.shift_remove(key);
+    Some(value)
+}
+
+fn take_anchor_type<T>(
+    fields: &mut serde_json::Map<String, serde_json::Value>,
+    from_name: fn(&str) -> Option<T>,
+) -> Option<T> {
+    let anchor_type = from_name(fields.get("type")?.as_str()?)?;
+    fields.shift_remove("type");
+    Some(anchor_type)
 }
 
 /// Lengths and prefixes in UTF-16 code units, as JavaScript's `length` and `slice` count them.
@@ -167,10 +231,14 @@ impl DocAnchor {
                 let node_id = self.node_id.as_deref().unwrap_or("");
                 format!("step \u{201c}{}\u{201d}", utf16_prefix(node_id, 50))
             }
+            // The TypeScript `describe` returns `undefined` here, which its callers interpolate.
+            DocAnchorType::Other => "undefined".to_string(),
         }
     }
 }
 
+/// The `type` of a patch anchor; a missing or unknown `type` (e.g. a `text` anchor a finding put
+/// on a patch) deserializes to `Other` and its original value stays in `extra`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PatchAnchorType {
     #[serde(rename = "patch")]
@@ -181,6 +249,24 @@ pub enum PatchAnchorType {
     CodeLine,
     #[serde(rename = "code-range")]
     CodeRange,
+    #[serde(skip)]
+    Other,
+}
+
+impl PatchAnchorType {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "patch" => Some(Self::Patch),
+            "code-file" => Some(Self::CodeFile),
+            "code-line" => Some(Self::CodeLine),
+            "code-range" => Some(Self::CodeRange),
+            _ => None,
+        }
+    }
+
+    fn is_other(&self) -> bool {
+        *self == Self::Other
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -190,25 +276,43 @@ pub enum PatchSide {
     Old,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PatchAnchor {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", skip_serializing_if = "PatchAnchorType::is_other")]
     pub anchor_type: PatchAnchorType,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub line: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub start_line: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub end_line: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub side: Option<PatchSide>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// Every field that is not one of the above or does not have its type, kept as it was.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+impl<'de> Deserialize<'de> for PatchAnchor {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut fields = serde_json::Map::deserialize(deserializer)?;
+        Ok(Self {
+            anchor_type: take_anchor_type(&mut fields, PatchAnchorType::from_name)
+                .unwrap_or(PatchAnchorType::Other),
+            path: take_field(&mut fields, "path"),
+            line: take_field(&mut fields, "line"),
+            start_line: take_field(&mut fields, "startLine"),
+            end_line: take_field(&mut fields, "endLine"),
+            side: take_field(&mut fields, "side"),
+            source: take_field(&mut fields, "source"),
+            extra: fields,
+        })
+    }
 }
 
 impl PatchAnchor {
@@ -239,6 +343,7 @@ impl PatchAnchor {
                 };
                 format!("{path}:{start}-{end}{side_suffix}")
             }
+            PatchAnchorType::Other => "undefined".to_string(),
         }
     }
 }
@@ -944,6 +1049,48 @@ mod tests {
             extra: serde_json::Map::new(),
         };
         assert_eq!(pa.describe(), "src/main.rs:42 (old)");
+    }
+
+    #[test]
+    fn test_anchors_round_trip_whatever_they_carry() {
+        let doc_anchors = [
+            r#"{"type":"text","exact":"a","prefix":"b","occurrence":2}"#,
+            r#"{"exact":"no type"}"#,
+            r#"{"type":"code-line","path":"a.rs","line":3}"#,
+            r#"{"type":7,"blockId":["not","a","string"],"exact":null}"#,
+        ];
+        for json in doc_anchors {
+            let anchor: DocAnchor = serde_json::from_str(json).unwrap();
+            assert_eq!(serde_json::to_string(&anchor).unwrap(), json);
+        }
+        let patch_anchors = [
+            r#"{"type":"code-range","path":"a.rs","startLine":1,"endLine":2,"side":"old"}"#,
+            r#"{"type":"text","exact":"on a patch"}"#,
+            r#"{"path":"a.rs","line":-1}"#,
+            r#"{"type":"code-line","line":"12","side":"both"}"#,
+        ];
+        for json in patch_anchors {
+            let anchor: PatchAnchor = serde_json::from_str(json).unwrap();
+            assert_eq!(serde_json::to_string(&anchor).unwrap(), json);
+        }
+
+        let text_on_patch: PatchAnchor = serde_json::from_str(patch_anchors[1]).unwrap();
+        assert_eq!(text_on_patch.anchor_type, PatchAnchorType::Other);
+        assert_eq!(text_on_patch.describe(), "undefined");
+        let typed: PatchAnchor = serde_json::from_str(patch_anchors[0]).unwrap();
+        assert_eq!(typed.anchor_type, PatchAnchorType::CodeRange);
+        assert_eq!(typed.side, Some(PatchSide::Old));
+        assert!(typed.extra.is_empty());
+
+        let location = serde_json::json!({
+            "kind": "patch",
+            "uri": "file:///r/change.patch",
+            "anchor": { "text": "" },
+            "patchAnchor": { "type": "text", "exact": "x" },
+            "docAnchor": { "nodeId": "n" },
+        });
+        let parsed: CodeLocation = serde_json::from_value(location.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), location);
     }
 
     #[test]

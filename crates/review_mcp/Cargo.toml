@@ -15,13 +15,13 @@ log.workspace = true
 parking_lot.workspace = true
 regex.workspace = true
 review_bundle.workspace = true
-review_code = { path = "../review_code" }
+review_code.workspace = true
 review_design.workspace = true
-review_github = { path = "../review_github" }
-review_graph = { path = "../review_graph" }
-review_index = { path = "../review_index" }
+review_github.workspace = true
+review_graph.workspace = true
+review_index.workspace = true
 review_model.workspace = true
-review_pages = { path = "../review_pages" }
+review_pages.workspace = true
 review_store.workspace = true
 serde.workspace = true
 serde_json.workspace = true

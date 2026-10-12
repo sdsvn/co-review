@@ -14,7 +14,7 @@ use review_model::{
     ReviewBundle, ReviewClosed, ReviewDecision, ReviewScope, ReviewThread, Severity, ThreadIntent,
     ThreadOptions, ThreadStatus, VerdictToAgent, waits_for_agent,
 };
-use review_store::{CreateReviewParams, ReviewChange};
+use review_store::{CreateReviewParams, MessagePatch, PartialMessage, ReviewChange};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use tokio_util::sync::CancellationToken;
@@ -575,7 +575,7 @@ impl CoReviewer {
                 .set("proposedFindings", count(&review, ThreadStatus::Proposed))
                 .spread(extra)
                 .set("note", note)
-                .set("hint", "Share the URL with the reviewer, then loop await_reviewer → reply until it returns their Submit.")
+                .set("hint", "Tell the reviewer the review is open in Co-Review, then loop await_reviewer → reply until it returns their Submit.")
                 .build(),
         )
     }
@@ -1034,7 +1034,6 @@ impl CoReviewer {
         }))
     }
 
-    /// A new thread whose target is tracked from here on, as the TypeScript store does for every new thread.
     fn create_thread(
         &self,
         review: &Review,
@@ -1043,12 +1042,9 @@ impl CoReviewer {
         author: Participant,
         options: ThreadOptions,
     ) -> Result<(Review, ReviewThread), review_store::ReviewStoreError> {
-        let store = &self.services.store;
-        let location = review_bundle::tracking::track_new(
-            &store.workspace_dir(&review.workspace_root),
-            location,
-        );
-        store.create_thread(&review.id, location, body, author, options)
+        self.services
+            .store
+            .create_thread(&review.id, location, body, author, options)
     }
 
     /// A semantic location (range, anchor text, Tree-sitter tokens, symbol) from a file and lines.
@@ -1816,14 +1812,16 @@ fn start_permission_message(
     body: String,
     permission: PermissionRequest,
 ) -> anyhow::Result<String> {
-    let store = &reviewer.services.store;
-    // review_store doesn't export its message types; their fields are public, so they are filled in place.
-    let mut init =
-        default_argument(|init| store.start_message(review_id, thread_id, author.clone(), init));
-    init.body = Some(body);
-    init.permission = Some(permission);
-    init.status = Some(MessageStatus::Done);
-    Ok(store.start_message(review_id, thread_id, author, init)?)
+    let init = PartialMessage {
+        body: Some(body),
+        status: Some(MessageStatus::Done),
+        permission: Some(permission),
+        ..PartialMessage::default()
+    };
+    Ok(reviewer
+        .services
+        .store
+        .start_message(review_id, thread_id, author, init)?)
 }
 
 fn update_permission(
@@ -1833,15 +1831,13 @@ fn update_permission(
     message_id: &str,
     permission: PermissionRequest,
 ) -> anyhow::Result<()> {
-    let store = &reviewer.services.store;
-    let mut patch =
-        default_argument(|patch| store.update_message(review_id, thread_id, message_id, patch));
-    patch.permission = Some(permission);
-    store.update_message(review_id, thread_id, message_id, patch)?;
+    let patch = MessagePatch {
+        permission: Some(permission),
+        ..MessagePatch::default()
+    };
+    reviewer
+        .services
+        .store
+        .update_message(review_id, thread_id, message_id, patch)?;
     Ok(())
-}
-
-/// The default value of the argument `call` takes; `call` itself is never run.
-fn default_argument<Argument: Default, Output>(_call: impl FnOnce(Argument) -> Output) -> Argument {
-    Argument::default()
 }

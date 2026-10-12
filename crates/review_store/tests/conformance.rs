@@ -32,6 +32,61 @@ mod tests {
         }
     }
 
+    /// Other crates (review_mcp) start and patch messages through the exported message types.
+    #[test]
+    fn test_messages_are_started_and_patched_from_outside_the_crate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = ReviewStore::with_home(tmp.path().to_path_buf());
+        let review = store
+            .create(CreateReviewParams {
+                workspace_root: "file:///nonexistent_test_workspace_42/project".into(),
+                title: "Messages".into(),
+                scope: ReviewScope::Repository,
+                author: test_author(),
+            })
+            .unwrap();
+        let (_, thread) = store
+            .create_thread(
+                &review.id,
+                test_location(),
+                "Q".into(),
+                test_author(),
+                ThreadOptions::default(),
+            )
+            .unwrap();
+        let message_id = store
+            .start_message(
+                &review.id,
+                &thread.id,
+                test_author(),
+                PartialMessage {
+                    body: Some("Thinking".into()),
+                    status: Some(MessageStatus::Streaming),
+                    ..PartialMessage::default()
+                },
+            )
+            .unwrap();
+        let thread = store
+            .update_message(
+                &review.id,
+                &thread.id,
+                &message_id,
+                MessagePatch {
+                    body: Some("Done".into()),
+                    status: Some(MessageStatus::Done),
+                    ..MessagePatch::default()
+                },
+            )
+            .unwrap();
+        let message = thread
+            .messages
+            .iter()
+            .find(|message| message.id == message_id)
+            .unwrap();
+        assert_eq!(message.body, "Done");
+        assert_eq!(message.status, Some(MessageStatus::Done));
+    }
+
     /// Run the same operations as gen.mjs and verify the output.
     #[test]
     fn test_operations_match_ts() {

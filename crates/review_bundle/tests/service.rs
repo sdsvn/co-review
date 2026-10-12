@@ -357,3 +357,52 @@ fn findings_files_are_ingested_while_the_review_is_open() {
     assert_eq!(store.get(&opened.review.id).unwrap().threads.len(), 4);
     assert_eq!(service.sync_findings(&opened.review.id).unwrap(), 1);
 }
+
+#[test]
+fn a_findings_file_anchor_the_model_does_not_know_is_kept_exactly() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(temporary.path()).unwrap();
+    let dir = root.join("change");
+    copy_dir(&fixtures().join("change"), &dir);
+    let anchors = [
+        r#"{"type":"text","exact":"refill int","prefix":"\t"}"#,
+        r#"{"exact":"no type at all"}"#,
+        r#"{"type":"code-line","path":"src/limiter.go","line":"5","side":"both"}"#,
+        r#"{"type":"patch","source":null}"#,
+    ];
+    let text = anchors
+        .iter()
+        .enumerate()
+        .map(|(index, anchor)| {
+            format!("{{\"id\":\"odd-{index}\",\"anchor\":{anchor},\"body\":\"x\"}}\n")
+        })
+        .collect::<String>();
+    fs::write(dir.join("change.comments.jsonl"), text).unwrap();
+    let store = Arc::new(ReviewStore::with_home(root.join("home")));
+    let service = BundleService::with_options(
+        store.clone(),
+        BundleServiceOptions {
+            home: root.join("home"),
+            export_on_change: false,
+        },
+    );
+    let opened = service.open(OpenBundleParams::dir(&dir, author())).unwrap();
+    service.unwatch_all();
+    service.export(&opened.review.id).unwrap();
+
+    let state: Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("review.json")).unwrap()).unwrap();
+    let threads = state["threads"].as_array().unwrap();
+    assert_eq!(threads.len(), anchors.len());
+    for (thread, anchor) in threads.iter().zip(anchors) {
+        // Like the TypeScript app: a patch's findings are on the patch, with the anchor as written.
+        assert_eq!(thread["target"], json!("patch:change"));
+        assert_eq!(serde_json::to_string(&thread["anchor"]).unwrap(), anchor);
+    }
+    // The same holds for the stored review.
+    let review = store.get(&opened.review.id).unwrap();
+    for (thread, anchor) in review.threads.iter().zip(anchors) {
+        let stored = thread.location.patch_anchor.as_ref().unwrap();
+        assert_eq!(serde_json::to_string(stored).unwrap(), anchor);
+    }
+}

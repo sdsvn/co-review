@@ -10,8 +10,11 @@ path = "src/review_store.rs"
 
 [dependencies]
 dunce = "1.0"
+log.workspace = true
 parking_lot.workspace = true
-review_model = { workspace = true }
+regex.workspace = true
+review_anchor.workspace = true
+review_model.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

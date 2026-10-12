@@ -368,8 +368,10 @@ impl<E: SymbolExtractor> RepoIndex<E> {
         map: &RepoMap,
         viewed: &HashMap<String, f64>,
     ) -> ReviewCoverage {
-        let files: Vec<(&str, &FileEntry)> =
+        // In path order, as the map is built, so each area's `next` is its first unviewed file.
+        let mut files: Vec<(&str, &FileEntry)> =
             map.files.iter().map(|(f, e)| (f.as_str(), e)).collect();
+        files.sort_unstable_by_key(|(file, _)| *file);
 
         let seen = |file: &str, entry: &FileEntry| {
             viewed
@@ -946,6 +948,23 @@ mod tests {
         // No viewed entries: nothing viewed.
         let coverage = index.coverage(&map, &HashMap::new());
         assert_eq!(coverage.viewed, 0);
+    }
+
+    #[test]
+    fn test_coverage_next_is_the_first_unviewed_file_in_path_order() {
+        let entry = || FileEntry {
+            content_hash: String::new(),
+            mtime_ms: 1000.0,
+            symbols: Vec::new(),
+        };
+        let names = ["src/k.rs", "src/c.rs", "src/z.rs", "src/a.rs", "src/q.rs", "src/b.rs"];
+        let map = RepoMap {
+            files: names.iter().map(|name| (name.to_string(), entry())).collect(),
+        };
+        let viewed = HashMap::from([("src/a.rs".to_string(), 2000.0)]);
+        let coverage = RepoIndex::new().coverage(&map, &viewed);
+        assert_eq!(coverage.areas.len(), 1);
+        assert_eq!(coverage.areas[0].next.as_deref(), Some("src/b.rs"));
     }
 
     #[test]

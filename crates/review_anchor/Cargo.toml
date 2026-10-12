@@ -9,7 +9,7 @@ license.workspace = true
 path = "src/review_anchor.rs"
 
 [dependencies]
-review_model = { workspace = true }
+review_model.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 

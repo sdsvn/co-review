@@ -11,7 +11,7 @@ pub const SERVER_INSTRUCTIONS: &str = concat!(
     "(its diff as a .patch in a review directory: open_review with dir), someone else's pull request (its patch and a PR.md in a ",
     "review directory), or a design document (open_review with dir). In each, prepare the review without showing it ",
     "(open_review with open: false), add your first-pass findings, then show it with open_review({ reviewId }) and tell the ",
-    "reviewer the URL. Then loop: ",
+    "reviewer the review is open in Co-Review. Then loop: ",
     "await_reviewer \u{2192} investigate the repository \u{2192} reply, until it returns the reviewer's Submit; await_reviewer is the only call to wait on. Use add_findings for issues you find, ",
     "ask_reviewer when you need a decision, and repo_map to find where things live before searching. ",
     "To review the whole repository: repo_map({ overview: true }) for where to start and how the code clusters, then ",
