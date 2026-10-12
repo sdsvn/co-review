@@ -137,7 +137,8 @@ pub(super) fn error_modal(title: &str, msg: &str) -> i32 {
 
 #[cfg(unix)]
 pub fn error_notification(title: &str, msg: &str) {
-    let res = std::process::Command::new("notify-send")
+    // co-review: log a failed notify-send instead of an unused `res` (build warning).
+    if let Err(err) = std::process::Command::new("notify-send")
         .args([
             // co-review: branding.
             "-a",
@@ -150,5 +151,8 @@ pub fn error_notification(title: &str, msg: &str) {
             title,
             msg,
         ])
-        .spawn();
+        .spawn()
+    {
+        tracing::error!("notify-send failed: {err}");
+    }
 }

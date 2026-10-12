@@ -42,8 +42,9 @@ use review_model::{
 };
 
 use super::{
-    ReviewPage, code,
+    ReviewPage, code, drafts,
     thread::{self, ThreadViewOptions},
+    workspace::ReviewDraft,
 };
 use crate::{
     config::{LapceConfig, color::LapceColor},
@@ -129,14 +130,62 @@ fn load(dir: &Path) -> LoadedParts {
     LoadedParts { meta, patches }
 }
 
-/// A comment being written on the page.
+/// A comment being written on the page: one of the window's drafts (`drafts.rs`, kept per review and listed in the
+/// Review panel) on one of the page's patches. Its text lives in the shared draft.
 struct Draft {
-    id: u64,
+    /// The shared draft's id.
+    id: String,
     patch: usize,
     anchor: PatchAnchor,
-    body: RwSignal<String>,
-    /// The suggested replacement, one entry per line of the commented source, while suggesting.
+    /// The suggested replacement, one entry per line of the commented source, while suggesting (not kept: drafts
+    /// carry no suggestion).
     suggestion: RwSignal<Option<Vec<String>>>,
+}
+
+/// A draft's suggested replacement lines, while suggesting.
+type Suggestion = RwSignal<Option<Vec<String>>>;
+
+/// Where a shared draft is on the page.
+#[derive(Clone, Debug, PartialEq)]
+struct PlacedDraft {
+    id: String,
+    uri: String,
+    anchor: PatchAnchor,
+}
+
+/// The review's drafts that are on a patch, oldest first.
+fn placed_drafts(drafts: &im::Vector<ReviewDraft>, review_id: &str) -> Vec<PlacedDraft> {
+    drafts
+        .iter()
+        .filter(|draft| draft.review_id == review_id && draft.location.kind == LocationKind::Patch)
+        .filter_map(|draft| {
+            Some(PlacedDraft {
+                id: draft.id.clone(),
+                uri: draft.location.uri.clone()?,
+                anchor: draft.location.patch_anchor.clone()?,
+            })
+        })
+        .collect()
+}
+
+/// A draft's location: on the patch at `uri`, at `anchor`.
+fn draft_location(uri: String, anchor: PatchAnchor) -> CodeLocation {
+    CodeLocation {
+        kind: LocationKind::Patch,
+        uri: Some(uri),
+        range: None,
+        symbol: None,
+        anchor: Some(CodeAnchor {
+            text: anchor.source.clone().unwrap_or_default(),
+            before: None,
+            after: None,
+            syntax: None,
+        }),
+        doc_anchor: None,
+        patch_anchor: Some(anchor),
+        tracked: None,
+        extra: serde_json::Map::new(),
+    }
 }
 
 impl Draft {
@@ -188,7 +237,7 @@ enum RowKey {
     File(usize, String, bool, usize),
     Code(usize, String, usize, bool),
     Thread(String),
-    Draft(u64),
+    Draft(String),
     Note(String),
 }
 
@@ -209,7 +258,7 @@ impl Row {
                 commented,
             } => RowKey::Code(*patch, file.path.clone(), *index, *commented),
             Row::Thread { thread_id } => RowKey::Thread(thread_id.clone()),
-            Row::Draft { draft } => RowKey::Draft(draft.id),
+            Row::Draft { draft } => RowKey::Draft(draft.id.clone()),
             Row::Note { text } => RowKey::Note(text.clone()),
         }
     }
@@ -502,8 +551,12 @@ struct Page {
     review: Memo<Option<Arc<Review>>>,
     loaded: RwSignal<Option<Rc<Loaded>>>,
     collapsed: RwSignal<HashSet<FileKey>>,
-    drafts: RwSignal<Vec<Rc<Draft>>>,
-    next_draft: RwSignal<u64>,
+    /// The review's drafts on the page's patches (from the window's drafts; not their text, so typing doesn't
+    /// rebuild the rows).
+    drafts: Memo<Vec<PlacedDraft>>,
+    /// Each draft's suggested edit while it is being written, by draft id.
+    suggestions: Rc<RefCell<HashMap<String, Suggestion>>>,
+    scope: Scope,
     /// The line a shift-click finishes a range from: `(patch, path, side, line)`.
     range_start: RwSignal<Option<(usize, String, PatchSide, u32)>>,
     /// Measured heights of thread and draft rows (they size themselves), by key.
@@ -533,22 +586,42 @@ impl Page {
             .with(|review| review.as_ref().and_then(|review| code::code_folder(review)).is_some())
     }
 
+    /// A draft on the patch (or the one already at `anchor`), kept with the window's drafts.
     fn add_draft(&self, patch: usize, anchor: PatchAnchor) {
-        let id = self.next_draft.get_untracked();
-        self.next_draft.set(id + 1);
-        let draft = Rc::new(Draft {
-            id,
-            patch,
-            anchor,
-            body: create_rw_signal(String::new()),
-            suggestion: create_rw_signal(None),
-        });
-        self.drafts.update(|drafts| drafts.push(draft));
+        let Some((uri, _)) = self.patch(patch) else {
+            return;
+        };
+        drafts::add_to(
+            &self.window_tab,
+            &self.review_id,
+            draft_location(uri, anchor),
+            ThreadIntent::Comment,
+        );
     }
 
-    fn discard_draft(&self, id: u64) {
-        self.drafts
-            .update(|drafts| drafts.retain(|draft| draft.id != id));
+    fn discard_draft(&self, id: &str) {
+        drafts::discard(&self.window_tab, id);
+        self.suggestions.borrow_mut().remove(id);
+    }
+
+    /// The page's drafts, with their patch and suggestion.
+    fn drafts_on(&self, loaded: &Loaded, placed: &[PlacedDraft]) -> Vec<Rc<Draft>> {
+        let mut suggestions = self.suggestions.borrow_mut();
+        placed
+            .iter()
+            .filter_map(|draft| {
+                let patch = loaded.patches.iter().position(|patch| patch.uri == draft.uri)?;
+                let suggestion = *suggestions
+                    .entry(draft.id.clone())
+                    .or_insert_with(|| self.scope.create_rw_signal(None));
+                Some(Rc::new(Draft {
+                    id: draft.id.clone(),
+                    patch,
+                    anchor: draft.anchor.clone(),
+                    suggestion,
+                }))
+            })
+            .collect()
     }
 
     /// Sends a draft as a new thread (off the UI thread); a suggestion goes with it as a pending proposal.
@@ -562,45 +635,35 @@ impl Page {
             .get_untracked()
             .map(|lines| lines.join("\n"))
             .filter(|after| *after != before);
-        let body = draft.body.get_untracked().trim().to_string();
-        if body.is_empty() && after.is_none() {
+        let Some(after) = after else {
+            // A plain comment: the shared drafts send it (and bring it back if that fails).
+            drafts::submit(&self.window_tab, &draft.id, intent);
+            self.suggestions.borrow_mut().remove(&draft.id);
             return;
-        }
+        };
+        let body = self.window_tab.review.drafts.with_untracked(|drafts| {
+            drafts
+                .iter()
+                .find(|shared| shared.id == draft.id)
+                .map(|shared| shared.body.trim().to_string())
+                .unwrap_or_default()
+        });
         let body = if body.is_empty() {
             "Suggested edit.".to_string()
         } else {
             body
         };
-        let proposal = after.map(|after| Proposal {
-            before: before.clone(),
+        // A suggested edit is a comment with a pending proposal, whatever button sent it.
+        let proposal = Some(Proposal {
+            before,
             after,
             path: draft.anchor.path.clone(),
             start_line: draft.anchor.line.or(draft.anchor.start_line),
             status: ProposalStatus::Pending,
         });
-        let intent = if proposal.is_some() {
-            ThreadIntent::Comment
-        } else {
-            intent
-        };
-        let location = CodeLocation {
-            kind: LocationKind::Patch,
-            uri: Some(uri),
-            range: None,
-            symbol: None,
-            anchor: Some(CodeAnchor {
-                text: before,
-                before: None,
-                after: None,
-                syntax: None,
-            }),
-            doc_anchor: None,
-            patch_anchor: Some(draft.anchor.clone()),
-            tracked: None,
-            extra: serde_json::Map::new(),
-        };
+        let location = draft_location(uri, draft.anchor.clone());
         let options = ThreadOptions {
-            intent: Some(intent),
+            intent: Some(ThreadIntent::Comment),
             proposal,
             ..ThreadOptions::default()
         };
@@ -616,7 +679,7 @@ impl Page {
             backend.ask_if_answering(&review_id, &thread);
             Ok(())
         });
-        self.discard_draft(draft.id);
+        self.discard_draft(&draft.id);
     }
 
     /// The **+** on a diff line: a comment on it, or with shift a range from the last line commented on this side.
@@ -716,8 +779,12 @@ pub fn pull_request_page(window_tab: Rc<WindowTabData>, review_id: String) -> im
         review,
         loaded: create_rw_signal(None),
         collapsed: create_rw_signal(HashSet::new()),
-        drafts: create_rw_signal(Vec::new()),
-        next_draft: create_rw_signal(0),
+        drafts: {
+            let (drafts, review_id) = (window_tab.review.drafts, review_id.clone());
+            create_memo(move |_| drafts.with(|drafts| placed_drafts(drafts, &review_id)))
+        },
+        suggestions: Rc::default(),
+        scope: Scope::current(),
         range_start: create_rw_signal(None),
         heights: create_rw_signal(HashMap::new()),
         hover: create_rw_signal(None),
@@ -759,8 +826,8 @@ pub fn pull_request_page(window_tab: Rc<WindowTabData>, review_id: String) -> im
             let started = Instant::now();
             let rows = placements.with(|threads| {
                 page.collapsed.with(|collapsed| {
-                    page.drafts
-                        .with(|drafts| build_rows(&loaded, threads, collapsed, drafts))
+                    let drafts = page.drafts.with(|placed| page.drafts_on(&loaded, placed));
+                    build_rows(&loaded, threads, collapsed, &drafts)
                 })
             });
             if started.elapsed() > Duration::from_millis(50) {
@@ -1544,16 +1611,24 @@ fn draft_view(page: Page, draft: Rc<Draft>) -> impl View {
     };
     let body = {
         let submit = submit.clone();
-        let body = draft.body;
+        let initial = page.window_tab.review.drafts.with_untracked(|drafts| {
+            drafts
+                .iter()
+                .find(|shared| shared.id == draft.id)
+                .map(|shared| shared.body.clone())
+                .unwrap_or_default()
+        });
+        let (submit_tab, change_tab) = (page.window_tab.clone(), page.window_tab.clone());
+        let (submit_id, change_id) = (draft.id.clone(), draft.id.clone());
         thread::reply_box(
             page.window_tab.clone(),
             "Leave a comment… (Enter to send)",
-            body.get_untracked(),
+            initial,
             move |text| {
-                body.set(text);
+                drafts::set_body(&submit_tab, &submit_id, text);
                 submit(ThreadIntent::Comment);
             },
-            move |text| body.set(text),
+            move |text| drafts::set_body(&change_tab, &change_id, text),
         )
     };
     let suggestion = {
@@ -1613,8 +1688,8 @@ fn draft_view(page: Page, draft: Rc<Draft>) -> impl View {
     let buttons = {
         let cancel = {
             let page = page.clone();
-            let id = draft.id;
-            move || page.discard_draft(id)
+            let id = draft.id.clone();
+            move || page.discard_draft(&id)
         };
         let ask = {
             let submit = submit.clone();
@@ -1813,6 +1888,35 @@ mod tests {
                 RowKey::Note(text) => format!("note {text}"),
             })
             .collect()
+    }
+
+    #[test]
+    fn the_pages_drafts_are_the_reviews_shared_drafts_on_a_patch() {
+        let uri = "file:///review/change.patch".to_string();
+        let shared = |id: &str, review_id: &str, location: CodeLocation| ReviewDraft {
+            id: id.to_string(),
+            review_id: review_id.to_string(),
+            location,
+            body: "kept".to_string(),
+            intent: ThreadIntent::Comment,
+        };
+        let mut on_file = draft_location(uri.clone(), line_anchor(2, PatchSide::New));
+        on_file.kind = LocationKind::File;
+        let drafts: im::Vector<ReviewDraft> = [
+            shared("d1", "r1", draft_location(uri.clone(), line_anchor(2, PatchSide::Old))),
+            shared("d2", "r2", draft_location(uri.clone(), line_anchor(2, PatchSide::Old))),
+            shared("d3", "r1", on_file),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            placed_drafts(&drafts, "r1"),
+            vec![PlacedDraft {
+                id: "d1".to_string(),
+                uri,
+                anchor: line_anchor(2, PatchSide::Old),
+            }]
+        );
     }
 
     #[test]

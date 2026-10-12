@@ -233,6 +233,20 @@ fn only_local_clients_are_served_and_the_instance_is_recorded() {
     );
     assert!(local.starts_with("HTTP/1.1 200"), "{local}");
     assert!(local.contains("mcp-session-id"), "{local}");
+    // serverInfo carries the app's (workspace) version, not a crate's own.
+    let workspace_manifest =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml"))
+            .unwrap();
+    let app_version = workspace_manifest
+        .lines()
+        .skip_while(|line| line.trim() != "[workspace.package]")
+        .find_map(|line| line.trim().strip_prefix("version"))
+        .and_then(|rest| rest.split('"').nth(1))
+        .unwrap();
+    assert!(
+        local.contains(&format!(r#""serverInfo":{{"name":"co-review","version":"{app_version}"}}"#)),
+        "{local}"
+    );
 
     server.stop();
     assert!(!registry.exists());

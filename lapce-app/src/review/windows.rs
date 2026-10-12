@@ -1,6 +1,6 @@
 //! The app's windows for the MCP server ([`review_mcp::ReviewWindows`]): showing a review opens its workspace's
 //! window, or focuses the one already open, with the review's overview page in front (a change review's pull-request
-//! page in front of it).
+//! page in front of it; a design's or knowledge bundle's document instead of an overview).
 
 use std::{
     collections::{HashMap, HashSet},
@@ -23,12 +23,12 @@ use crate::{app::AppData, window::WindowData, window_tab::WindowTabData};
 /// What the MCP server asks of the app's windows, handled on the UI thread.
 #[derive(Clone, Debug)]
 pub enum WindowRequest {
-    /// Show `review_id` in the window of `workspace` (resolved through symbolic links); a change review's
-    /// pull-request page in front of its overview.
+    /// Show `review_id`'s `pages` (the last in front, see [`pages_to_show`]) in the window of `workspace` (resolved
+    /// through symbolic links).
     Show {
         review_id: String,
         workspace: PathBuf,
-        pull_request: bool,
+        pages: Vec<ReviewPage>,
     },
     /// The agent session is done with the window of `workspace_root` (a file URI), or with all of its windows.
     Done {
@@ -80,15 +80,12 @@ impl ReviewWindows for AppWindows {
                 .or_default()
                 .insert(session_id.to_string());
         }
-        // Read here, off the UI thread: whether the review has patches to show as a pull request.
-        let pull_request = self
-            .store
-            .get(review_id)
-            .is_some_and(|review| super::pull_request::has_patches(&review));
+        // Read here, off the UI thread: the review, its patches and its document decide the pages.
+        let pages = pages_to_show(review_id, self.store.get(review_id).as_ref());
         self.send(WindowRequest::Show {
             review_id: review_id.to_string(),
             workspace: review_store::real_path(workspace),
-            pull_request,
+            pages,
         });
         SHOWN_NOTE.to_string()
     }
@@ -126,16 +123,10 @@ pub(super) fn handle(core: &ReviewCore, app_data: &AppData, request: WindowReque
     // Opening pages and panels reads signals; the request effect must only track the requests.
     untrack(|| match request {
         WindowRequest::Show {
-            review_id,
+            review_id: _,
             workspace,
-            pull_request,
-        } => {
-            let mut pages = vec![ReviewPage::overview(&review_id)];
-            if pull_request {
-                pages.push(ReviewPage::pull_request(&review_id));
-            }
-            show_pages(core, app_data, pages, workspace)
-        }
+            pages,
+        } => show_pages(core, app_data, pages, workspace),
         WindowRequest::Done {
             session_id,
             message,
@@ -158,6 +149,26 @@ pub(super) fn handle(core: &ReviewCore, app_data: &AppData, request: WindowReque
     });
 }
 
+/// The pages showing a review opens, the last in front: a change review's overview and its pull-request page; a
+/// review directory without patches (a design, a knowledge bundle) its document, which is its front page, titled
+/// after it (the review's title is the document's); any other
+/// review its overview. Reads the review directory, so it runs off the UI thread.
+fn pages_to_show(review_id: &str, review: Option<&review_model::Review>) -> Vec<ReviewPage> {
+    let overview = ReviewPage::overview(review_id);
+    let Some(review) = review else {
+        return vec![overview];
+    };
+    if super::pull_request::has_patches(review) {
+        return vec![overview, ReviewPage::pull_request(review_id)];
+    }
+    review
+        .bundle
+        .as_ref()
+        .and_then(|bundle| review_bundle::service::document_of(Path::new(&bundle.dir)))
+        .map(|document| vec![ReviewPage::document(review_id, &document).titled(review.title.clone())])
+        .unwrap_or_else(|| vec![overview])
+}
+
 /// Opens or focuses the window of `workspace` (a folder, opened as a local workspace) and opens `pages` in it, the
 /// last in front.
 fn show_pages(
@@ -177,6 +188,11 @@ fn show_pages(
                 workspace.display()
             );
             window.active.set(index);
+            // Shown again (another agent session): a countdown from an agent that was done with it stops.
+            if window_tab.review.closing.get_untracked().is_some() {
+                tracing::info!("the window of {} stays open: a review is shown in it", workspace.display());
+                window_tab.review.closing.set(None);
+            }
             for page in pages {
                 reveal_page(&window_tab, page);
             }
@@ -308,5 +324,44 @@ pub fn close_now_action(window_tab: &WindowTabData) -> impl Fn() + 'static {
             crate::command::WindowCommand::CloseWorkspaceTab { index: None }
         };
         window_common.window_command.send(command);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn review(bundle_dir: Option<&Path>) -> review_model::Review {
+        let mut review = serde_json::json!({
+            "id": "r1", "title": "T", "workspaceRoot": "file:///w", "scope": { "kind": "repository" },
+            "participants": [], "threads": [], "activity": [], "nextThreadNumber": 1,
+            "createdAt": 0, "updatedAt": 0,
+        });
+        if let Some(dir) = bundle_dir {
+            review["bundle"] = serde_json::json!({ "dir": dir.to_string_lossy() });
+        }
+        serde_json::from_value(review).unwrap()
+    }
+
+    #[test]
+    fn a_design_opens_its_document_and_a_change_its_pull_request() {
+        let scratch = tempfile::tempdir().unwrap();
+        let design = scratch.path().join("design");
+        std::fs::create_dir_all(&design).unwrap();
+        std::fs::write(design.join("index.md"), "# Design\n").unwrap();
+        let pages = pages_to_show("r1", Some(&review(Some(&design))));
+        assert_eq!(pages, vec![ReviewPage::document("r1", &design.join("index.md"))]);
+        assert_eq!(pages[0].title.as_deref(), Some("T"));
+
+        let change = scratch.path().join("change");
+        std::fs::create_dir_all(&change).unwrap();
+        std::fs::write(change.join("change.patch"), "diff --git a/x b/x\n").unwrap();
+        assert_eq!(
+            pages_to_show("r1", Some(&review(Some(&change)))),
+            vec![ReviewPage::overview("r1"), ReviewPage::pull_request("r1")]
+        );
+
+        assert_eq!(pages_to_show("r1", Some(&review(None))), vec![ReviewPage::overview("r1")]);
+        assert_eq!(pages_to_show("r1", None), vec![ReviewPage::overview("r1")]);
     }
 }

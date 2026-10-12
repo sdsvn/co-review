@@ -1,0 +1,3 @@
+# Co-Review's crates use rustfmt's defaults; this file stops the root .rustfmt.toml (Lapce's 85 columns) applying here.
+max_width = 100
+edition = "2024"

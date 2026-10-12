@@ -145,6 +145,9 @@ fn left(
                         config.color(LapceColor::PANEL_HOVERED_ACTIVE_BACKGROUND),
                     )
                 })
+                // co-review: no remote development (the app ships no lapce-proxy for remote workspaces), so the
+                // "Connect to Remote" button only shows in a remote workspace, to disconnect.
+                .apply_if(is_local, |s| s.hide())
         }),
         drag_window_area(empty())
             .style(|s| s.height_pct(100.0).flex_basis(0.0).flex_grow(1.0f32)),

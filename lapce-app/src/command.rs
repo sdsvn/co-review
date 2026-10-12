@@ -93,6 +93,10 @@ pub fn lapce_internal_commands() -> IndexMap<String, LapceCommand> {
     let mut commands = IndexMap::new();
 
     for c in LapceWorkbenchCommand::iter() {
+        // co-review: remote development (SSH, WSL) is not offered: the app ships no lapce-proxy for remote workspaces.
+        if crate::review::hides_workbench_command(&c) {
+            continue;
+        }
         let command = LapceCommand {
             kind: CommandKind::Workbench(c.clone()),
             data: None,

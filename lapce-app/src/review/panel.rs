@@ -94,15 +94,18 @@ fn panel_content(window_tab_data: Rc<WindowTabData>) -> impl View {
     let config = window_tab_data.common.config;
     let review = window_tab_data.review.clone();
     let loaded = review.loaded;
-    let active_id = create_memo(move |_| review.active_review().map(|review| review.id.clone()));
+    // Whether there is an active review, not which: switching reviews keeps the review view (its memos follow the
+    // new review). Rebuilding it on a switch disposed memos its list was still reading in the same update (a panic
+    // when an agent showed another review in an open window).
+    let has_active = create_memo(move |_| review.active_review().is_some());
     let body = {
         let window_tab_data = window_tab_data.clone();
         dyn_container(
-            move || (loaded.get(), active_id.get()),
+            move || (loaded.get(), has_active.get()),
             move |state| match state {
                 (false, _) => message("Loading reviews…", config).into_any(),
-                (true, None) => empty_state(window_tab_data.clone()).into_any(),
-                (true, Some(_)) => review_view(window_tab_data.clone()).into_any(),
+                (true, false) => empty_state(window_tab_data.clone()).into_any(),
+                (true, true) => review_view(window_tab_data.clone()).into_any(),
             },
         )
         .style(|s| s.width_full())

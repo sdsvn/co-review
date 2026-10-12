@@ -11,7 +11,10 @@
 //! **Live placement.** In an open editor threads follow the text as it is typed, before it is saved: every edit
 //! (`Doc::apply_deltas` calls [`doc_edited`]) carries each thread's tracked range through the edit with
 //! `review_anchor::track`, which keeps it on its code (`active` / `modified`) or takes it off the code (`removed`,
-//! `ambiguous`: out of scope, never shown on code).
+//! `ambiguous`: out of scope, never shown on code). Placing (the first placement's diff against a snapshot, and
+//! each edit's) runs on a background thread on a snapshot of the text: one at a time per file, the next one starting
+//! from the text the last one placed in. Files without threads do nothing on an edit. Saving a file with threads
+//! resolves their stored anchors ([`doc_saved`]), as the spec's "a commented file changes".
 
 use std::{
     cell::RefCell,
@@ -40,7 +43,7 @@ use floem::{
 use lapce_core::cursor::{CursorAffinity, CursorMode};
 use lapce_core::buffer::rope_text::RopeText;
 use lapce_xi_rope::Rope;
-use review_anchor::{AnchorStatus, Edit, TrackedRange};
+use review_anchor::{AnchorStatus, TrackedRange};
 use review_model::{
     CodeAnchor, CodeLocation, LocationKind, Position, Range, Review, ReviewThread,
     ThreadIntent, ThreadStatus,
@@ -105,19 +108,51 @@ struct Entry {
     summary: String,
 }
 
-/// The tracked range of a thread or draft in the editor's current text, and the stored target it came from.
+/// The tracked range of a thread or draft in the text last placed in ([`Tracking::text`]), and the stored target it
+/// came from.
+#[derive(Clone, Debug, PartialEq)]
 struct Live {
     basis: String,
     tracked: Option<TrackedRange>,
-    /// The line to use without a tracked range.
-    fallback_line: Option<usize>,
+    /// The line it shows under; `None` when out of scope.
+    line: Option<usize>,
+}
+
+/// What a background placement starts from.
+enum Start {
+    /// A live range in the text last placed in.
+    Tracked(Box<TrackedRange>),
+    /// The stored location: first placement.
+    Location(Box<CodeLocation>),
+}
+
+struct Job {
+    key: ItemKey,
+    basis: String,
+    start: Start,
+}
+
+/// The background placement of one file's threads.
+#[derive(Default)]
+struct Tracking {
+    /// The text the live ranges are in (a rope: cloning it is cheap).
+    text: Option<Rope>,
+    /// The editor's buffer, read when a placement starts.
+    buffer: Option<RwSignal<lapce_core::buffer::Buffer>>,
+    /// The review's anchor snapshots, for first placements.
+    snapshots: Option<PathBuf>,
+    running: bool,
+    /// Edited or refreshed while a placement ran: place again when it ends.
+    again: bool,
 }
 
 /// The threads and drafts of one open file (shared by every editor on it).
 pub struct DocThreads {
     uri: String,
+    scope: Scope,
     entries: RefCell<Vec<Entry>>,
     live: RefCell<HashMap<ItemKey, Live>>,
+    tracking: RefCell<Tracking>,
     pub items: RwSignal<Vec<Item>>,
     /// Phantom rows of each unfolded item, from its measured height.
     pub rows: RwSignal<HashMap<ItemKey, usize>>,
@@ -148,8 +183,10 @@ fn doc_threads_or_new(path: &Path) -> Rc<DocThreads> {
                     uri: review_store::path_to_file_uri(
                         &review_store::real_path(path).to_string_lossy(),
                     ),
+                    scope: cx,
                     entries: RefCell::default(),
                     live: RefCell::default(),
+                    tracking: RefCell::default(),
                     items: cx.create_rw_signal(Vec::new()),
                     rows: cx.create_rw_signal(HashMap::new()),
                 })
@@ -197,52 +234,94 @@ pub fn phantom_text(doc: &Doc, line: usize, line_len: usize) -> Option<PhantomTe
     })
 }
 
-/// The document changed (`co-review:` hook in `Doc::apply_deltas`): threads follow the edit before it is saved.
-/// `before` is the text before the edit.
-pub fn doc_edited(doc: &Doc, before: &Rope) {
-    let Some(path) = doc_path(doc) else {
+/// The document changed (`co-review:` hook in `Doc::apply_deltas`): threads follow the edit before it is saved, placed
+/// in the background from the text they were last placed in (so `_before`, the text before this edit, isn't needed).
+/// A file without threads does nothing.
+pub fn doc_edited(doc: &Doc, _before: &Rope) {
+    let Some(threads) = doc_path(doc).and_then(|path| doc_threads(&path)) else {
         return;
     };
-    let Some(threads) = doc_threads(&path) else {
-        return;
-    };
-    if threads.live.borrow().is_empty() {
+    if threads.entries.borrow().is_empty() {
         return;
     }
-    let before = before.to_string();
-    let after = doc.buffer.with_untracked(|buffer| buffer.to_string());
-    let edit = single_edit(&before, &after);
-    for live in threads.live.borrow_mut().values_mut() {
-        if let Some(tracked) = &live.tracked {
-            live.tracked = Some(review_anchor::track(
-                tracked,
-                Some(&before),
-                &after,
-                "live",
-                Some(std::slice::from_ref(&edit)),
-            ));
-        }
-    }
-    threads.place(doc, &after);
+    threads.sync(Some(doc.buffer));
 }
 
-/// The one replacement that turns `before` into `after` (common start and end kept), in UTF-16 units.
-fn single_edit(before: &str, after: &str) -> Edit {
-    let (a, b): (Vec<u16>, Vec<u16>) = (before.encode_utf16().collect(), after.encode_utf16().collect());
-    let prefix = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
-    let max_suffix = a.len().min(b.len()) - prefix;
-    let suffix = a
+/// A file was saved (`co-review:` hook in `Doc::save`): the stored anchors of the reviews with threads in it are
+/// resolved against it, off the UI thread.
+pub fn doc_saved(path: &Path) {
+    let Some(threads) = doc_threads(path) else {
+        return;
+    };
+    let mut review_ids: Vec<String> = threads
+        .entries
+        .borrow()
         .iter()
-        .rev()
-        .zip(b.iter().rev())
-        .take(max_suffix)
-        .take_while(|(x, y)| x == y)
-        .count();
-    Edit {
-        from: prefix,
-        to: a.len() - suffix,
-        insert: String::from_utf16_lossy(&b[prefix..b.len() - suffix]),
+        .filter_map(|entry| match &entry.key {
+            ItemKey::Thread { review_id, .. } => Some(review_id.clone()),
+            ItemKey::Draft(_) => None,
+        })
+        .collect();
+    review_ids.dedup();
+    let Some(core) = ReviewCore::get().filter(|_| !review_ids.is_empty()) else {
+        return;
+    };
+    let bundles = std::sync::Arc::clone(&core.services.bundles);
+    let resolving = std::thread::Builder::new()
+        .name("ReviewResolveAnchors".to_owned())
+        .spawn(move || {
+            for review_id in review_ids {
+                if let Err(error) = bundles.resolve_anchors(&review_id) {
+                    tracing::error!("resolving the anchors of review {review_id} after a save: {error:#}");
+                }
+            }
+        });
+    if let Err(error) = resolving {
+        tracing::error!("anchors not resolved after a save: {error}");
     }
+}
+
+/// Places `jobs` in `after` (on a background thread): tracked ranges are carried from `before` through the edits
+/// between the two texts, stored locations placed for the first time (through the snapshot of their version in
+/// `snapshots`).
+fn placements(before: Option<&str>, after: &str, jobs: Vec<Job>, snapshots: Option<&Path>) -> Vec<(ItemKey, Live)> {
+    let tracks = jobs.iter().any(|job| matches!(job.start, Start::Tracked(_)));
+    let edits = before.filter(|_| tracks).map(|before| review_anchor::edits_between(before, after));
+    jobs.into_iter()
+        .map(|job| {
+            let (tracked, fallback_line) = match job.start {
+                Start::Tracked(tracked) => (
+                    Some(match &edits {
+                        Some(edits) => review_anchor::track(&tracked, before, after, "live", Some(edits)),
+                        None => review_anchor::track(&tracked, None, after, "live", None),
+                    }),
+                    None,
+                ),
+                Start::Location(location) => (
+                    live_range(&location, after, snapshots),
+                    location.range.as_ref().map(end_line),
+                ),
+            };
+            let line = match &tracked {
+                Some(tracked) => match tracked.status {
+                    AnchorStatus::Removed | AnchorStatus::Ambiguous => None,
+                    AnchorStatus::Active | AnchorStatus::Modified => {
+                        let end = if tracked.to > tracked.from { tracked.to - 1 } else { tracked.from };
+                        Some(review_anchor::position_at(after, end as usize).0)
+                    }
+                },
+                None => fallback_line,
+            };
+            (
+                job.key,
+                Live {
+                    basis: job.basis,
+                    tracked,
+                    line,
+                },
+            )
+        })
+        .collect()
 }
 
 impl DocThreads {
@@ -275,10 +354,17 @@ impl DocThreads {
     }
 
     /// Takes the window tab's active review and drafts for this file and places them in the editor's text.
-    fn refresh(&self, doc: &Doc, review: Option<&Review>, drafts: &[super::workspace::ReviewDraft], folded: &HashMap<String, bool>) {
+    fn refresh(
+        self: &Rc<Self>,
+        doc: &Doc,
+        review: Option<&Review>,
+        drafts: &[super::workspace::ReviewDraft],
+        folded: &HashMap<String, bool>,
+    ) {
         if !doc.loaded.get_untracked() {
             // Placed once the text is there; nothing is tracked against an empty buffer.
             self.live.borrow_mut().clear();
+            self.tracking.borrow_mut().text = None;
             return;
         }
         let mut entries = Vec::new();
@@ -328,32 +414,14 @@ impl DocThreads {
                 });
             }
         }
-        let text = doc.buffer.with_untracked(|buffer| buffer.to_string());
-        {
-            let snapshots = review.and_then(|review| {
-                ReviewCore::get().map(|core| {
-                    review_store::snapshots::snapshots_dir(
-                        &core.services.store.workspace_dir(&review.workspace_root),
-                    )
-                })
-            });
-            let mut live = self.live.borrow_mut();
-            live.retain(|key, _| entries.iter().any(|entry| &entry.key == key));
-            for entry in &entries {
-                let basis = basis(&entry.location);
-                if live.get(&entry.key).is_some_and(|live| live.basis == basis) {
-                    continue;
-                }
-                live.insert(
-                    entry.key.clone(),
-                    Live {
-                        tracked: live_range(&entry.location, &text, snapshots.as_deref()),
-                        fallback_line: entry.location.range.as_ref().map(end_line),
-                        basis,
-                    },
-                );
-            }
-        }
+        self.tracking.borrow_mut().snapshots = review.and_then(|review| {
+            ReviewCore::get().map(|core| {
+                review_store::snapshots::snapshots_dir(&core.services.store.workspace_dir(&review.workspace_root))
+            })
+        });
+        self.live
+            .borrow_mut()
+            .retain(|key, _| entries.iter().any(|entry| &entry.key == key));
         tracing::debug!(
             "{} review threads and drafts for {} (review {:?})",
             entries.len(),
@@ -361,7 +429,97 @@ impl DocThreads {
             review.map(|review| review.id.as_str())
         );
         *self.entries.borrow_mut() = entries;
-        self.place(doc, &text);
+        self.place();
+        self.sync(Some(doc.buffer));
+    }
+
+    /// Places the entries in the buffer's current text on a background thread, unless one is placing already (then
+    /// again when it ends). Entries placed before follow the edits since; new ones (or with a new stored target) are
+    /// placed for the first time.
+    fn sync(self: &Rc<Self>, buffer: Option<RwSignal<lapce_core::buffer::Buffer>>) {
+        let mut tracking = self.tracking.borrow_mut();
+        if let Some(buffer) = buffer {
+            tracking.buffer = Some(buffer);
+        }
+        if tracking.running {
+            tracking.again = true;
+            return;
+        }
+        let Some(buffer) = tracking.buffer else {
+            return;
+        };
+        let after = buffer.with_untracked(|buffer| buffer.text().clone());
+        let before = tracking.text.clone().filter(|before| !before.ptr_eq(&after));
+        let unchanged = tracking.text.as_ref().is_some_and(|before| before.ptr_eq(&after));
+        let jobs: Vec<Job> = {
+            let live = self.live.borrow();
+            self.entries
+                .borrow()
+                .iter()
+                .filter_map(|entry| {
+                    let basis = basis(&entry.location);
+                    let start = match live.get(&entry.key) {
+                        Some(current) if current.basis == basis => match (&current.tracked, &before) {
+                            (Some(tracked), Some(_)) => Start::Tracked(Box::new(tracked.clone())),
+                            // In the text already, or on a line that doesn't follow edits.
+                            _ if unchanged || current.tracked.is_none() => return None,
+                            _ => Start::Location(Box::new(entry.location.clone())),
+                        },
+                        _ => Start::Location(Box::new(entry.location.clone())),
+                    };
+                    Some(Job {
+                        key: entry.key.clone(),
+                        basis,
+                        start,
+                    })
+                })
+                .collect()
+        };
+        if jobs.is_empty() {
+            tracking.text = Some(after);
+            return;
+        }
+        tracking.running = true;
+        let snapshots = tracking.snapshots.clone();
+        drop(tracking);
+        let this = Rc::clone(self);
+        let done = floem::ext_event::create_ext_action(self.scope, move |(after, placed): (Rope, Vec<(ItemKey, Live)>)| {
+            let again = {
+                let mut tracking = this.tracking.borrow_mut();
+                tracking.running = false;
+                tracking.text = Some(after);
+                std::mem::take(&mut tracking.again)
+            };
+            {
+                let entries = this.entries.borrow();
+                let mut live = this.live.borrow_mut();
+                for (key, placed) in placed {
+                    // Kept only while the entry is still there with the same stored target.
+                    if entries
+                        .iter()
+                        .any(|entry| entry.key == key && basis(&entry.location) == placed.basis)
+                    {
+                        live.insert(key, placed);
+                    }
+                }
+            }
+            this.place();
+            if again {
+                this.sync(None);
+            }
+        });
+        let placing = std::thread::Builder::new()
+            .name("ReviewThreadPlacement".to_owned())
+            .spawn(move || {
+                let before = before.map(|before| before.to_string());
+                let after_text = after.to_string();
+                let placed = placements(before.as_deref(), &after_text, jobs, snapshots.as_deref());
+                done((after, placed));
+            });
+        if let Err(error) = placing {
+            tracing::error!("review threads not placed: {error}");
+            self.tracking.borrow_mut().running = false;
+        }
     }
 
     /// Whether a location shows in this file: lines of it.
@@ -376,25 +534,16 @@ impl DocThreads {
                 .is_some_and(|uri| uri == self.uri || real_uri(uri) == self.uri)
     }
 
-    /// Places the entries by their live ranges in `text` (the editor's text); out-of-scope ones are left out.
-    fn place(&self, doc: &Doc, text: &str) {
+    /// Places the entries on their live lines; out-of-scope ones (and ones not placed yet) are left out. The editors
+    /// on the file lay out again when the items change (see `doc_overlay`).
+    fn place(&self) {
         let live = self.live.borrow();
         let mut items: Vec<Item> = self
             .entries
             .borrow()
             .iter()
             .filter_map(|entry| {
-                let live = live.get(&entry.key)?;
-                let line = match &live.tracked {
-                    Some(tracked) => match tracked.status {
-                        AnchorStatus::Removed | AnchorStatus::Ambiguous => return None,
-                        AnchorStatus::Active | AnchorStatus::Modified => {
-                            let end = if tracked.to > tracked.from { tracked.to - 1 } else { tracked.from };
-                            review_anchor::position_at(text, end as usize).0
-                        }
-                    },
-                    None => live.fallback_line?,
-                };
+                let line = live.get(&entry.key)?.line?;
                 Some(Item {
                     key: entry.key.clone(),
                     line,
@@ -414,7 +563,6 @@ impl DocThreads {
                 items.iter().map(|item| (item.line, item.folded)).collect::<Vec<_>>()
             );
             self.items.set(items);
-            doc.clear_text_cache();
         }
     }
 
@@ -547,6 +695,11 @@ fn doc_overlay(
     let viewport = editor.viewport;
     let screen_lines = editor.screen_lines;
     let items = threads.items;
+    // Placed (in the background): the editor lays out the rows under the new lines.
+    Scope::current().create_effect(move |_| {
+        items.with(|_| ());
+        doc_signal.get_untracked().clear_text_cache();
+    });
     let shown = create_memo(move |_| {
         items.with(|items| {
             items
@@ -1180,24 +1333,44 @@ pub fn unfold(window_tab: &WindowTabData, thread_id: &str) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn single_edit_is_the_changed_middle() {
-        let edit = single_edit("let a = 1;\nlet b = 2;\n", "let a = 1;\nlet bb = 2;\n");
-        assert_eq!((edit.from, edit.to, edit.insert.as_str()), (16, 16, "b"));
-        let edit = single_edit("abc", "abc");
-        assert_eq!((edit.from, edit.to, edit.insert.as_str()), (3, 3, ""));
-        let edit = single_edit("aaa", "a");
-        assert_eq!((edit.from, edit.to, edit.insert.as_str()), (1, 3, ""));
+    fn job(start: Start) -> Job {
+        Job {
+            key: ItemKey::Draft("d1".to_string()),
+            basis: "b".to_string(),
+            start,
+        }
     }
 
     #[test]
     fn typing_above_moves_the_thread_down() {
         let before = "fn a() {}\nfn b() {}\n";
         let tracked = review_anchor::range_in(before, "v1", 10, 19, AnchorStatus::Active, None);
-        let after = "// new\nfn a() {}\nfn b() {}\n";
-        let edit = single_edit(before, after);
-        let moved = review_anchor::track(&tracked, Some(before), after, "live", Some(&[edit]));
-        assert_eq!(moved.status, AnchorStatus::Active);
-        assert_eq!(review_anchor::position_at(after, moved.from as usize).0, 2);
+        // Several edits since the last placement (a background placement was still running).
+        let after = "// new\n// newer\nfn a() {}\nfn b() {}\n";
+        let placed = placements(Some(before), after, vec![job(Start::Tracked(Box::new(tracked)))], None);
+        let live = &placed[0].1;
+        assert_eq!(live.tracked.as_ref().map(|tracked| tracked.status), Some(AnchorStatus::Active));
+        assert_eq!(live.line, Some(3));
+    }
+
+    #[test]
+    fn deleted_code_takes_the_thread_off_the_code() {
+        let before = "fn a() {}\nfn b() {}\n";
+        let tracked = review_anchor::range_in(before, "v1", 10, 19, AnchorStatus::Active, None);
+        let placed = placements(Some(before), "fn a() {}\n", vec![job(Start::Tracked(Box::new(tracked)))], None);
+        assert_eq!(placed[0].1.line, None);
+    }
+
+    #[test]
+    fn a_first_placement_uses_the_stored_range() {
+        let location: CodeLocation = serde_json::from_value(serde_json::json!({
+            "kind": "line",
+            "uri": "file:///w/a.rs",
+            "range": { "start": { "line": 1, "character": 0 }, "end": { "line": 1, "character": 9 } },
+        }))
+        .unwrap();
+        let placed = placements(None, "fn a() {}\nfn b() {}\n", vec![job(Start::Location(Box::new(location)))], None);
+        assert_eq!(placed[0].1.line, Some(1));
+        assert_eq!(placed[0].1.tracked.as_ref().map(|tracked| tracked.status), Some(AnchorStatus::Active));
     }
 }

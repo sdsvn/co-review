@@ -19,7 +19,7 @@ use crate::{
 pub type ReviewPageId = floem::views::editor::id::Id;
 
 /// Which review page a tab shows. A review has at most one tab per page: opening it again selects that tab.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewPage {
     pub review_id: String,
@@ -27,7 +27,19 @@ pub struct ReviewPage {
     /// A document page's file (`document.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// The tab's title, when not the page kind's or the file's name (a design's document: the design's title). Not
+    /// part of which page it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
+
+impl PartialEq for ReviewPage {
+    fn eq(&self, other: &Self) -> bool {
+        self.review_id == other.review_id && self.kind == other.kind && self.path == other.path
+    }
+}
+
+impl Eq for ReviewPage {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +57,7 @@ impl ReviewPage {
             review_id: review_id.to_string(),
             kind: ReviewPageKind::Overview,
             path: None,
+            title: None,
         }
     }
 
@@ -53,6 +66,7 @@ impl ReviewPage {
             review_id: review_id.to_string(),
             kind: ReviewPageKind::PullRequest,
             path: None,
+            title: None,
         }
     }
 
@@ -61,6 +75,15 @@ impl ReviewPage {
             review_id: review_id.to_string(),
             kind: ReviewPageKind::Document,
             path: Some(path.to_string_lossy().into_owned()),
+            title: None,
+        }
+    }
+
+    /// The same page, its tab titled `title`.
+    pub fn titled(self, title: impl Into<String>) -> Self {
+        Self {
+            title: Some(title.into()),
+            ..self
         }
     }
 }
@@ -81,6 +104,7 @@ pub fn review_page_view_info(
     config: ReadSignal<Arc<LapceConfig>>,
 ) -> Memo<EditorTabChildViewInfo> {
     let name = match &page.path {
+        _ if page.title.is_some() => page.title.clone().unwrap_or_default(),
         Some(path) if page.kind == ReviewPageKind::Document => std::path::Path::new(path)
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())

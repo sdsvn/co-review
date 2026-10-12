@@ -1,6 +1,7 @@
 [package]
 name = "review_mcp"
-version = "0.1.0"
+# The app's version: MCP clients see it as serverInfo.version.
+version.workspace = true
 edition.workspace = true
 publish = false
 license = "EPL-2.0"

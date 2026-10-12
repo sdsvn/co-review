@@ -1465,8 +1465,11 @@ impl Doc {
         if let DocContent::File { path, .. } = content {
             let rev = self.rev();
             let buffer = self.buffer;
+            // co-review: a saved file's review threads have their stored anchors resolved (comment-anchoring).
+            let saved_path = path.clone();
             let send = create_ext_action(self.scope, move |result| {
                 if let Ok(ProxyResponse::SaveResponse {}) = result {
+                    crate::review::inline::doc_saved(&saved_path);
                     let current_rev = buffer.with_untracked(|buffer| buffer.rev());
                     if current_rev == rev {
                         buffer.update(|buffer| {

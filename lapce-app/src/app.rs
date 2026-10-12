@@ -4149,7 +4149,10 @@ pub fn launch() {
             has_visible_windows,
         } => {
             if !has_visible_windows {
-                app_data.new_window(None);
+                // co-review: an app an update replaced on disk quits on activation instead (cli spec, stale
+                // versions).
+                let app_data = app_data.clone();
+                crate::review::activated(move || app_data.new_window(None));
             }
         }
     })

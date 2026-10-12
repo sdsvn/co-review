@@ -17,6 +17,7 @@ mod page;
 mod panel;
 pub mod picker;
 pub mod pull_request;
+mod stale;
 mod submit;
 pub mod drafts;
 pub mod inline;
@@ -68,6 +69,9 @@ pub struct ReviewCore {
     pub changes: ReadSignal<Option<ReviewChange>>,
     /// Started with `--background`: no window until a review is shown or the app is activated.
     pub background: bool,
+    /// The version an update installed over this app (`stale.rs`): the app quits once no window is open.
+    stale: RwSignal<Option<String>>,
+    stale_reports: ReadSignal<Option<String>>,
     server: RefCell<Option<ServerHandle>>,
     reviewer: Option<Arc<CoReviewer>>,
     requests: ReadSignal<Option<WindowRequest>>,
@@ -119,6 +123,11 @@ impl ReviewCore {
             tracing::error!("ACP agents will not follow review changes: {error:#}");
         }
         let listening = presence_signal(&services);
+        let (stale_sender, stale_receiver) = mpsc::channel();
+        if background {
+            stale::watch(stale_sender);
+        }
+        stale::quit_on_terminate();
         let core = Rc::new(ReviewCore {
             agents,
             listening,
@@ -128,6 +137,8 @@ impl ReviewCore {
             requests: create_signal_from_channel(request_receiver),
             services,
             background,
+            stale: create_rw_signal(None),
+            stale_reports: create_signal_from_channel(stale_receiver),
             pending_pages: RefCell::default(),
             open_workspaces: RefCell::default(),
         });
@@ -198,6 +209,32 @@ pub fn connect(core: Rc<ReviewCore>, app_data: AppData) {
         });
     }
     let windows = app_data.windows;
+    {
+        let (stale, reports) = (core.stale, core.stale_reports);
+        create_effect(move |_| {
+            if let Some(on_disk) = reports.get() {
+                stale.set(Some(on_disk));
+            }
+        });
+        // Replaced on disk: quit now if no window is open, else once the last one closes (never under a reviewer).
+        create_effect(move |_| {
+            let Some(on_disk) = stale.get() else {
+                return;
+            };
+            if windows.with(|windows| windows.is_empty()) {
+                tracing::error!(
+                    "Co-Review {} was replaced on disk by {on_disk}: quitting, so the next launch starts it",
+                    env!("CARGO_PKG_VERSION")
+                );
+                floem::quit_app();
+            } else {
+                tracing::info!(
+                    "Co-Review {on_disk} is installed: this app ({}) quits once its windows are closed",
+                    env!("CARGO_PKG_VERSION")
+                );
+            }
+        });
+    }
     create_effect(move |had_windows: Option<bool>| {
         let has_windows = windows.with(|windows| !windows.is_empty());
         let window_tabs: Vec<Rc<WindowTabData>> = windows.with(|windows| {
@@ -231,6 +268,28 @@ pub fn connect(core: Rc<ReviewCore>, app_data: AppData) {
     });
 }
 
+/// The app was activated (`co-review:` hook on `AppEvent::Reopen`): an app an update replaced on disk quits instead
+/// (`stale.rs`, checked off the UI thread); otherwise `open` runs.
+pub fn activated(open: impl FnOnce() + 'static) {
+    let Some(core) = ReviewCore::get() else {
+        open();
+        return;
+    };
+    let stale = core.stale;
+    let send = floem::ext_event::create_ext_action(floem::reactive::Scope::new(), move |on_disk: Option<String>| {
+        match on_disk {
+            Some(on_disk) => stale.set(Some(on_disk)),
+            None => open(),
+        }
+    });
+    let checking = std::thread::Builder::new()
+        .name("ReviewStaleVersion".to_owned())
+        .spawn(move || send(stale::check()));
+    if let Err(error) = checking {
+        tracing::error!("the version on disk was not checked: {error}");
+    }
+}
+
 /// Opens `page` in the window tab and shows the Review panel beside it.
 pub fn reveal_page(window_tab: &WindowTabData, page: ReviewPage) {
     window_tab.review.active.set(Some(page.review_id.clone()));
@@ -245,6 +304,18 @@ pub fn open_overview(window_tab: &WindowTabData) {
     match latest {
         Some(review) => reveal_page(window_tab, ReviewPage::overview(&review.id)),
         None => window_tab.show_panel(PanelKind::Review),
+    }
+}
+
+/// Lapce's commands the app doesn't offer (palette, keybindings): remote development (SSH, WSL), since the app
+/// ships no lapce-proxy for remote workspaces.
+pub fn hides_workbench_command(command: &crate::command::LapceWorkbenchCommand) -> bool {
+    use crate::command::LapceWorkbenchCommand::*;
+    match command {
+        ConnectSshHost | DisconnectRemote => true,
+        #[cfg(windows)]
+        ConnectWslHost => true,
+        _ => false,
     }
 }
 
@@ -328,4 +399,16 @@ fn presence_signal(services: &Services) -> RwSignal<im::HashMap<String, bool>> {
         }
     });
     listening
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn remote_development_is_not_in_the_palette() {
+        let commands = crate::command::lapce_internal_commands();
+        for hidden in ["connect_ssh_host", "connect_wsl_host", "disconnect_remote"] {
+            assert!(!commands.contains_key(hidden), "{hidden}");
+        }
+        assert!(commands.contains_key("new_window"));
+    }
 }

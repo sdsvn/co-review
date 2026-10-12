@@ -294,7 +294,7 @@ impl ServerHandler for McpHandler {
         tools.list_changed = Some(true);
         capabilities.tools = Some(tools);
         let mut info = InitializeResult::new(capabilities).with_instructions(SERVER_INSTRUCTIONS);
-        info.server_info = Implementation::new("co-review", "0.1.0");
+        info.server_info = Implementation::new("co-review", env!("CARGO_PKG_VERSION"));
         info
     }
 
