@@ -1,0 +1,21 @@
+{
+  "changed": [
+    {
+      "id": "review_model_src_review_model_agentpresence",
+      "label": "AgentPresence",
+      "file": "review_model/src/review_model.rs",
+      "line": 447,
+      "area": "review_model.rs"
+    },
+    {
+      "id": "review_model_src_review_model",
+      "label": "review_model.rs",
+      "file": "review_model/src/review_model.rs",
+      "line": 1,
+      "area": "review_model.rs"
+    }
+  ],
+  "affected": [],
+  "edges": [],
+  "files": []
+}
