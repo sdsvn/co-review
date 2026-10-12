@@ -1,0 +1,221 @@
+[
+  {
+    "name": "basic",
+    "input": "title: Fix authentication bug\npr: 42\nrepo: owner/repo\nbranch: fix/auth\nbase: main\ncommits: 3\n\nThis fixes the authentication bug that caused users to be logged out.",
+    "expected": {
+      "body": "This fixes the authentication bug that caused users to be logged out.",
+      "title": "Fix authentication bug",
+      "number": 42,
+      "repo": "owner/repo",
+      "branch": "fix/auth",
+      "base": "main",
+      "commits": 3
+    }
+  },
+  {
+    "name": "url-only",
+    "input": "url: https://github.com/owner/repo/pull/123\n\nBody text here.",
+    "expected": {
+      "body": "Body text here.",
+      "url": "https://github.com/owner/repo/pull/123",
+      "repo": "owner/repo",
+      "number": 123
+    }
+  },
+  {
+    "name": "url-and-repo",
+    "input": "repo: explicit/repo\nurl: https://github.com/owner/repo/pull/99\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "repo": "explicit/repo",
+      "url": "https://github.com/owner/repo/pull/99",
+      "number": 99
+    }
+  },
+  {
+    "name": "url-and-number",
+    "input": "pr: 50\nurl: https://github.com/owner/repo/pull/99\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "number": 50,
+      "url": "https://github.com/owner/repo/pull/99",
+      "repo": "owner/repo"
+    }
+  },
+  {
+    "name": "empty-body",
+    "input": "title: Something\npr: 1\n",
+    "expected": {
+      "body": "",
+      "title": "Something",
+      "number": 1
+    }
+  },
+  {
+    "name": "no-headers",
+    "input": "Just a body without any headers.\n\nMultiple paragraphs.",
+    "expected": {
+      "body": "Just a body without any headers.\n\nMultiple paragraphs."
+    }
+  },
+  {
+    "name": "fenced",
+    "input": "---\ntitle: Fenced\npr: 7\n---\n\nBody after fence.",
+    "expected": {
+      "body": "Body after fence.",
+      "title": "Fenced",
+      "number": 7
+    }
+  },
+  {
+    "name": "fenced-with-trailing-space",
+    "input": "---\ntitle: Fenced trailing\n---\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "title": "Fenced trailing"
+    }
+  },
+  {
+    "name": "pr-zero",
+    "input": "pr: 0\n\nBody.",
+    "expected": {
+      "body": "Body."
+    }
+  },
+  {
+    "name": "commits-zero",
+    "input": "commits: 0\n\nBody.",
+    "expected": {
+      "body": "Body."
+    }
+  },
+  {
+    "name": "non-numeric-pr",
+    "input": "pr: abc\n\nBody.",
+    "expected": {
+      "body": "Body."
+    }
+  },
+  {
+    "name": "all-fields",
+    "input": "title: Full example\npr: 42\nbranch: feature/thing\nbase: develop\ncommits: 5\nrepo: org/project\nurl: https://github.com/org/project/pull/42\n\n## Description\n\nA full PR description with **markdown**.",
+    "expected": {
+      "body": "## Description\n\nA full PR description with **markdown**.",
+      "title": "Full example",
+      "number": 42,
+      "branch": "feature/thing",
+      "base": "develop",
+      "commits": 5,
+      "repo": "org/project",
+      "url": "https://github.com/org/project/pull/42"
+    }
+  },
+  {
+    "name": "body-only-blank",
+    "input": "title: X\n\n",
+    "expected": {
+      "body": "",
+      "title": "X"
+    }
+  },
+  {
+    "name": "multiline-body",
+    "input": "title: Y\n\nLine one.\n\nLine two.\n\nLine three.",
+    "expected": {
+      "body": "Line one.\n\nLine two.\n\nLine three.",
+      "title": "Y"
+    }
+  },
+  {
+    "name": "unknown-keys",
+    "input": "title: Known\ncustom: ignored-but-parsed-past\npr: 10\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "title": "Known",
+      "number": 10
+    }
+  },
+  {
+    "name": "blank-line-immediate",
+    "input": "\nJust body.",
+    "expected": {
+      "body": "Just body."
+    }
+  },
+  {
+    "name": "url-no-github",
+    "input": "url: https://gitlab.com/owner/repo/merge_requests/5\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "url": "https://gitlab.com/owner/repo/merge_requests/5"
+    }
+  },
+  {
+    "name": "url-with-dots",
+    "input": "url: https://github.com/my.org/my.repo/pull/77\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "url": "https://github.com/my.org/my.repo/pull/77",
+      "repo": "my.org/my.repo",
+      "number": 77
+    }
+  },
+  {
+    "name": "url-with-hyphens",
+    "input": "url: https://github.com/my-org/my-repo/pull/88\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "url": "https://github.com/my-org/my-repo/pull/88",
+      "repo": "my-org/my-repo",
+      "number": 88
+    }
+  },
+  {
+    "name": "title-with-colon",
+    "input": "title: Fix: handle edge case\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "title": "Fix: handle edge case"
+    }
+  },
+  {
+    "name": "number-key",
+    "input": "number: 33\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "number": 33
+    }
+  },
+  {
+    "name": "repo-with-whitespace",
+    "input": "repo:   owner/repo\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "repo": "owner/repo"
+    }
+  },
+  {
+    "name": "triple-dash-end",
+    "input": "title: A\n---\n\nBody after triple dash.",
+    "expected": {
+      "body": "Body after triple dash.",
+      "title": "A"
+    }
+  },
+  {
+    "name": "fenced-tab",
+    "input": "---\t\ntitle: Tab fence\n---\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "title": "Tab fence"
+    }
+  },
+  {
+    "name": "fenced-multi-space",
+    "input": "---\ntitle: Multi space\n---\n\nBody.",
+    "expected": {
+      "body": "Body.",
+      "title": "Multi space"
+    }
+  }
+]
