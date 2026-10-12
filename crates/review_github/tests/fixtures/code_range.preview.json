@@ -1,0 +1,21 @@
+{
+  "event": "COMMENT",
+  "body": "Range comments.",
+  "comments": [
+    {
+      "threadId": "range-multi",
+      "path": "src/lib.rs",
+      "line": 20,
+      "startLine": 10,
+      "side": "RIGHT",
+      "body": "This block needs refactoring."
+    },
+    {
+      "threadId": "range-single",
+      "path": "src/lib.rs",
+      "line": 30,
+      "side": "RIGHT",
+      "body": "Simplify this line."
+    }
+  ]
+}

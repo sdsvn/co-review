@@ -1,0 +1,149 @@
+{
+  "id": "review-1",
+  "title": "Test Review",
+  "workspaceRoot": "/workspace",
+  "scope": {
+    "kind": "repository"
+  },
+  "participants": [
+    {
+      "id": "reviewer-1",
+      "kind": "human",
+      "name": "Reviewer"
+    },
+    {
+      "id": "agent-1",
+      "kind": "agent",
+      "name": "Agent"
+    }
+  ],
+  "threads": [
+    {
+      "id": "filtered-question",
+      "number": 1,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/main.rs",
+          "line": 5,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-20",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "What does this do?",
+          "createdAt": 1700000000020
+        }
+      ],
+      "status": "open",
+      "intent": "question",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "filtered-resolved",
+      "number": 2,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/main.rs",
+          "line": 10,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-22",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "Fixed.",
+          "createdAt": 1700000000022
+        }
+      ],
+      "status": "resolved",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "filtered-agent",
+      "number": 3,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/main.rs",
+          "line": 15,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-24",
+          "author": {
+            "id": "agent-1",
+            "kind": "agent",
+            "name": "Agent"
+          },
+          "body": "I found something.",
+          "createdAt": 1700000000024
+        }
+      ],
+      "status": "proposed",
+      "intent": "comment",
+      "origin": "finding",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "filtered-valid",
+      "number": 4,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/main.rs",
+          "line": 20,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-26",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "Good point, keeping this.",
+          "createdAt": 1700000000026
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "activity": [],
+  "nextThreadNumber": 5,
+  "createdAt": 1700000000000,
+  "updatedAt": 1700000000000,
+  "verdict": {
+    "decision": "comment",
+    "summary": "Filtering test.",
+    "submittedAt": 1700000000000,
+    "count": 1
+  }
+}

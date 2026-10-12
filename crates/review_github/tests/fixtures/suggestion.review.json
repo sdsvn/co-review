@@ -1,0 +1,136 @@
+{
+  "id": "review-1",
+  "title": "Test Review",
+  "workspaceRoot": "/workspace",
+  "scope": {
+    "kind": "repository"
+  },
+  "participants": [
+    {
+      "id": "reviewer-1",
+      "kind": "human",
+      "name": "Reviewer"
+    },
+    {
+      "id": "agent-1",
+      "kind": "agent",
+      "name": "Agent"
+    }
+  ],
+  "threads": [
+    {
+      "id": "suggest-accepted",
+      "number": 1,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/config.rs",
+          "line": 8,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-10",
+          "author": {
+            "id": "agent-1",
+            "kind": "agent",
+            "name": "Agent"
+          },
+          "body": "Use a constant here.",
+          "createdAt": 1700000000010
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "origin": "finding",
+      "proposal": {
+        "before": "let x = 42;",
+        "after": "const X: i32 = 42;\n",
+        "status": "accepted"
+      },
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "suggest-rejected",
+      "number": 2,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/config.rs",
+          "line": 12,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-12",
+          "author": {
+            "id": "agent-1",
+            "kind": "agent",
+            "name": "Agent"
+          },
+          "body": "Consider using an enum.",
+          "createdAt": 1700000000012
+        }
+      ],
+      "status": "resolved",
+      "intent": "comment",
+      "origin": "finding",
+      "proposal": {
+        "before": "let mode = \"fast\";",
+        "after": "let mode = Mode::Fast;\n",
+        "status": "rejected"
+      },
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "suggest-old",
+      "number": 3,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/config.rs",
+          "line": 5,
+          "side": "old"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-14",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "This was wrong before.",
+          "createdAt": 1700000000014
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "proposal": {
+        "before": "old code",
+        "after": "new code\n",
+        "status": "accepted"
+      },
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "activity": [],
+  "nextThreadNumber": 4,
+  "createdAt": 1700000000000,
+  "updatedAt": 1700000000000,
+  "verdict": {
+    "decision": "comment",
+    "summary": "",
+    "submittedAt": 1700000000000,
+    "count": 1
+  }
+}

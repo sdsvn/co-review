@@ -1,0 +1,20 @@
+[
+  {
+    "event": "REQUEST_CHANGES",
+    "body": "Edited summary by reviewer.",
+    "comments": [
+      {
+        "path": "src/api.rs",
+        "line": 10,
+        "side": "RIGHT",
+        "body": "Original comment kept."
+      },
+      {
+        "path": "src/api.rs",
+        "line": 25,
+        "side": "RIGHT",
+        "body": "Reviewer rewrote this comment."
+      }
+    ]
+  }
+]

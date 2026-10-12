@@ -1,0 +1,92 @@
+{
+  "id": "review-1",
+  "title": "Test Review",
+  "workspaceRoot": "/workspace",
+  "scope": {
+    "kind": "repository"
+  },
+  "participants": [
+    {
+      "id": "reviewer-1",
+      "kind": "human",
+      "name": "Reviewer"
+    },
+    {
+      "id": "agent-1",
+      "kind": "agent",
+      "name": "Agent"
+    }
+  ],
+  "threads": [
+    {
+      "id": "range-multi",
+      "number": 1,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-range",
+          "path": "src/lib.rs",
+          "startLine": 10,
+          "endLine": 20,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-3",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "This block needs refactoring.",
+          "createdAt": 1700000000003
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "range-single",
+      "number": 2,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-range",
+          "path": "src/lib.rs",
+          "startLine": 30,
+          "endLine": 30,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-5",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "Simplify this line.",
+          "createdAt": 1700000000005
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "activity": [],
+  "nextThreadNumber": 3,
+  "createdAt": 1700000000000,
+  "updatedAt": 1700000000000,
+  "verdict": {
+    "decision": "comment",
+    "summary": "Range comments.",
+    "submittedAt": 1700000000000,
+    "count": 1
+  }
+}
