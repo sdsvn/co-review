@@ -40,7 +40,8 @@ pub struct AffectedNode {
     pub direction: AffectedDirection,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Declared in the order the TypeScript sorts them: what uses the change first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum AffectedDirection {
     #[serde(rename = "uses it")]
     UsesIt,
@@ -140,13 +141,11 @@ pub fn blast_radius(
     }
 
     // Build adjacency.
-    let deps = &*DEPENDENCIES;
     let mut depends_on: HashMap<&str, HashSet<&str>> = HashMap::new();
     let mut depended_on_by: HashMap<&str, HashSet<&str>> = HashMap::new();
 
     for edge in graph.all_edges() {
-        let rel = edge.relation.as_deref().unwrap_or("");
-        if deps.contains(rel)
+        if DEPENDENCIES.contains(&edge.relation.as_deref().unwrap_or(""))
             && node_lookup.contains_key(edge.source.as_str())
             && node_lookup.contains_key(edge.target.as_str())
             && edge.source != edge.target
@@ -211,18 +210,7 @@ pub fn blast_radius(
         .into_iter()
         .map(|(id, (hops, dir))| (id, hops, dir))
         .collect();
-    affected_list.sort_by(|a, b| {
-        a.1.cmp(&b.1).then_with(|| {
-            // 'uses it' sorts before 'it uses' (matching TS: -1 for 'uses it')
-            match (&a.2, &b.2) {
-                (AffectedDirection::UsesIt, AffectedDirection::ItUses) => std::cmp::Ordering::Less,
-                (AffectedDirection::ItUses, AffectedDirection::UsesIt) => {
-                    std::cmp::Ordering::Greater
-                }
-                _ => std::cmp::Ordering::Equal,
-            }
-        })
-    });
+    affected_list.sort_by_key(|&(_, hops, direction)| (hops, direction));
 
     let affected_nodes: Vec<AffectedNode> = affected_list
         .into_iter()
@@ -247,20 +235,12 @@ pub fn blast_radius(
         .filter(|e| shown.contains(e.from.as_str()) && shown.contains(e.to.as_str()))
         .collect();
 
-    let files: Vec<String> = {
-        let mut seen = HashSet::new();
-        affected_nodes
-            .iter()
-            .filter(|a| !changed_lines.contains_key(&a.node.file))
-            .filter_map(|a| {
-                if seen.insert(a.node.file.as_str()) {
-                    Some(a.node.file.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    };
+    let mut seen = HashSet::new();
+    let files: Vec<String> = affected_nodes
+        .iter()
+        .filter(|a| !changed_lines.contains_key(&a.node.file) && seen.insert(a.node.file.as_str()))
+        .map(|a| a.node.file.clone())
+        .collect();
 
     Some(BlastRadius {
         changed: changed_nodes,

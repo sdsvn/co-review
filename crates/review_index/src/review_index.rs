@@ -9,22 +9,19 @@ mod symbol_extractor;
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Instant;
 
 use anyhow::{Context, Result};
 use rayon::prelude::*;
-use review_model::ReviewCoverage;
-use review_model::ReviewCoverageArea;
+use review_model::{ReviewCoverage, ReviewCoverageArea};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 pub use symbol_extractor::{DefaultSymbolExtractor, Symbol, SymbolExtractor, SymbolKind};
 
 /// Extension-to-language-id mapping, matching the TypeScript app exactly.
-pub static LANGUAGE_BY_EXTENSION: &[(&str, &str)] = &[
+static LANGUAGE_BY_EXTENSION: &[(&str, &str)] = &[
     (".go", "go"),
     (".ts", "typescript"),
     (".tsx", "typescriptreact"),
@@ -68,9 +65,10 @@ pub fn language_for_extension(ext: &str) -> Option<&'static str> {
         .map(|(_, lang)| *lang)
 }
 
-// ---------------------------------------------------------------------------
-// Cache types — persisted to disk
-// ---------------------------------------------------------------------------
+fn language_of(file: &str) -> Option<&'static str> {
+    let ext = Path::new(file).extension()?.to_str()?;
+    language_for_extension(&format!(".{ext}"))
+}
 
 /// Symbols for one file, keyed by content hash.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,15 +83,9 @@ struct SymbolCache {
     entries: HashMap<String, CachedSymbols>,
 }
 
-// ---------------------------------------------------------------------------
-// RepoMap — the built map exposed to callers
-// ---------------------------------------------------------------------------
-
 /// One source file in the map: its top-level definitions with their members.
 #[derive(Debug, Clone)]
 pub struct FileEntry {
-    /// Content hash (git blob SHA or computed hash).
-    pub content_hash: String,
     /// File modification time in milliseconds (from stat, for the current worktree only;
     /// not stored in the shared cache).
     pub mtime_ms: f64,
@@ -119,21 +111,10 @@ pub struct RenderOptions {
     pub max_chars: Option<usize>,
 }
 
-// ---------------------------------------------------------------------------
-// RepoIndex — the main entry point
-// ---------------------------------------------------------------------------
-
 /// Builds and caches the repository map. Thread-safe, uses rayon for parallel parsing.
+#[derive(Default)]
 pub struct RepoIndex<E: SymbolExtractor = DefaultSymbolExtractor> {
     extractor: E,
-}
-
-impl Default for RepoIndex<DefaultSymbolExtractor> {
-    fn default() -> Self {
-        Self {
-            extractor: DefaultSymbolExtractor,
-        }
-    }
 }
 
 impl RepoIndex<DefaultSymbolExtractor> {
@@ -149,26 +130,17 @@ impl<E: SymbolExtractor> RepoIndex<E> {
 
     /// Build or refresh the repository map, using the content-hash cache.
     pub fn build(&self, root: &Path) -> Result<RepoMap> {
-        let source_files = self.source_files(root)?;
-        let cache_path = Self::cache_path(root)?;
-
-        // Load existing cache.
-        let mut cache = Self::load_cache(&cache_path);
-
-        // Get content hashes: git ls-files -s for tracked, computed for untracked.
+        let source_files = source_files(root)?;
+        let cache_path = cache_path(root)?;
+        let mut cache = load_cache(&cache_path);
         let tracked_hashes = git_blob_hashes(root)?;
-        let untracked = git_untracked_files(root)?;
 
         let mut files = HashMap::new();
         let mut to_parse: Vec<(String, PathBuf, String, f64)> = Vec::new();
-
-        for file in &source_files {
-            let absolute = root.join(file);
-
-            // Check file size and get mtime.
-            let metadata = match fs::metadata(&absolute) {
-                Ok(m) => m,
-                Err(_) => continue,
+        for file in source_files {
+            let absolute = root.join(&file);
+            let Ok(metadata) = fs::metadata(&absolute) else {
+                continue;
             };
             if !metadata.is_file() || metadata.len() > MAX_FILE_BYTES {
                 continue;
@@ -179,88 +151,62 @@ impl<E: SymbolExtractor> RepoIndex<E> {
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs_f64() * 1000.0)
                 .unwrap_or(0.0);
-
-            // Get content hash.
-            let content_hash = if let Some(hash) = tracked_hashes.get(file.as_str()) {
-                hash.clone()
-            } else if untracked.contains(file.as_str()) {
-                // Compute git hash-object semantics: SHA-1("blob {len}\0{content}").
-                match fs::read(&absolute) {
-                    Ok(content) => git_hash_object(&content),
-                    Err(_) => continue,
-                }
-            } else {
-                // File listed by ls-files but not in -s output (e.g. unmerged).
-                // Fall back to reading and hashing.
-                match fs::read(&absolute) {
-                    Ok(content) => git_hash_object(&content),
-                    Err(_) => continue,
-                }
+            // Untracked (or unmerged, absent from `ls-files -s`) files are hashed as git would.
+            let Some(content_hash) = tracked_hashes
+                .get(&file)
+                .cloned()
+                .or_else(|| fs::read(&absolute).ok().map(|content| git_hash_object(&content)))
+            else {
+                continue;
             };
-
-            // Check cache.
-            if let Some(cached) = cache.entries.get(&content_hash) {
-                files.insert(
-                    file.clone(),
-                    FileEntry {
-                        content_hash: content_hash.clone(),
-                        mtime_ms,
-                        symbols: cached.symbols.clone(),
-                    },
-                );
-            } else {
-                to_parse.push((file.clone(), absolute, content_hash, mtime_ms));
+            match cache.entries.get(&content_hash) {
+                Some(cached) => {
+                    files.insert(
+                        file,
+                        FileEntry {
+                            mtime_ms,
+                            symbols: cached.symbols.clone(),
+                        },
+                    );
+                }
+                None => to_parse.push((file, absolute, content_hash, mtime_ms)),
             }
         }
 
-        type SymbolTuples = Vec<(String, Vec<String>)>;
-        // Parse uncached files in parallel.
-        let parsed: Vec<(String, String, f64, SymbolTuples)> = to_parse
-            .par_iter()
+        let parsed: Vec<_> = to_parse
+            .into_par_iter()
             .filter_map(|(file, absolute, content_hash, mtime_ms)| {
-                let ext = Path::new(file)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| format!(".{e}"))?;
-                let language_id = language_for_extension(&ext)?;
+                let language_id = language_of(&file)?;
                 let text = fs::read(absolute).ok()?;
-                let symbols = self.extractor.extract(language_id, &text);
-                let symbol_tuples: Vec<(String, Vec<String>)> = symbols
-                    .iter()
-                    .map(|s| {
-                        let members: Vec<String> = s
+                let symbols: Vec<(String, Vec<String>)> = self
+                    .extractor
+                    .extract(language_id, &text)
+                    .into_iter()
+                    .map(|symbol| {
+                        let members = symbol
                             .children
-                            .iter()
-                            .filter(|c| c.kind != SymbolKind::Field)
-                            .map(|c| c.name.clone())
+                            .into_iter()
+                            .filter(|child| child.kind != SymbolKind::Field)
+                            .map(|child| child.name)
                             .collect();
-                        (s.name.clone(), members)
+                        (symbol.name, members)
                     })
                     .collect();
-                Some((file.clone(), content_hash.clone(), *mtime_ms, symbol_tuples))
+                Some((file, content_hash, mtime_ms, symbols))
             })
             .collect();
 
-        for (file, content_hash, mtime_ms, symbol_tuples) in parsed {
+        for (file, content_hash, mtime_ms, symbols) in parsed {
             cache.entries.insert(
-                content_hash.clone(),
+                content_hash,
                 CachedSymbols {
-                    symbols: symbol_tuples.clone(),
+                    symbols: symbols.clone(),
                 },
             );
-            files.insert(
-                file,
-                FileEntry {
-                    content_hash,
-                    mtime_ms,
-                    symbols: symbol_tuples,
-                },
-            );
+            files.insert(file, FileEntry { mtime_ms, symbols });
         }
 
-        // Save cache.
-        Self::save_cache(&cache_path, &cache);
-
+        save_cache(&cache_path, &cache);
         Ok(RepoMap { files })
     }
 
@@ -308,14 +254,10 @@ impl<E: SymbolExtractor> RepoIndex<E> {
         }
 
         let max_chars = options.max_chars.unwrap_or(20_000);
-        let total = map.files.len();
-
         let mut lines = vec![format!(
             "Repository map: {} source files, each with the classes, functions and methods it defines (Tree-sitter outline).",
-            total
+            map.files.len()
         )];
-
-        // Check for graphify output.
         if root.join("graphify-out/GRAPH_REPORT.md").is_file() {
             lines.push(
                 "A Graphify knowledge graph of this repository is in graphify-out/ (GRAPH_REPORT.md summarizes it)."
@@ -325,7 +267,6 @@ impl<E: SymbolExtractor> RepoIndex<E> {
 
         let mut size: usize = lines.iter().map(|l| l.len()).sum::<usize>() + lines.len() - 1;
         let mut shown = 0;
-
         for (file, entry) in &file_entries {
             let text = outline(entry, query.as_deref());
             let line = if text.is_empty() {
@@ -336,8 +277,8 @@ impl<E: SymbolExtractor> RepoIndex<E> {
             if size + line.len() + 1 > max_chars {
                 break;
             }
+            size += line.len() + 1;
             lines.push(line);
-            size += lines.last().map_or(0, |l| l.len()) + 1;
             shown += 1;
         }
 
@@ -462,97 +403,63 @@ impl<E: SymbolExtractor> RepoIndex<E> {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Source file listing
-    // -----------------------------------------------------------------------
-
-    /// Source files, repository-relative: from git (tracked + untracked, not ignored), else directory walk.
-    fn source_files(&self, root: &Path) -> Result<Vec<String>> {
-        let from_git = git_ls_files(root);
-        let all = match from_git {
-            Some(files) => files,
-            None => walk_directory(root, "")?,
-        };
-        let mut unique: Vec<String> = all
-            .into_iter()
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .filter(|file| {
-                Path::new(file)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|ext| language_for_extension(&format!(".{ext}")).is_some())
-                    .unwrap_or(false)
-            })
-            .collect();
-        unique.sort();
-        unique.truncate(MAX_FILES);
-        Ok(unique)
-    }
-
-    // -----------------------------------------------------------------------
-    // Cache location and persistence
-    // -----------------------------------------------------------------------
-
-    /// Cache path: `<CO_REVIEW_HOME or ~/.co-review>/repos/<sha256(common_dir)[0:16]>/symbols-cache.json`
-    fn cache_path(root: &Path) -> Result<PathBuf> {
-        let common_dir = git_common_dir(root)?;
-        let mut hasher = Sha256::new();
-        hasher.update(common_dir.as_bytes());
-        let hash = format!("{:x}", hasher.finalize());
-        let prefix = &hash[..16];
-
-        let home = std::env::var("CO_REVIEW_HOME")
-            .unwrap_or_else(|_| {
-                dirs_home().join(".co-review").to_string_lossy().to_string()
-            });
-
-        let cache_dir = PathBuf::from(&home).join("repos").join(prefix);
-        Ok(cache_dir.join("symbols-cache.json"))
-    }
-
-    fn load_cache(path: &Path) -> SymbolCache {
-        let content = match fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(_) => {
-                return SymbolCache {
-                    version: CACHE_VERSION,
-                    entries: HashMap::new(),
-                }
-            }
-        };
-        match serde_json::from_str::<SymbolCache>(&content) {
-            Ok(cache) if cache.version == CACHE_VERSION => cache,
-            _ => SymbolCache {
-                version: CACHE_VERSION,
-                entries: HashMap::new(),
-            },
-        }
-    }
-
-    fn save_cache(path: &Path, cache: &SymbolCache) {
-        if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        // Atomic write: write to temp file then rename.
-        let temp_path = path.with_extension("tmp");
-        let result = (|| -> Result<()> {
-            let mut file = fs::File::create(&temp_path)?;
-            serde_json::to_writer(&mut file, cache)?;
-            file.flush()?;
-            drop(file);
-            fs::rename(&temp_path, path)?;
-            Ok(())
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&temp_path);
-        }
-    }
 }
 
-// ---------------------------------------------------------------------------
-// Git helpers
-// ---------------------------------------------------------------------------
+/// Source files, repository-relative: from git (tracked + untracked, not ignored), else directory walk.
+fn source_files(root: &Path) -> Result<Vec<String>> {
+    let all = match git_ls_files(root) {
+        Some(files) => files,
+        None => {
+            let mut found = Vec::new();
+            walk_directory(root, "", &mut found)?;
+            found
+        }
+    };
+    let mut unique: Vec<String> = all
+        .into_iter()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .filter(|file| language_of(file).is_some())
+        .collect();
+    unique.sort();
+    unique.truncate(MAX_FILES);
+    Ok(unique)
+}
+
+/// Cache path: `<CO_REVIEW_HOME or ~/.co-review>/repos/<sha256(common_dir)[0:16]>/symbols-cache.json`
+fn cache_path(root: &Path) -> Result<PathBuf> {
+    let hash = format!("{:x}", Sha256::digest(git_common_dir(root)?.as_bytes()));
+    Ok(review_store::co_review_home()
+        .join("repos")
+        .join(&hash[..16])
+        .join("symbols-cache.json"))
+}
+
+fn load_cache(path: &Path) -> SymbolCache {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<SymbolCache>(&content).ok())
+        .filter(|cache| cache.version == CACHE_VERSION)
+        .unwrap_or_else(|| SymbolCache {
+            version: CACHE_VERSION,
+            entries: HashMap::new(),
+        })
+}
+
+/// Written to a temporary file and renamed, so a concurrent build never reads half a cache.
+fn save_cache(path: &Path, cache: &SymbolCache) {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let temp_path = path.with_extension("tmp");
+    let result = serde_json::to_vec(cache)
+        .map_err(anyhow::Error::from)
+        .and_then(|json| Ok(fs::write(&temp_path, json)?))
+        .and_then(|()| Ok(fs::rename(&temp_path, path)?));
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+}
 
 /// `git ls-files -z --cached --others --exclude-standard`
 fn git_ls_files(root: &Path) -> Option<Vec<String>> {
@@ -564,12 +471,11 @@ fn git_ls_files(root: &Path) -> Option<Vec<String>> {
     if !output.status.success() {
         return None;
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
     Some(
-        stdout
+        String::from_utf8_lossy(&output.stdout)
             .split('\0')
             .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
+            .map(str::to_string)
             .collect(),
     )
 }
@@ -584,46 +490,18 @@ fn git_blob_hashes(root: &Path) -> Result<HashMap<String, String>> {
     if !output.status.success() {
         return Ok(HashMap::new());
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut result = HashMap::new();
-    for line in stdout.lines() {
-        // Format: <mode> <sha> <stage>\t<path>
-        let parts: Vec<&str> = line.splitn(2, '\t').collect();
-        if parts.len() != 2 {
-            continue;
-        }
-        let meta: Vec<&str> = parts[0].split_whitespace().collect();
-        if meta.len() >= 2 {
-            result.insert(parts[1].to_string(), meta[1].to_string());
-        }
-    }
-    Ok(result)
-}
-
-/// `git ls-files --others --exclude-standard` — untracked files.
-fn git_untracked_files(root: &Path) -> Result<HashSet<String>> {
-    let output = Command::new("git")
-        .args([
-            "ls-files",
-            "--others",
-            "--exclude-standard",
-            "-z",
-        ])
-        .current_dir(root)
-        .output()
-        .context("failed to run git ls-files --others")?;
-    if !output.status.success() {
-        return Ok(HashSet::new());
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(stdout
-        .split('\0')
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
+    // Format: <mode> <sha> <stage>\t<path>
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let (meta, path) = line.split_once('\t')?;
+            let sha = meta.split_whitespace().nth(1)?;
+            Some((path.to_string(), sha.to_string()))
+        })
         .collect())
 }
 
-/// `git rev-parse --git-common-dir` — the shared .git dir for worktrees.
+/// `git rev-parse --git-common-dir` — the shared .git dir for worktrees, absolute and canonical.
 fn git_common_dir(root: &Path) -> Result<String> {
     let output = Command::new("git")
         .args(["rev-parse", "--git-common-dir"])
@@ -633,60 +511,23 @@ fn git_common_dir(root: &Path) -> Result<String> {
     if !output.status.success() {
         anyhow::bail!("git rev-parse --git-common-dir failed");
     }
-    let dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    // Make it absolute.
-    let path = if Path::new(&dir).is_absolute() {
-        PathBuf::from(&dir)
-    } else {
-        root.join(&dir)
-    };
-    // Canonicalize to resolve symlinks and ..
-    let canonical = path
-        .canonicalize()
-        .unwrap_or(path);
+    let path = root.join(String::from_utf8_lossy(&output.stdout).trim());
+    let canonical = path.canonicalize().unwrap_or(path);
     Ok(canonical.to_string_lossy().to_string())
 }
 
 /// Compute git hash-object semantics: SHA-1("blob {len}\0{content}").
 fn git_hash_object(content: &[u8]) -> String {
-    use sha1_smol::Sha1;
-    let mut hasher = Sha1::new();
-    let header = format!("blob {}\0", content.len());
-    hasher.update(header.as_bytes());
+    let mut hasher = sha1_smol::Sha1::new();
+    hasher.update(format!("blob {}\0", content.len()).as_bytes());
     hasher.update(content);
-    let digest = hasher.digest();
-    let b = digest.bytes();
-    format!(
-        "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9],
-        b[10], b[11], b[12], b[13], b[14], b[15], b[16], b[17], b[18], b[19],
-    )
-}
-
-/// Home directory fallback.
-fn dirs_home() -> PathBuf {
-    std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."))
+    hasher.digest().to_string()
 }
 
 /// Directory walk fallback when git is not available.
-fn walk_directory(root: &Path, dir: &str) -> Result<Vec<String>> {
-    let mut found = Vec::new();
-    walk_recursive(root, dir, &mut found)?;
-    Ok(found)
-}
-
-fn walk_recursive(root: &Path, dir: &str, found: &mut Vec<String>) -> Result<()> {
-    let full_path = if dir.is_empty() {
-        root.to_path_buf()
-    } else {
-        root.join(dir)
-    };
-    let entries = match fs::read_dir(&full_path) {
-        Ok(e) => e,
-        Err(_) => return Ok(()),
+fn walk_directory(root: &Path, dir: &str, found: &mut Vec<String>) -> Result<()> {
+    let Ok(entries) = fs::read_dir(root.join(dir)) else {
+        return Ok(());
     };
     for entry in entries {
         if found.len() >= MAX_FILES {
@@ -694,18 +535,18 @@ fn walk_recursive(root: &Path, dir: &str, found: &mut Vec<String>) -> Result<()>
         }
         let entry = entry?;
         let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-        if name_str.starts_with('.') {
+        let name = name.to_string_lossy();
+        if name.starts_with('.') {
             continue;
         }
         let relative = if dir.is_empty() {
-            name_str.to_string()
+            name.to_string()
         } else {
-            format!("{dir}/{name_str}")
+            format!("{dir}/{name}")
         };
         let file_type = entry.file_type()?;
-        if file_type.is_dir() && !SKIPPED_DIRS.contains(&name_str.as_ref()) {
-            walk_recursive(root, &relative, found)?;
+        if file_type.is_dir() && !SKIPPED_DIRS.contains(&name.as_ref()) {
+            walk_directory(root, &relative, found)?;
         } else if file_type.is_file() {
             found.push(relative);
         }
@@ -713,13 +554,9 @@ fn walk_recursive(root: &Path, dir: &str, found: &mut Vec<String>) -> Result<()>
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Rendering helpers
-// ---------------------------------------------------------------------------
-
-/// Render symbols for one file: `Class { method, ... }, function`.
-/// A long member list is cut short, except for members matching `query`.
-fn outline(entry: &FileEntry, query: Option<&str>) -> String {
+/// A file's outline line: `Class { method, ... }, function`. A long member list is cut short,
+/// except for members matching `query` (lowercase).
+pub fn outline(entry: &FileEntry, query: Option<&str>) -> String {
     entry
         .symbols
         .iter()
@@ -731,10 +568,7 @@ fn outline(entry: &FileEntry, query: Option<&str>) -> String {
                 .iter()
                 .enumerate()
                 .filter(|(i, member)| {
-                    *i < MAX_CHILDREN
-                        || query
-                            .map(|q| member.to_lowercase().contains(q))
-                            .unwrap_or(false)
+                    *i < MAX_CHILDREN || query.is_some_and(|q| member.to_lowercase().contains(q))
                 })
                 .map(|(_, m)| m.as_str())
                 .collect();
@@ -751,46 +585,17 @@ fn outline(entry: &FileEntry, query: Option<&str>) -> String {
 
 /// Count how many path segments two paths share from the left.
 fn common_segments(a: &str, b: &str) -> usize {
-    let x: Vec<&str> = a.split('/').collect();
-    let y: Vec<&str> = b.split('/').collect();
-    x.iter().zip(y.iter()).take_while(|(a, b)| a == b).count()
-}
-
-// ---------------------------------------------------------------------------
-// Timing helper for benchmarks
-// ---------------------------------------------------------------------------
-
-/// Times a cold build and a warm (cached) rebuild, printing the results.
-/// Returns (cold_ms, warm_ms).
-pub fn benchmark_build(root: &Path) -> Result<(u128, u128)> {
-    let index = RepoIndex::new();
-
-    // Cold: clear cache first.
-    if let Ok(cache_path) = RepoIndex::<DefaultSymbolExtractor>::cache_path(root) {
-        let _ = fs::remove_file(&cache_path);
-    }
-    let start = Instant::now();
-    let map = index.build(root)?;
-    let cold = start.elapsed().as_millis();
-
-    // Warm: rebuild with cache.
-    let start = Instant::now();
-    let _map2 = index.build(root)?;
-    let warm = start.elapsed().as_millis();
-
-    eprintln!(
-        "Repository map: {} files, cold: {}ms, warm: {}ms",
-        map.files.len(),
-        cold,
-        warm
-    );
-
-    Ok((cold, warm))
+    a.split('/')
+        .zip(b.split('/'))
+        .take_while(|(a, b)| a == b)
+        .count()
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+    use std::time::Instant;
+
     use super::*;
 
     #[test]
@@ -810,7 +615,6 @@ mod tests {
     #[test]
     fn test_outline_formatting() {
         let entry = FileEntry {
-            content_hash: String::new(),
             mtime_ms: 0.0,
             symbols: vec![
                 ("MyClass".to_string(), vec!["method_a".to_string(), "method_b".to_string()]),
@@ -825,7 +629,6 @@ mod tests {
     fn test_outline_truncation() {
         let members: Vec<String> = (0..20).map(|i| format!("member_{i}")).collect();
         let entry = FileEntry {
-            content_hash: String::new(),
             mtime_ms: 0.0,
             symbols: vec![("BigClass".to_string(), members)],
         };
@@ -840,7 +643,6 @@ mod tests {
     fn test_outline_query_bypass_truncation() {
         let members: Vec<String> = (0..20).map(|i| format!("member_{i}")).collect();
         let entry = FileEntry {
-            content_hash: String::new(),
             mtime_ms: 0.0,
             symbols: vec![("BigClass".to_string(), members)],
         };
@@ -916,7 +718,6 @@ mod tests {
         files.insert(
             "src/old.rs".to_string(),
             FileEntry {
-                content_hash: "aaa".to_string(),
                 mtime_ms: 1000.0,
                 symbols: vec![("func_old".to_string(), vec![])],
             },
@@ -924,7 +725,6 @@ mod tests {
         files.insert(
             "src/new.rs".to_string(),
             FileEntry {
-                content_hash: "bbb".to_string(),
                 mtime_ms: 5000.0,
                 symbols: vec![("func_new".to_string(), vec![])],
             },
@@ -953,7 +753,6 @@ mod tests {
     #[test]
     fn test_coverage_next_is_the_first_unviewed_file_in_path_order() {
         let entry = || FileEntry {
-            content_hash: String::new(),
             mtime_ms: 1000.0,
             symbols: Vec::new(),
         };
@@ -971,9 +770,15 @@ mod tests {
     #[ignore]
     fn benchmark_cold_warm() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap();
-        let (cold, warm) = benchmark_build(root).expect("benchmark should succeed");
-        eprintln!("Cold build: {}ms", cold);
-        eprintln!("Warm build: {}ms", warm);
+        let index = RepoIndex::new();
+        let _ = fs::remove_file(cache_path(root).unwrap());
+        let start = Instant::now();
+        let map = index.build(root).expect("cold build");
+        let cold = start.elapsed().as_millis();
+        let start = Instant::now();
+        index.build(root).expect("warm build");
+        let warm = start.elapsed().as_millis();
+        eprintln!("Repository map: {} files, cold: {cold}ms, warm: {warm}ms", map.files.len());
     }
 
     #[test]

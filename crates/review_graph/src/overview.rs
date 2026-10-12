@@ -1,99 +1,97 @@
 //! Graph-based repository overview: most connected code, communities, Mermaid diagram.
 //!
-//! The repo-map-based fallback (`fromMap` in the TypeScript) lives in `review_index`. Callers
-//! pick which path to use; this module only builds the graph overview.
+//! The TypeScript sorts entries of insertion-ordered `Map`s with a stable sort, so ties keep the
+//! order in which a key first appeared; the `Vec`s with an index below keep that order.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use review_model::ReviewCoverage;
 
-use crate::graph_model::{GraphifyGraph, DEPENDENCIES};
+use crate::graph_model::{DEPENDENCIES, GraphifyGraph, GraphifyNodeData};
 
-/// Build the graph-based repository overview Markdown.
-///
-/// Takes the parsed graph, coverage stats, and the repository's basename for the title.
-/// Returns the Markdown lines joined with newlines.
-///
-/// This is the `fromGraph` path from the TypeScript `repositoryOverview`; the `fromMap` fallback
-/// is in `review_index` and takes the outline map as input instead.
+/// Counts by key, in the order each key first appeared.
+struct OrderedCounts<K> {
+    index: HashMap<K, usize>,
+    entries: Vec<(K, u32)>,
+}
+
+impl<K: std::hash::Hash + Eq + Clone> OrderedCounts<K> {
+    fn new() -> Self {
+        Self {
+            index: HashMap::new(),
+            entries: Vec::new(),
+        }
+    }
+
+    fn add(&mut self, key: K) {
+        let at = *self.index.entry(key.clone()).or_insert_with(|| {
+            self.entries.push((key, 0));
+            self.entries.len() - 1
+        });
+        self.entries[at].1 += 1;
+    }
+
+    fn get(&self, key: &K) -> u32 {
+        self.index.get(key).map_or(0, |&at| self.entries[at].1)
+    }
+}
+
+/// The repository overview (Markdown) from a Graphify graph: the TypeScript `fromGraph`.
 pub fn graph_overview(graph: &GraphifyGraph, coverage: &ReviewCoverage, repo_name: &str) -> String {
-    let title = format!("# Repository overview: {repo_name}");
-    let nodes: HashMap<&str, &crate::graph_model::GraphifyNodeData> =
+    let nodes: HashMap<&str, &GraphifyNodeData> =
         graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
-    // Degree: how many dependency edges touch each node.
-    let mut degree: HashMap<&str, u32> = HashMap::new();
-    // Between: dependency edges crossing community boundaries.
-    // Track insertion order to match TS Map iteration for deterministic sorting.
-    let mut between: HashMap<String, u32> = HashMap::new();
-    let mut between_order: Vec<String> = Vec::new();
-    let deps = &*DEPENDENCIES;
-
+    // Degree: how many dependency edges touch each node. Between: dependency edges crossing
+    // community boundaries.
+    let mut degree = OrderedCounts::new();
+    let mut between = OrderedCounts::new();
     for edge in graph.all_edges() {
-        let rel = edge.relation.as_deref().unwrap_or("");
-        if !deps.contains(rel) {
+        if !DEPENDENCIES.contains(&edge.relation.as_deref().unwrap_or("")) {
             continue;
         }
-        *degree.entry(edge.source.as_str()).or_default() += 1;
-        *degree.entry(edge.target.as_str()).or_default() += 1;
-
+        degree.add(edge.source.as_str());
+        degree.add(edge.target.as_str());
         let a = nodes.get(edge.source.as_str()).and_then(|n| n.community);
         let b = nodes.get(edge.target.as_str()).and_then(|n| n.community);
-        if let (Some(a), Some(b)) = (a, b) && a != b {
-            let key = if a < b {
+        if let (Some(a), Some(b)) = (a, b)
+            && a != b
+        {
+            between.add(if a < b {
                 format!("{a}-{b}")
             } else {
                 format!("{b}-{a}")
-            };
-            if !between.contains_key(&key) {
-                between_order.push(key.clone());
-            }
-            *between.entry(key).or_default() += 1;
+            });
         }
     }
 
-    // Communities. Track insertion order to match TS Map iteration.
-    let mut communities: BTreeMap<i64, CommunityInfo> = BTreeMap::new();
-    let mut community_order: Vec<i64> = Vec::new();
+    let mut community_index: HashMap<i64, usize> = HashMap::new();
+    let mut communities: Vec<(i64, CommunityInfo)> = Vec::new();
     for node in &graph.nodes {
         if let Some(community_id) = node.community {
-            if !communities.contains_key(&community_id) {
-                community_order.push(community_id);
-            }
-            let entry = communities.entry(community_id).or_insert_with(|| CommunityInfo {
-                name: node
-                    .community_name
-                    .clone()
-                    .unwrap_or_else(|| format!("Area {community_id}")),
-                nodes: Vec::new(),
+            let at = *community_index.entry(community_id).or_insert_with(|| {
+                communities.push((
+                    community_id,
+                    CommunityInfo {
+                        name: node
+                            .community_name
+                            .clone()
+                            .unwrap_or_else(|| format!("Area {community_id}")),
+                        nodes: Vec::new(),
+                    },
+                ));
+                communities.len() - 1
             });
-            entry.nodes.push(node);
+            communities[at].1.nodes.push(node);
         }
     }
-    let community_insertion: HashMap<i64, usize> = community_order
-        .iter()
-        .enumerate()
-        .map(|(i, &id)| (id, i))
-        .collect();
 
-    // Filter to communities with >= 3 nodes, sorted by size descending, top 12.
-    // Tie-break by insertion order (matching TS Array.sort stability on Map entries).
-    let mut areas: Vec<(i64, &CommunityInfo)> = communities
-        .iter()
-        .filter(|(_, c)| c.nodes.len() >= 3)
-        .map(|(&id, c)| (id, c))
-        .collect();
-    areas.sort_by(|a, b| {
-        b.1.nodes.len().cmp(&a.1.nodes.len()).then_with(|| {
-            let ia = community_insertion.get(&a.0).copied().unwrap_or(usize::MAX);
-            let ib = community_insertion.get(&b.0).copied().unwrap_or(usize::MAX);
-            ia.cmp(&ib)
-        })
-    });
+    let mut areas: Vec<&(i64, CommunityInfo)> =
+        communities.iter().filter(|(_, c)| c.nodes.len() >= 3).collect();
+    areas.sort_by_key(|(_, c)| std::cmp::Reverse(c.nodes.len()));
     areas.truncate(12);
 
     let mut lines = vec![
-        title,
+        format!("# Repository overview: {repo_name}"),
         String::new(),
         format!(
             "Built from the Graphify graph of this repository (`graphify-out/graph.json`: {} definitions, \
@@ -113,62 +111,21 @@ pub fn graph_overview(graph: &GraphifyGraph, coverage: &ReviewCoverage, repo_nam
         String::new(),
     ];
 
-    if degree.is_empty() {
+    if degree.entries.is_empty() {
         lines.push(
             "- No calls, imports or references between definitions yet: start with the areas below."
                 .to_string(),
         );
     }
 
-    // Node insertion order (matching TS Map iteration for deterministic tie-breaking).
-    let node_order: HashMap<&str, usize> = graph
-        .nodes
-        .iter()
-        .enumerate()
-        .map(|(i, n)| (n.id.as_str(), i))
-        .collect();
-
-    // Top 8 most connected nodes. Ties broken by the order the node first gained a degree entry
-    // in the TS code, which iterates edges in order and inserts into a Map (insertion-ordered).
-    // Approximation: use graph.nodes order, since the TS degree map's insertion order follows
-    // edge iteration which roughly matches node appearance. We match exactly by tracking edge
-    // iteration order.
-    let mut degree_order: Vec<&str> = Vec::new();
-    {
-        let mut seen = HashSet::new();
-        for edge in graph.all_edges() {
-            let rel = edge.relation.as_deref().unwrap_or("");
-            if !deps.contains(rel) {
-                continue;
-            }
-            if seen.insert(edge.source.as_str()) {
-                degree_order.push(edge.source.as_str());
-            }
-            if seen.insert(edge.target.as_str()) {
-                degree_order.push(edge.target.as_str());
-            }
-        }
-    }
-    let degree_insertion_order: HashMap<&str, usize> = degree_order
-        .iter()
-        .enumerate()
-        .map(|(i, &id)| (id, i))
-        .collect();
-
-    let mut degree_sorted: Vec<(&str, u32)> = degree.iter().map(|(&k, &v)| (k, v)).collect();
-    degree_sorted.sort_by(|a, b| {
-        b.1.cmp(&a.1).then_with(|| {
-            let ia = degree_insertion_order.get(a.0).copied().unwrap_or(usize::MAX);
-            let ib = degree_insertion_order.get(b.0).copied().unwrap_or(usize::MAX);
-            ia.cmp(&ib)
-        })
-    });
-    for &(id, count) in degree_sorted.iter().take(8) {
+    let mut most_connected = degree.entries.clone();
+    most_connected.sort_by_key(|&(_, count)| std::cmp::Reverse(count));
+    for &(id, count) in most_connected.iter().take(8) {
         if let Some(node) = nodes.get(id) {
             let area = node
                 .community
-                .and_then(|c| communities.get(&c))
-                .map(|c| c.name.as_str());
+                .and_then(|c| community_index.get(&c))
+                .map(|&at| communities[at].1.name.as_str());
             let label = node.label.as_deref().unwrap_or(id);
             let link_text = link(label, node.source_file.as_deref(), node.source_location.as_deref());
             let area_suffix = area.map_or(String::new(), |a| format!(", in {a}"));
@@ -185,25 +142,16 @@ pub fn graph_overview(graph: &GraphifyGraph, coverage: &ReviewCoverage, repo_nam
     );
     lines.push(String::new());
 
-    for &(_, area) in &areas {
-        let files: HashSet<&str> = area
+    for (_, area) in &areas {
+        let file_count = area
             .nodes
             .iter()
             .filter_map(|n| n.source_file.as_deref().filter(|s| !s.is_empty()))
-            .collect();
-        let file_count = files.len();
-
-        // Top 3 most-connected pieces in this area.
-        let mut area_nodes: Vec<&&crate::graph_model::GraphifyNodeData> = area.nodes.iter().collect();
-        area_nodes.sort_by(|a, b| {
-            let da = degree.get(a.id.as_str()).copied().unwrap_or(0);
-            let db = degree.get(b.id.as_str()).copied().unwrap_or(0);
-            db.cmp(&da).then_with(|| {
-                let ia = node_order.get(a.id.as_str()).copied().unwrap_or(usize::MAX);
-                let ib = node_order.get(b.id.as_str()).copied().unwrap_or(usize::MAX);
-                ia.cmp(&ib)
-            })
-        });
+            .collect::<HashSet<_>>()
+            .len();
+        // The 3 most connected pieces in this area.
+        let mut area_nodes = area.nodes.clone();
+        area_nodes.sort_by_key(|n| std::cmp::Reverse(degree.get(&n.id.as_str())));
         let key: Vec<String> = area_nodes
             .iter()
             .take(3)
@@ -215,7 +163,6 @@ pub fn graph_overview(graph: &GraphifyGraph, coverage: &ReviewCoverage, repo_nam
                 )
             })
             .collect();
-
         let plural = if file_count == 1 { "" } else { "s" };
         lines.push(format!(
             "- **{}** ({file_count} file{plural}): {}",
@@ -225,69 +172,42 @@ pub fn graph_overview(graph: &GraphifyGraph, coverage: &ReviewCoverage, repo_nam
     }
 
     // Mermaid diagram of inter-area connections.
-    let shown_ids: HashSet<i64> = areas.iter().map(|&(id, _)| id).collect();
-    let mut cross_edges: Vec<CrossEdge> = between
+    let shown_ids: HashSet<i64> = areas.iter().map(|(id, _)| *id).collect();
+    let mut cross_edges: Vec<(i64, i64, u32)> = between
+        .entries
         .iter()
-        .filter_map(|(key, &count)| {
+        .filter_map(|(key, count)| {
             let mut parts = key.split('-');
             let a: i64 = parts.next()?.parse().ok()?;
             let b: i64 = parts.next()?.parse().ok()?;
-            if shown_ids.contains(&a) && shown_ids.contains(&b) && count >= 2 {
-                Some(CrossEdge { a, b, count })
-            } else {
-                None
-            }
+            (shown_ids.contains(&a) && shown_ids.contains(&b) && *count >= 2).then_some((a, b, *count))
         })
         .collect();
-    let between_insertion: HashMap<String, usize> = between_order
-        .iter()
-        .enumerate()
-        .map(|(i, k)| (k.clone(), i))
-        .collect();
-    cross_edges.sort_by(|x, y| {
-        y.count.cmp(&x.count).then_with(|| {
-            let kx = if x.a < x.b {
-                format!("{}-{}", x.a, x.b)
-            } else {
-                format!("{}-{}", x.b, x.a)
-            };
-            let ky = if y.a < y.b {
-                format!("{}-{}", y.a, y.b)
-            } else {
-                format!("{}-{}", y.b, y.a)
-            };
-            let ix = between_insertion.get(&kx).copied().unwrap_or(usize::MAX);
-            let iy = between_insertion.get(&ky).copied().unwrap_or(usize::MAX);
-            ix.cmp(&iy)
-        })
-    });
+    cross_edges.sort_by_key(|&(_, _, count)| std::cmp::Reverse(count));
     cross_edges.truncate(16);
 
     if !cross_edges.is_empty() {
-        lines.push(String::new());
-        lines.push("## How the areas connect".to_string());
-        lines.push(String::new());
-        lines.push(
-            "Lines are calls, references and imports between areas; thicker means more.".to_string(),
+        lines.extend(
+            [
+                "",
+                "## How the areas connect",
+                "",
+                "Lines are calls, references and imports between areas; thicker means more.",
+                "",
+                "```mermaid",
+                "%% id: areas",
+                "flowchart LR",
+            ]
+            .map(String::from),
         );
-        lines.push(String::new());
-        lines.push("```mermaid".to_string());
-        lines.push("%% id: areas".to_string());
-        lines.push("flowchart LR".to_string());
-
-        for &(id, area) in &areas {
+        for (id, area) in &areas {
             let name = area.name.replace('"', "'");
-            lines.push(format!(
-                "    a{id}[\"{name} ({})\"]",
-                area.nodes.len()
-            ));
+            lines.push(format!("    a{id}[\"{name} ({})\"]", area.nodes.len()));
         }
-
-        for e in &cross_edges {
-            let arrow = if e.count >= 10 { "===" } else { "---" };
-            lines.push(format!("    a{} {}|{}| a{}", e.a, arrow, e.count, e.b));
+        for (a, b, count) in &cross_edges {
+            let arrow = if *count >= 10 { "===" } else { "---" };
+            lines.push(format!("    a{a} {arrow}|{count}| a{b}"));
         }
-
         lines.push("```".to_string());
     }
 
@@ -296,13 +216,7 @@ pub fn graph_overview(graph: &GraphifyGraph, coverage: &ReviewCoverage, repo_nam
 
 struct CommunityInfo<'a> {
     name: String,
-    nodes: Vec<&'a crate::graph_model::GraphifyNodeData>,
-}
-
-struct CrossEdge {
-    a: i64,
-    b: i64,
-    count: u32,
+    nodes: Vec<&'a GraphifyNodeData>,
 }
 
 /// A Markdown link that opens code at a location (`path:line`).

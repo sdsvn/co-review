@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 use review_bundle::patch::PatchMeta;
-use review_graph::{BlastRadius, GraphNode};
+use review_graph::{AffectedDirection, BlastRadius, GraphNode};
 use review_model::{LocationKind, Review, ReviewThread, ThreadStatus, is_overview_page};
 
 use crate::text::{
@@ -251,7 +251,10 @@ fn radius_section(radius: &Radius) -> Vec<String> {
     let mut areas: Vec<(&str, Vec<String>)> = Vec::new();
     for affected in &radius.affected {
         let area = affected.node.area.as_deref().unwrap_or("Other");
-        let direction = wire_name(&affected.direction);
+        let direction = match affected.direction {
+            AffectedDirection::UsesIt => "uses it",
+            AffectedDirection::ItUses => "it uses",
+        };
         let steps = if affected.hops > 1 {
             format!(", {} steps", affected.hops)
         } else {

@@ -229,19 +229,14 @@ impl CodeFolders {
 
     /// Where a review's worktree lives: per repository and review, outside the repository.
     fn folder_of(&self, repo: &Path, review_id: &str) -> PathBuf {
-        let digest = Sha256::digest(path_string(&real_path(repo)).as_bytes());
-        let hash: String = digest
-            .iter()
-            .take(4)
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
+        let hash = format!("{:x}", Sha256::digest(path_string(&real_path(repo)).as_bytes()));
         let name = repo
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         let review: String = review_id.chars().take(8).collect();
         self.worktrees_dir
-            .join(format!("{name}-{hash}"))
+            .join(format!("{name}-{}", &hash[..8]))
             .join(review)
     }
 
@@ -268,8 +263,7 @@ impl CodeFolders {
         base: Option<&str>,
     ) -> Result<PathBuf> {
         let code = self.folder_of(repo, &review.id);
-        let base = base.map(str::to_string);
-        if code.join(".git").exists() {
+        let (checkout, fill) = if code.join(".git").exists() {
             // Opened again (new commits, or the same): move to the head; a full checkout stays
             // full.
             git(&code, ["checkout", "--quiet", "--detach", "--force", head])
@@ -279,66 +273,58 @@ impl CodeFolders {
                 .as_ref()
                 .and_then(|bundle| bundle.checkout)
                 .unwrap_or(CheckoutKind::Full);
-            let real_code = real_path(&code);
-            self.record(&review.id, |bundle| {
-                bundle.repo = Some(path_string(repo));
-                bundle.code = Some(path_string(&real_code));
-                bundle.base = base;
-                bundle.head = Some(head.to_string());
-                bundle.worktree = Some(true);
-                bundle.checkout = Some(checkout);
-            });
-            self.fill(&review.id, &code);
-            return Ok(real_code);
-        }
-        if let Some(parent) = code.parent() {
-            fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
-        }
-        git(repo, ["worktree", "prune"])
-            .map(drop)
-            .unwrap_or_else(|error| log::warn!("git worktree prune: {error:#}"));
-        git(
-            repo,
-            [
-                OsStr::new("worktree"),
-                OsStr::new("add"),
-                OsStr::new("--quiet"),
-                OsStr::new("--no-checkout"),
-                OsStr::new("--detach"),
-                code.as_os_str(),
-                OsStr::new(head),
-            ],
-        )
-        .context("git worktree add")?;
-        // The neighbourhood first: the folders of the changed and related files (cone mode also
-        // has the top-level files and those of each folder's parents).
-        let folders: BTreeSet<&str> = files
-            .iter()
-            .filter_map(|file| file.rsplit_once('/').map(|(folder, _)| folder))
-            .filter(|folder| !folder.is_empty() && *folder != ".")
-            .collect();
-        if !folders.is_empty() {
-            let mut arguments = vec!["sparse-checkout", "set", "--cone"];
-            arguments.extend(&folders);
-            git(&code, arguments).context("git sparse-checkout set")?;
-        }
-        git(&code, ["checkout", "--quiet", "--detach", head])
-            .with_context(|| format!("git checkout {head}"))?;
-        let real_code = real_path(&code);
-        let checkout = if folders.is_empty() {
-            CheckoutKind::Full
+            (checkout, true)
         } else {
-            CheckoutKind::Neighbourhood
+            if let Some(parent) = code.parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("creating {}", parent.display()))?;
+            }
+            git(repo, ["worktree", "prune"])
+                .map(drop)
+                .unwrap_or_else(|error| log::warn!("git worktree prune: {error:#}"));
+            git(
+                repo,
+                [
+                    OsStr::new("worktree"),
+                    OsStr::new("add"),
+                    OsStr::new("--quiet"),
+                    OsStr::new("--no-checkout"),
+                    OsStr::new("--detach"),
+                    code.as_os_str(),
+                    OsStr::new(head),
+                ],
+            )
+            .context("git worktree add")?;
+            // The neighbourhood first: the folders of the changed and related files (cone mode
+            // also has the top-level files and those of each folder's parents).
+            let folders: BTreeSet<&str> = files
+                .iter()
+                .filter_map(|file| file.rsplit_once('/').map(|(folder, _)| folder))
+                .filter(|folder| !folder.is_empty() && *folder != ".")
+                .collect();
+            if !folders.is_empty() {
+                let mut arguments = vec!["sparse-checkout", "set", "--cone"];
+                arguments.extend(&folders);
+                git(&code, arguments).context("git sparse-checkout set")?;
+            }
+            git(&code, ["checkout", "--quiet", "--detach", head])
+                .with_context(|| format!("git checkout {head}"))?;
+            if folders.is_empty() {
+                (CheckoutKind::Full, false)
+            } else {
+                (CheckoutKind::Neighbourhood, true)
+            }
         };
+        let real_code = real_path(&code);
         self.record(&review.id, |bundle| {
             bundle.repo = Some(path_string(repo));
             bundle.code = Some(path_string(&real_code));
-            bundle.base = base;
+            bundle.base = base.map(str::to_string);
             bundle.head = Some(head.to_string());
             bundle.worktree = Some(true);
             bundle.checkout = Some(checkout);
         });
-        if !folders.is_empty() {
+        if fill {
             self.fill(&review.id, &code);
         }
         Ok(real_code)

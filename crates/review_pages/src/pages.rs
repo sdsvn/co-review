@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 use review_bundle::discovery::patches_of;
 use review_bundle::patch::{PatchFile, changed_lines, parse_patch, parse_patch_meta};
 use review_graph::{BlastRadius, GraphState, GraphifyGraph, build_graph};
-use review_index::{FileEntry, RepoIndex};
+use review_index::{RepoIndex, outline};
 use review_store::{ReviewChange, ReviewStore};
 
 use crate::overview_page::{OverviewParts, PatchFileSummary, PatchSummary, Radius, overview_page};
@@ -40,29 +40,6 @@ pub trait SectionBuilder: Send + Sync + 'static {
 /// The sections from the repository itself: its Tree-sitter map and its Graphify graph.
 pub struct RepositorySections;
 
-const MAX_CHILDREN: usize = 12;
-
-/// A file's outline line, as `review_index` renders it for agents.
-fn outline(entry: &FileEntry) -> String {
-    entry
-        .symbols
-        .iter()
-        .map(|(name, members)| {
-            if members.is_empty() {
-                return name.clone();
-            }
-            let shown = &members[..members.len().min(MAX_CHILDREN)];
-            let more = if shown.len() < members.len() {
-                ", …"
-            } else {
-                ""
-            };
-            format!("{name} {{ {}{more} }}", shown.join(", "))
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
 impl SectionBuilder for RepositorySections {
     fn repository_overview(&self, root: &Path, viewed: &HashMap<String, u64>) -> Result<String> {
         let index = RepoIndex::new();
@@ -81,7 +58,7 @@ impl SectionBuilder for RepositorySections {
         let mut outlines: Vec<(String, String)> = map
             .files
             .iter()
-            .map(|(file, entry)| (file.clone(), outline(entry)))
+            .map(|(file, entry)| (file.clone(), outline(entry, None)))
             .collect();
         outlines.sort();
         repository_overview(&OverviewInput {

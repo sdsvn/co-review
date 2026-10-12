@@ -1,7 +1,5 @@
 //! Graphify `graph.json` types (networkx node-link format) and the dependency-edge filter.
 
-use std::collections::HashSet;
-
 use serde::{Deserialize, Serialize};
 
 /// A Graphify `graph.json` (networkx node-link format).
@@ -17,7 +15,7 @@ pub struct GraphifyGraph {
 }
 
 impl GraphifyGraph {
-    /// All dependency edges, from whichever key is present (`links` or `edges`).
+    /// The edges, from whichever key is present (`links` or `edges`).
     pub fn all_edges(&self) -> &[GraphifyEdge] {
         self.links
             .as_deref()
@@ -50,21 +48,13 @@ pub struct GraphifyEdge {
 }
 
 /// Edge relations that say how code depends on code; `contains` / `method` only restate structure.
-pub fn dependency_set() -> HashSet<&'static str> {
-    HashSet::from([
-        "calls",
-        "references",
-        "imports",
-        "imports_from",
-        "implements",
-        "indirect_call",
-        "inherits",
-        "uses",
-    ])
-}
-
-/// Lazily-initialized set of dependency edge relations matching the TypeScript `DEPENDENCIES`.
-///
-/// Thread-safe: uses `std::sync::LazyLock`.
-pub static DEPENDENCIES: std::sync::LazyLock<HashSet<&'static str>> =
-    std::sync::LazyLock::new(dependency_set);
+pub const DEPENDENCIES: &[&str] = &[
+    "calls",
+    "references",
+    "imports",
+    "imports_from",
+    "implements",
+    "indirect_call",
+    "inherits",
+    "uses",
+];

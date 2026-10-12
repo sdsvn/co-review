@@ -11,14 +11,14 @@
 //! - Blast radius: what a change touches and what depends on it.
 //! - Graph-based overview: most connected code, communities, Mermaid diagram.
 //!
-//! The repo-map-based fallback overview lives in `review_index`.
+//! The repo-map-based fallback overview lives in `review_pages`.
 
 mod blast_radius;
 mod build;
 mod graph_model;
 mod overview;
 
-pub use blast_radius::{blast_radius, BlastRadius, GraphNode};
-pub use build::{build_graph, graphify_installed, BuildState, GraphState, FRESH_MS};
-pub use graph_model::{GraphifyEdge, GraphifyGraph, GraphifyNodeData, DEPENDENCIES};
+pub use blast_radius::{AffectedDirection, AffectedNode, BlastEdge, BlastRadius, GraphNode, blast_radius};
+pub use build::{GraphState, build_graph};
+pub use graph_model::{DEPENDENCIES, GraphifyEdge, GraphifyGraph, GraphifyNodeData};
 pub use overview::graph_overview;

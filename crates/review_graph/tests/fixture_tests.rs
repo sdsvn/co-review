@@ -136,7 +136,7 @@ fn dependencies_set_matches_typescript() {
     let expected: Vec<String> =
         serde_json::from_str(&expected_text).expect("dependencies JSON must parse");
 
-    let mut actual: Vec<&str> = review_graph::DEPENDENCIES.iter().copied().collect();
+    let mut actual: Vec<&str> = review_graph::DEPENDENCIES.to_vec();
     actual.sort();
 
     assert_eq!(

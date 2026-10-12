@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -12,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 /// A graph younger than this is fresh enough for the overview; rebuilding is not worth the wait.
-pub const FRESH_MS: u64 = 60_000;
+const FRESH_MS: u64 = 60_000;
 
 /// The outcome of a `build_graph` call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,46 +28,38 @@ pub enum GraphState {
 
 /// Persisted state of the last successful build, stored in `graphify-out/.co-review-build-state.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BuildState {
+struct BuildState {
     /// The HEAD commit at build time.
-    pub head: String,
+    head: String,
     /// SHA-256 of `git status --porcelain` output at build time.
-    pub status_hash: String,
+    status_hash: String,
     /// Unix timestamp in milliseconds when the build completed.
-    pub built_at: u64,
+    built_at: u64,
 }
 
 /// Per-root build locks so only one `graphify update` runs per root at a time.
 static BUILD_LOCKS: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Whether graphify has been found on PATH. `None` = not checked, `Some(true)` = yes.
-static INSTALLED: Mutex<Option<bool>> = Mutex::new(None);
+/// Whether graphify has been found on PATH.
+static INSTALLED: AtomicBool = AtomicBool::new(false);
 
 /// Whether the `graphify` command is on the PATH.
 ///
 /// Only a `true` result is cached, so installing graphify later needs no restart.
-pub fn graphify_installed() -> bool {
-    {
-        let guard = INSTALLED.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(true) = *guard {
-            return true;
-        }
+fn graphify_installed() -> bool {
+    if INSTALLED.load(Ordering::Relaxed) {
+        return true;
     }
-
     let ok = Command::new("graphify")
         .arg("--help")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-
+        .is_ok_and(|s| s.success());
     if ok {
-        let mut guard = INSTALLED.lock().unwrap_or_else(|e| e.into_inner());
-        *guard = Some(true);
+        INSTALLED.store(true, Ordering::Relaxed);
     }
-
     ok
 }
 
@@ -105,10 +98,10 @@ fn build_graph_inner(root: &Path) -> Result<GraphState> {
     let state_file = out_dir.join(".co-review-build-state.json");
     let existed = out_dir.is_dir();
 
-    // Read persisted build state.
-    let saved_state = read_build_state(&state_file);
+    let saved_state = std::fs::read_to_string(&state_file)
+        .ok()
+        .and_then(|text| serde_json::from_str::<BuildState>(&text).ok());
 
-    // Check freshness window.
     if let Some(ref state) = saved_state && existed && now_ms().saturating_sub(state.built_at) < FRESH_MS {
         return Ok(GraphState::Built);
     }
@@ -121,12 +114,7 @@ fn build_graph_inner(root: &Path) -> Result<GraphState> {
         && state.head == current_head && state.status_hash == current_status_hash
     {
         // Nothing changed; update the timestamp so we stay in the freshness window.
-        let new_state = BuildState {
-            head: current_head.clone(),
-            status_hash: current_status_hash.clone(),
-            built_at: now_ms(),
-        };
-        let _ = write_build_state(&state_file, &new_state);
+        write_build_state(&state_file, current_head, current_status_hash);
         return Ok(GraphState::Built);
     }
 
@@ -143,17 +131,17 @@ fn build_graph_inner(root: &Path) -> Result<GraphState> {
         .context("failed to run graphify update")?;
 
     if !graph_file.is_file() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let tail = if !stdout.is_empty() {
-            let s = stdout.as_ref();
-            &s[s.len().saturating_sub(400)..]
-        } else if !stderr.is_empty() {
-            let s = stderr.as_ref();
-            &s[s.len().saturating_sub(400)..]
+        let shown = if output.stdout.is_empty() {
+            &output.stderr
         } else {
-            ""
+            &output.stdout
         };
+        let shown = String::from_utf8_lossy(shown);
+        let mut start = shown.len().saturating_sub(400);
+        while !shown.is_char_boundary(start) {
+            start += 1;
+        }
+        let tail = &shown[start..];
         log::error!(
             "[co-review] graphify update {} failed{}",
             root.display(),
@@ -166,13 +154,7 @@ fn build_graph_inner(root: &Path) -> Result<GraphState> {
         return Ok(GraphState::Failed);
     }
 
-    // Persist build state.
-    let new_state = BuildState {
-        head: current_head,
-        status_hash: current_status_hash,
-        built_at: now_ms(),
-    };
-    let _ = write_build_state(&state_file, &new_state);
+    write_build_state(&state_file, current_head, current_status_hash);
 
     // Exclude from git if we created graphify-out/.
     if !existed && let Err(err) = exclude_from_git(root) {
@@ -182,21 +164,16 @@ fn build_graph_inner(root: &Path) -> Result<GraphState> {
     Ok(GraphState::Built)
 }
 
-/// Read the build state from disk, or None if it doesn't exist or is unreadable.
-fn read_build_state(path: &Path) -> Option<BuildState> {
-    let text = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str(&text).ok()
-}
-
-/// Write the build state to disk.
-fn write_build_state(path: &Path, state: &BuildState) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+/// Remembers a build, best effort: without it the next one just runs `graphify update` again.
+fn write_build_state(path: &Path, head: String, status_hash: String) {
+    let state = BuildState {
+        head,
+        status_hash,
+        built_at: now_ms(),
+    };
+    if let Ok(json) = serde_json::to_string_pretty(&state) {
+        let _ = std::fs::write(path, json);
     }
-    let json = serde_json::to_string_pretty(state)?;
-    let mut file = std::fs::File::create(path)?;
-    file.write_all(json.as_bytes())?;
-    Ok(())
 }
 
 /// Get the current HEAD sha.
@@ -214,9 +191,7 @@ fn git_status_hash(root: &Path) -> Result<String> {
         .args(["-C", &root.to_string_lossy(), "status", "--porcelain"])
         .output()
         .context("git status --porcelain")?;
-    let mut hasher = Sha256::new();
-    hasher.update(&output.stdout);
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(format!("{:x}", Sha256::digest(&output.stdout)))
 }
 
 fn now_ms() -> u64 {
@@ -280,35 +255,16 @@ fn seed_from_sibling(root: &Path) -> Result<()> {
     let source_out = source.join("graphify-out");
     let dest_out = root.join("graphify-out");
 
-    // Copy on macOS with copy-on-write, fall back to normal copy.
-    let cow_result = if cfg!(target_os = "macos") {
+    let copy = |flags: &[&str]| {
         Command::new("cp")
-            .args(["-c", "-R"])
+            .args(flags)
             .arg(&source_out)
             .arg(&dest_out)
             .status()
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "not macOS",
-        ))
+            .is_ok_and(|s| s.success())
     };
-
-    let ok = match cow_result {
-        Ok(status) if status.success() => true,
-        _ => {
-            // Fallback: normal recursive copy.
-            Command::new("cp")
-                .args(["-R"])
-                .arg(&source_out)
-                .arg(&dest_out)
-                .status()
-                .map(|s| s.success())
-                .unwrap_or(false)
-        }
-    };
-
-    if !ok {
+    // Copy-on-write on macOS, else (or when that fails) a normal copy.
+    if !((cfg!(target_os = "macos") && copy(&["-c", "-R"])) || copy(&["-R"])) {
         anyhow::bail!("cp of graphify-out failed");
     }
 

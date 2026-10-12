@@ -116,7 +116,6 @@ fn render_fixtures_directory() {
         files.insert(
             name,
             review_index::FileEntry {
-                content_hash: String::new(),
                 mtime_ms: 0.0,
                 symbols: symbol_tuples,
             },

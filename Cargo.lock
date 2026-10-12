@@ -1233,9 +1233,7 @@ dependencies = [
 name = "review_anchor"
 version = "0.1.0"
 dependencies = [
- "pretty_assertions",
  "review_model",
- "serde",
  "serde_json",
 ]
 
@@ -1319,8 +1317,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "smol",
- "tempfile",
 ]
 
 [[package]]
@@ -1330,6 +1326,7 @@ dependencies = [
  "anyhow",
  "rayon",
  "review_model",
+ "review_store",
  "serde",
  "serde_json",
  "sha1_smol",
@@ -1343,7 +1340,6 @@ dependencies = [
  "tree-sitter-go",
  "tree-sitter-java",
  "tree-sitter-javascript",
- "tree-sitter-language",
  "tree-sitter-php",
  "tree-sitter-powershell",
  "tree-sitter-python",
@@ -1359,10 +1355,8 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
- "http",
  "log",
  "parking_lot",
- "pretty_assertions",
  "regex",
  "review_bundle",
  "review_code",
@@ -1422,7 +1416,6 @@ dependencies = [
  "regex",
  "review_anchor",
  "review_model",
- "serde",
  "serde_json",
  "sha2",
  "smol",

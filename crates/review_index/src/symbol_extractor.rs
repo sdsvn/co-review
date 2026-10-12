@@ -4,15 +4,7 @@
 //! `DefaultSymbolExtractor` uses native tree-sitter grammars from crates.io with the same
 //! node-kind-to-symbol mapping as the TypeScript `syntax-service-impl.ts`.
 
-use std::collections::HashMap;
-use std::sync::LazyLock;
-
 use tree_sitter::{Language, Node, Parser};
-use tree_sitter_language::LanguageFn;
-
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
 
 /// The kind of a symbol, matching the TypeScript `SyntaxSymbolKind`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,240 +36,138 @@ pub trait SymbolExtractor: Send + Sync {
     fn extract(&self, language_id: &str, source: &[u8]) -> Vec<Symbol>;
 }
 
-// ---------------------------------------------------------------------------
-// Grammar registry
-// ---------------------------------------------------------------------------
-
-/// Maps Monaco/VS Code language id to a grammar identifier used internally.
-static GRAMMARS: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
-    HashMap::from([
-        ("go", "go"),
-        ("typescript", "typescript"),
-        ("typescriptreact", "tsx"),
-        ("javascript", "javascript"),
-        ("javascriptreact", "javascript"),
-        ("python", "python"),
-        ("java", "java"),
-        ("rust", "rust"),
-        ("csharp", "c-sharp"),
-        ("cpp", "cpp"),
-        ("c", "c"),
-        ("ruby", "ruby"),
-        ("php", "php"),
-        ("shellscript", "bash"),
-        ("powershell", "powershell"),
-    ])
-});
-
-/// Definition node types per grammar, and the symbol kind each one produces.
-/// Matches the TypeScript `DEFINITIONS` exactly.
-static DEFINITIONS: LazyLock<HashMap<&'static str, HashMap<&'static str, SymbolKind>>> =
-    LazyLock::new(|| {
-        use SymbolKind::*;
-        HashMap::from([
-            (
-                "go",
-                HashMap::from([
-                    ("type_spec", Type),
-                    ("function_declaration", Function),
-                    ("method_declaration", Method),
-                    ("method_elem", Method),
-                    ("field_declaration", Field),
-                ]),
-            ),
-            (
-                "typescript",
-                HashMap::from([
-                    ("class_declaration", Class),
-                    ("abstract_class_declaration", Class),
-                    ("interface_declaration", Interface),
-                    ("enum_declaration", Enum),
-                    ("type_alias_declaration", Type),
-                    ("function_declaration", Function),
-                    ("generator_function_declaration", Function),
-                    ("method_definition", Method),
-                    ("method_signature", Method),
-                    ("abstract_method_signature", Method),
-                    ("internal_module", Module),
-                    ("public_field_definition", Field),
-                    ("variable_declarator", Function),
-                ]),
-            ),
-            (
-                "javascript",
-                HashMap::from([
-                    ("class_declaration", Class),
-                    ("function_declaration", Function),
-                    ("generator_function_declaration", Function),
-                    ("method_definition", Method),
-                    ("field_definition", Field),
-                    ("variable_declarator", Function),
-                ]),
-            ),
-            ("python", HashMap::from([("class_definition", Class), ("function_definition", Function)])),
-            (
-                "java",
-                HashMap::from([
-                    ("class_declaration", Class),
-                    ("interface_declaration", Interface),
-                    ("enum_declaration", Enum),
-                    ("record_declaration", Class),
-                    ("method_declaration", Method),
-                    ("constructor_declaration", Constructor),
-                ]),
-            ),
-            (
-                "rust",
-                HashMap::from([
-                    ("function_item", Function),
-                    ("function_signature_item", Function),
-                    ("struct_item", Struct),
-                    ("enum_item", Enum),
-                    ("trait_item", Interface),
-                    ("impl_item", Class),
-                    ("mod_item", Module),
-                    ("type_item", Type),
-                ]),
-            ),
-            (
-                "c-sharp",
-                HashMap::from([
-                    ("namespace_declaration", Module),
-                    ("file_scoped_namespace_declaration", Module),
-                    ("class_declaration", Class),
-                    ("struct_declaration", Struct),
-                    ("interface_declaration", Interface),
-                    ("enum_declaration", Enum),
-                    ("record_declaration", Class),
-                    ("method_declaration", Method),
-                    ("constructor_declaration", Constructor),
-                    ("property_declaration", Field),
-                ]),
-            ),
-            (
-                "cpp",
-                HashMap::from([
-                    ("namespace_definition", Module),
-                    ("class_specifier", Class),
-                    ("struct_specifier", Struct),
-                    ("enum_specifier", Enum),
-                    ("function_definition", Function),
-                ]),
-            ),
-            (
-                "ruby",
-                HashMap::from([
-                    ("module", Module),
-                    ("class", Class),
-                    ("method", Method),
-                    ("singleton_method", Method),
-                ]),
-            ),
-            (
-                "php",
-                HashMap::from([
-                    ("namespace_definition", Module),
-                    ("class_declaration", Class),
-                    ("interface_declaration", Interface),
-                    ("trait_declaration", Interface),
-                    ("enum_declaration", Enum),
-                    ("function_definition", Function),
-                    ("method_declaration", Method),
-                ]),
-            ),
-            ("bash", HashMap::from([("function_definition", Function)])),
-            (
-                "powershell",
-                HashMap::from([("function_statement", Function), ("class_statement", Class)]),
-            ),
-            // tsx shares typescript's definitions.
-            (
-                "tsx",
-                HashMap::from([
-                    ("class_declaration", Class),
-                    ("abstract_class_declaration", Class),
-                    ("interface_declaration", Interface),
-                    ("enum_declaration", Enum),
-                    ("type_alias_declaration", Type),
-                    ("function_declaration", Function),
-                    ("generator_function_declaration", Function),
-                    ("method_definition", Method),
-                    ("method_signature", Method),
-                    ("abstract_method_signature", Method),
-                    ("internal_module", Module),
-                    ("public_field_definition", Field),
-                    ("variable_declarator", Function),
-                ]),
-            ),
-            // c shares cpp definitions (the TS maps both to the cpp grammar, but we use separate
-            // grammars; the node types are the same).
-            (
-                "c",
-                HashMap::from([
-                    ("namespace_definition", Module),
-                    ("class_specifier", Class),
-                    ("struct_specifier", Struct),
-                    ("enum_specifier", Enum),
-                    ("function_definition", Function),
-                ]),
-            ),
-        ])
-    });
-
-/// Returns the tree-sitter Language for a grammar id.
-fn language_for_grammar(grammar: &str) -> Option<Language> {
-    let lang_fn: LanguageFn = match grammar {
-        "go" => tree_sitter_go::LANGUAGE,
-        "typescript" => tree_sitter_typescript::LANGUAGE_TYPESCRIPT,
-        "tsx" => tree_sitter_typescript::LANGUAGE_TSX,
-        "javascript" => tree_sitter_javascript::LANGUAGE,
-        "python" => tree_sitter_python::LANGUAGE,
-        "java" => tree_sitter_java::LANGUAGE,
-        "rust" => tree_sitter_rust::LANGUAGE,
-        "c-sharp" => tree_sitter_c_sharp::LANGUAGE,
-        "cpp" => tree_sitter_cpp::LANGUAGE,
-        "c" => tree_sitter_c::LANGUAGE,
-        "ruby" => tree_sitter_ruby::LANGUAGE,
-        "php" => tree_sitter_php::LANGUAGE_PHP,
-        "bash" => tree_sitter_bash::LANGUAGE,
-        "powershell" => tree_sitter_powershell::LANGUAGE,
+/// The grammar for a Monaco/VS Code language id: the name its definitions and quirks go by, and
+/// the parser. TSX shares TypeScript's definitions and C shares C++'s, as in the TypeScript.
+fn grammar_of(language_id: &str) -> Option<(&'static str, Language)> {
+    Some(match language_id {
+        "go" => ("go", tree_sitter_go::LANGUAGE.into()),
+        "typescript" => ("typescript", tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
+        "typescriptreact" => ("typescript", tree_sitter_typescript::LANGUAGE_TSX.into()),
+        "javascript" | "javascriptreact" => ("javascript", tree_sitter_javascript::LANGUAGE.into()),
+        "python" => ("python", tree_sitter_python::LANGUAGE.into()),
+        "java" => ("java", tree_sitter_java::LANGUAGE.into()),
+        "rust" => ("rust", tree_sitter_rust::LANGUAGE.into()),
+        "csharp" => ("c-sharp", tree_sitter_c_sharp::LANGUAGE.into()),
+        "cpp" => ("cpp", tree_sitter_cpp::LANGUAGE.into()),
+        "c" => ("cpp", tree_sitter_c::LANGUAGE.into()),
+        "ruby" => ("ruby", tree_sitter_ruby::LANGUAGE.into()),
+        "php" => ("php", tree_sitter_php::LANGUAGE_PHP.into()),
+        "shellscript" => ("bash", tree_sitter_bash::LANGUAGE.into()),
+        "powershell" => ("powershell", tree_sitter_powershell::LANGUAGE.into()),
         _ => return None,
-    };
-    Some(lang_fn.into())
+    })
 }
 
-// ---------------------------------------------------------------------------
-// Default extractor
-// ---------------------------------------------------------------------------
+/// Definition node types per grammar, and the symbol kind each one produces (the TypeScript `DEFINITIONS`).
+fn definitions(grammar: &str) -> &'static [(&'static str, SymbolKind)] {
+    use SymbolKind::*;
+    match grammar {
+        "go" => &[
+            ("type_spec", Type),
+            ("function_declaration", Function),
+            ("method_declaration", Method),
+            ("method_elem", Method),
+            ("field_declaration", Field),
+        ],
+        "typescript" => &[
+            ("class_declaration", Class),
+            ("abstract_class_declaration", Class),
+            ("interface_declaration", Interface),
+            ("enum_declaration", Enum),
+            ("type_alias_declaration", Type),
+            ("function_declaration", Function),
+            ("generator_function_declaration", Function),
+            ("method_definition", Method),
+            ("method_signature", Method),
+            ("abstract_method_signature", Method),
+            ("internal_module", Module),
+            ("public_field_definition", Field),
+            ("variable_declarator", Function),
+        ],
+        "javascript" => &[
+            ("class_declaration", Class),
+            ("function_declaration", Function),
+            ("generator_function_declaration", Function),
+            ("method_definition", Method),
+            ("field_definition", Field),
+            ("variable_declarator", Function),
+        ],
+        "python" => &[("class_definition", Class), ("function_definition", Function)],
+        "java" => &[
+            ("class_declaration", Class),
+            ("interface_declaration", Interface),
+            ("enum_declaration", Enum),
+            ("record_declaration", Class),
+            ("method_declaration", Method),
+            ("constructor_declaration", Constructor),
+        ],
+        "rust" => &[
+            ("function_item", Function),
+            ("function_signature_item", Function),
+            ("struct_item", Struct),
+            ("enum_item", Enum),
+            ("trait_item", Interface),
+            ("impl_item", Class),
+            ("mod_item", Module),
+            ("type_item", Type),
+        ],
+        "c-sharp" => &[
+            ("namespace_declaration", Module),
+            ("file_scoped_namespace_declaration", Module),
+            ("class_declaration", Class),
+            ("struct_declaration", Struct),
+            ("interface_declaration", Interface),
+            ("enum_declaration", Enum),
+            ("record_declaration", Class),
+            ("method_declaration", Method),
+            ("constructor_declaration", Constructor),
+            ("property_declaration", Field),
+        ],
+        "cpp" => &[
+            ("namespace_definition", Module),
+            ("class_specifier", Class),
+            ("struct_specifier", Struct),
+            ("enum_specifier", Enum),
+            ("function_definition", Function),
+        ],
+        "ruby" => &[
+            ("module", Module),
+            ("class", Class),
+            ("method", Method),
+            ("singleton_method", Method),
+        ],
+        "php" => &[
+            ("namespace_definition", Module),
+            ("class_declaration", Class),
+            ("interface_declaration", Interface),
+            ("trait_declaration", Interface),
+            ("enum_declaration", Enum),
+            ("function_definition", Function),
+            ("method_declaration", Method),
+        ],
+        "bash" => &[("function_definition", Function)],
+        "powershell" => &[("function_statement", Function), ("class_statement", Class)],
+        _ => &[],
+    }
+}
 
 /// The default symbol extractor using native tree-sitter grammars.
+#[derive(Default)]
 pub struct DefaultSymbolExtractor;
 
 impl SymbolExtractor for DefaultSymbolExtractor {
     fn extract(&self, language_id: &str, source: &[u8]) -> Vec<Symbol> {
-        let grammar = match GRAMMARS.get(language_id) {
-            Some(g) => *g,
-            None => return Vec::new(),
+        let Some((grammar, language)) = grammar_of(language_id) else {
+            return Vec::new();
         };
-        let language = match language_for_grammar(grammar) {
-            Some(l) => l,
-            None => return Vec::new(),
-        };
-        let definitions = match DEFINITIONS.get(grammar) {
-            Some(d) => d,
-            None => return Vec::new(),
-        };
-
         let mut parser = Parser::new();
         if parser.set_language(&language).is_err() {
             return Vec::new();
         }
-        let tree = match parser.parse(source, None) {
-            Some(t) => t,
-            None => return Vec::new(),
+        let Some(tree) = parser.parse(source, None) else {
+            return Vec::new();
         };
-
-        collect_symbols(grammar, &tree.root_node(), definitions, source)
+        collect_symbols(grammar, &tree.root_node(), definitions(grammar), source)
     }
 }
 
@@ -285,29 +175,25 @@ impl SymbolExtractor for DefaultSymbolExtractor {
 fn collect_symbols(
     grammar: &str,
     node: &Node,
-    definitions: &HashMap<&str, SymbolKind>,
+    definitions: &[(&str, SymbolKind)],
     source: &[u8],
 ) -> Vec<Symbol> {
     let mut result = Vec::new();
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        let kind = definitions.get(child.kind());
-        let name_node = kind.and_then(|_| name_of(grammar, &child, source));
-
-        if let (Some(&kind), Some(name_node)) = (kind, name_node) {
-            if is_definition(grammar, &child) {
-                let name = qualified_name(grammar, &child, &name_node, source);
-                let children = collect_symbols(grammar, &child, definitions, source);
-                result.push(Symbol {
-                    name,
-                    kind,
-                    children,
-                });
-            } else {
-                result.extend(collect_symbols(grammar, &child, definitions, source));
-            }
-        } else {
-            result.extend(collect_symbols(grammar, &child, definitions, source));
+        let definition = definitions
+            .iter()
+            .find(|(kind, _)| *kind == child.kind())
+            .and_then(|&(_, kind)| Some((kind, name_of(grammar, &child)?)))
+            .filter(|_| is_definition(grammar, &child));
+        let children = collect_symbols(grammar, &child, definitions, source);
+        match definition {
+            Some((kind, name_node)) => result.push(Symbol {
+                name: qualified_name(grammar, &child, &name_node, source),
+                kind,
+                children,
+            }),
+            None => result.extend(children),
         }
     }
     result
@@ -338,7 +224,7 @@ fn is_definition(grammar: &str, node: &Node) -> bool {
 }
 
 /// Find the name node for a definition. Matches the TS `nameOf` method.
-fn name_of<'a>(grammar: &str, node: &Node<'a>, _source: &[u8]) -> Option<Node<'a>> {
+fn name_of<'a>(grammar: &str, node: &Node<'a>) -> Option<Node<'a>> {
     // Rust impl_item uses "type" field instead of "name".
     if grammar == "rust" && node.kind() == "impl_item" {
         return node.child_by_field_name("type");
