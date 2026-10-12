@@ -34,7 +34,7 @@ original text kept), `removed`, or `ambiguous` (several places fit about equally
 - **THEN** the comment is not moved onto that other code
 
 #### Scenario: Same results as the Theia app
-- **WHEN** the anchor corpus (`extensions/review/test/anchor-corpus.mjs` cases) is resolved
+- **WHEN** the anchor corpus (`crates/review_anchor/tests/fixtures/cases.json`, recorded from the Theia app) is resolved
 - **THEN** every case has the status and range the Theia app gives
 
 ### Requirement: Live placement while editing

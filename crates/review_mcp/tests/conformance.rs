@@ -1,4 +1,4 @@
-//! Replays MCP sessions recorded from the Theia app (`tests/gen/record.mjs` → `tests/conformance/*.jsonl`) against
+//! Replays MCP sessions recorded from the Theia app (`tests/conformance/*.jsonl`) against
 //! review_mcp over Streamable HTTP, with the same scripted reviewer acting through the store, and compares every
 //! result. Ids, times and scratch paths are normalized.
 
@@ -288,7 +288,11 @@ fn window_root(review: &Review) -> String {
 /// The one deliberate contract change (design decision 11: no browser app, `open_review` returns a `note` and never a
 /// `url`): where the Theia app told agents to give the reviewer the URL, review_mcp tells them the review is open in
 /// Co-Review. Applied to the recorded side only, so the old wording can't come back unnoticed.
-const DECISION_11: [(&str, &str); 3] = [
+const DECISION_11: [(&str, &str); 4] = [
+    (
+        "and give me the URL (if there is one).",
+        "and tell me it's open in Co-Review.",
+    ),
     (
         "tell the reviewer the URL.",
         "tell the reviewer the review is open in Co-Review.",

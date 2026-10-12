@@ -1,4 +1,4 @@
-//! Replays what the Theia app's document page shows (recorded by `tests/gen/record.mjs`): the page's text, the
+//! Replays what the Theia app's document page shows (as recorded from it): the page's text, the
 //! diagrams' ids, the anchors of selections and where anchors are marked.
 
 #![allow(clippy::unwrap_used)]

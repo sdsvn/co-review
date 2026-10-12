@@ -490,7 +490,7 @@ mod tests {
         assert_eq!(slice(&text, 1, 4), "é😀");
     }
 
-    /// The `track` cases of fixtures/dmp.json, recorded from anchor-tracking.js by tests/gen/gen.mjs.
+    /// The `track` cases of fixtures/dmp.json, recorded from the Theia app's anchor-tracking.js.
     #[test]
     fn snaps_to_words_as_javascript_does() {
         let cases: Vec<serde_json::Value> =

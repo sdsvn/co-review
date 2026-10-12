@@ -19,7 +19,7 @@ Review the change you made with me in Co-Review, following the `co-review` skill
    callers, data, configuration, other services), and where to start reading. Plain language; no line-by-line
    walkthrough.
 3. Show it: `open_review({ reviewId })`. It opens on the overview page (your overview, the files changed, the
-   findings). Give me the URL (if there is one) and, in one sentence, what to look at first.
+   findings). Tell me it's open in Co-Review and, in one sentence, what to look at first.
 4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review
    (tell me what's still open), then act on my verdict: approve → go ahead (commit, merge, continue), mentioning
    anything still open; request changes → address every comment and apply the accepted suggestions as new commits

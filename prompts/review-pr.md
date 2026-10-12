@@ -13,8 +13,8 @@
    for several lines). They arrive proposed: I accept or dismiss each one.
    {{> overview}}
 5. Show it: `{{open_review}}({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
-   changed, the findings). Give me the URL (if there is one) and two sentences: what the pull request does and its
-   riskiest part.
+   changed, the findings). Tell me it's open in Co-Review, with two sentences: what the pull request does and
+   its riskiest part.
 6. Loop `{{await_reviewer}}` → investigate → `{{reply}}` until it returns my Submit or says I closed the review (tell
    me what's still open). It's someone else's change: don't edit it. On my Submit, tell me my verdict and what I
    asked for; the author does the work. I can post the review to the pull request myself (**Also post to GitHub**

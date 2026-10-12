@@ -36,12 +36,11 @@ the human starts from your findings instead of an empty review, and never sees a
 2. Your first pass: `add_findings`, and your overview for the review's front page (`open_review({ reviewId,
    overview, open: false })`: what it does and why, how it works as a Mermaid flowchart, the blast radius, where to
    start); for a design, fix every `format.warnings` entry instead (the document is its own front page).
-3. `open_review({ reviewId })` shows it, with the Review panel (in the browser, or the repository's window in the
-   desktop app). A repository, diff or pull-request review opens on its **overview page**: the pull request, your
-   overview, the files changed, then every thread grouped by area, and for a repository its areas, as one rendered
-   page the human reads and comments on (comments there come back with `target: "overview"` and the quoted text as
-   `source`). A design opens on its document, with your findings inline. Give the human the returned `url`, or say it is open in the desktop app
-   if there is a `note` instead, with a short summary.
+3. `open_review({ reviewId })` shows it in the repository's window, with the Review panel. A repository, diff or
+   pull-request review opens on its **overview page**: the pull request, your overview, the files changed, then every
+   thread grouped by area, and for a repository its areas, as one rendered page the human reads and comments on
+   (comments there come back with `target: "overview"` and the quoted text as `source`). A design opens on its
+   document, with your findings inline. Tell the human it is open in Co-Review, with a short summary.
 
 Pass `title` to start a new review instead of joining the latest one.
 
@@ -52,7 +51,7 @@ instead of 5,000 files:
 
 <!-- prompt: audit -->
 1. Prepare the review without showing it: `open_review({ title: "Repository review", open: false })`. Keep the
-   `reviewId` it returns. Don't give me a URL yet.
+   `reviewId` it returns. Don't tell me about it yet.
 2. Call `repo_map({ overview: true })` and `repo_map`. With [Graphify](https://graphify.net) installed, the
    overview is built from its code graph (Co-Review builds it: calls, imports, clusters, the most connected code), and
    `graphify-out/GRAPH_REPORT.md` lists import cycles and surprising connections between distant parts of the code:
@@ -68,8 +67,8 @@ instead of 5,000 files:
    callers, data, configuration, other services), and where to start reading. Plain language; no line-by-line
    walkthrough.
 4. Show it: `open_review({ reviewId })`. It opens on the overview page: your overview, every finding grouped by
-   area, and the repository's areas, as one page I can read and comment on. Give me the URL (if there is one) and the
-   areas with their finding counts, in one short message.
+   area, and the repository's areas, as one page I can read and comment on. Tell me it's open in Co-Review, with the areas and
+   their finding counts, in one short message.
 5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review
    (tell me what's still open). On my Submit: approve → nothing to change unless I say so; request changes → fix
    what I accepted and asked for, as commits, then reply in each thread with what changed and wait again. Don't
@@ -103,7 +102,7 @@ on lines, suggests edits and submits one verdict:
    callers, data, configuration, other services), and where to start reading. Plain language; no line-by-line
    walkthrough.
 3. Show it: `open_review({ reviewId })`. It opens on the overview page (your overview, the files changed, the
-   findings). Give me the URL (if there is one) and, in one sentence, what to look at first.
+   findings). Tell me it's open in Co-Review and, in one sentence, what to look at first.
 4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review
    (tell me what's still open), then act on my verdict: approve → go ahead (commit, merge, continue), mentioning
    anything still open; request changes → address every comment and apply the accepted suggestions as new commits
@@ -135,8 +134,8 @@ For a pull request you didn't write. You take the first pass; the human decides 
    callers, data, configuration, other services), and where to start reading. Plain language; no line-by-line
    walkthrough.
 5. Show it: `open_review({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
-   changed, the findings). Give me the URL (if there is one) and two sentences: what the pull request does and its
-   riskiest part.
+   changed, the findings). Tell me it's open in Co-Review, with two sentences: what the pull request does and
+   its riskiest part.
 6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review (tell
    me what's still open). It's someone else's change: don't edit it. On my Submit, tell me my verdict and what I
    asked for; the author does the work. I can post the review to the pull request myself (**Also post to GitHub**

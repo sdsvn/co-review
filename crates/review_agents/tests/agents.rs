@@ -742,7 +742,7 @@ fn the_connection_reports_its_state() {
     }
 }
 
-/// Replays `tests/fixtures/acp_turns.json`, recorded from the Theia app by `tests/gen/record.mjs`: the same script
+/// Replays `tests/fixtures/acp_turns.json`, recorded from the Theia app: the same script
 /// against the same agent gives the same thread messages and sends the agent the same prompts.
 #[test]
 fn replays_the_typescript_recording() {

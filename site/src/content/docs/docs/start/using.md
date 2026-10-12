@@ -8,14 +8,13 @@ sidebar:
 ## Start a review
 
 The Review panel is where every review begins.
-Open it from the status bar or with `Cmd+Shift+Alt+R`, then pick what to review:
+Open it from its icon in the side bar, or with **Review: Toggle Review Panel** in the command palette, then pick what to review:
 
 - the **entire repository**
 - the **current file**
 - a **branch** against its base
 - a **commit**
 
-You can also right-click files or folders and choose **Start Review of Selection**.
 When Claude Code opens a review, it appears on its own.
 
 ## Comment and discuss
@@ -42,7 +41,7 @@ The panel lists them by file (**Open / Proposed / Resolved / All**).
 An **entire repository** review shows your progress as you read. Reach for it to get a codebase back in your head, or to check your own work.
 
 - **Coverage** in the Review panel: how many source files you've viewed, overall and per area. Click an area to open its next unviewed file.
-- **Mark a file as viewed** with `Cmd+Alt+V`, the status bar item, or the editor's right-click menu. A file that changes afterwards counts as unviewed again.
+- **Mark a file as viewed** with `Cmd+Alt+V` (**Review: Mark File as Viewed / Not Viewed**). A file that changes afterwards counts as unviewed again.
 - **The explorer** shows a check on viewed files and the number of open threads on files and folders.
 - **Overview** (next to the coverage bar) opens a page with where to start, the areas of the code and how they connect. With a [Graphify](https://pypi.org/project/graphifyy/) graph (`graphify update .`, code only, no LLM) it shows the most connected code and a diagram of its clusters.
 - **`/co-review:audit`** has the agent go first: proposed findings labelled by area. **By area** in the panel groups them.
@@ -62,7 +61,7 @@ Between repository reviews, review one change at a time — the way you'd review
 
 Review the plan before any code exists. A design document is **not source code** — it's a plan: prose, Mermaid diagrams and a foldable **L1 · L2 · L3** step tree (what happens, then how, then the edge cases), where every step, diagram node and line of text can carry a comment.
 
-Rendered review opens automatically for `index.markdown` and `*.pseudocode.md` — the filename only triggers the render; the content is a design plan, not pseudocode. For any other `.md` file, use **Open With → Review (rendered)**.
+Markdown files open rendered while a review is open; opening one at a line goes to the editor. A `## Design` section, or a `*.pseudocode.md` file, renders as the design tree — the filename only triggers the render; the content is a design plan, not pseudocode.
 
 Inside the rendered view you can:
 
@@ -83,13 +82,6 @@ The agent gets every open comment and any accepted suggestions in one batch.
 
 The dropdown at the top of the panel switches between reviews. When one is done, **... then Archive review** takes it out of the dropdown while keeping it on disk — reopen it later with **... then Show archived reviews...**. Delete review removes it for good.
 
-## From your phone
-
-Open the mobile view with **... then Open mobile view**, or go to `http://<host>:<port>/m/`.
-
-It accepts local connections only.
-To use it over Tailscale, run `tailscale serve --bg 3000` and allow the host with `CO_REVIEW_ALLOWED_HOSTS`.
-
 ## Keyboard shortcuts
 
 | Shortcut | Action |
@@ -99,4 +91,3 @@ To use it over Tailscale, run `tailscale serve --bg 3000` and allow the host wit
 | `Cmd+Alt+Down` / `Cmd+Alt+Up` | Next / previous comment |
 | `Cmd+Alt+O` | Go to comment... |
 | `Cmd+Alt+V` | Mark the file as viewed (or not) |
-| `Cmd+Shift+Alt+R` | Show or hide the Review panel |

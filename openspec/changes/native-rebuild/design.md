@@ -36,8 +36,8 @@ no cmake) in about 10 GB.
    need Floem views inside `lapce-app`.
 2. **This repository is the fork.** Lapce's history is merged at the root (`lapce-app/`, `lapce-core/`,
    `lapce-proxy/`, `lapce-rpc/`), beside `crates/review_*` in one Cargo workspace. Upstream changes arrive by merging
-   `lapce/master` (remote `lapce`); it moves slowly, so conflicts are rare. The Theia app stays until the Lapce app
-   replaces it.
+   `lapce/master` (remote `lapce`); it moves slowly, so conflicts are rare. The Theia app has been removed (task 8.4); the
+   fixtures recorded from it are the reference.
 3. **New code in new crates; few, marked hooks.** Edits to Lapce's own files are hooks marked `// co-review:` and
    listed in `docs/co-review/fork-surface.md`. Expected hooks: a `PanelKind::Review` panel (`panel/kind.rs`,
    `panel/view.rs`), review pages as new editor-tab children like Settings and Keymap (`editor_tab.rs`), gutter
@@ -123,7 +123,9 @@ diff); a regression over 20 % fails the build.
   against the Theia app's anchors.
 - [Ferrite's Mermaid layout differs from mermaid.js] → node and edge ids (what anchors use) come from the source,
   not the layout, so comments survive layout differences.
-- [Behaviour drift] → recorded MCP sessions and corpora from the Theia app as conformance tests.
+- [Behaviour drift] → recorded MCP sessions and corpora from the Theia app as conformance tests. The Theia app and
+  its recorders are gone; the recorded fixtures (`crates/*/tests/fixtures`, `crates/review_mcp/tests/conformance`)
+  are now the reference.
 - [Windows] → Windows CI from the first task.
 - [Browser, phone and script users lose their entry points] → the browser app, the phone view and the review
   server (`co-review-server`) are dropped (decided 2026-10-12); release notes say so.

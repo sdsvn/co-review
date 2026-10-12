@@ -1,5 +1,5 @@
-//! The Markdown matches what the TypeScript app writes, byte for byte, for the cases recorded by
-//! `tests/gen/gen.mjs`.
+//! The Markdown matches what the TypeScript app writes, byte for byte, for the cases recorded
+//! from it.
 
 use std::path::PathBuf;
 

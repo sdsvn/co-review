@@ -7,7 +7,7 @@ sidebar:
 
 Building with a coding agent is fast. Change by change, each diff looks fine, and months later the codebase works but no longer feels like yours: you don't know where things live or why they're built the way they are.
 
-Co-Review is a review tool with IDE features — not an IDE. You open something as a review, comment on a line, a diagram node or a design step, and the agent that did the work answers in the thread, from the code, and waits for your verdict before it changes anything. It is built on [Eclipse Theia](https://theia-ide.org), so code navigation, search, Git and language servers are the real thing; everything unrelated to reviewing is removed.
+Co-Review is a review tool with IDE features — not an IDE. You open something as a review, comment on a line, a diagram node or a design step, and the agent that did the work answers in the thread, from the code, and waits for your verdict before it changes anything. It is a native desktop app, a fork of the [Lapce](https://lapce.dev) editor (Rust), so code navigation, search, Git and language servers are the real thing; everything unrelated to reviewing is removed.
 
 ## Four ways to review
 

@@ -945,7 +945,7 @@ mod tests {
         );
     }
 
-    /// Replays fixtures/dmp.json, recorded from @sanity/diff-match-patch by tests/gen/gen.mjs.
+    /// Replays fixtures/dmp.json, recorded from @sanity/diff-match-patch, which the Theia app used.
     #[test]
     fn matches_javascript_diff_match_patch() {
         let cases: Vec<serde_json::Value> =

@@ -19,18 +19,20 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// The `co-review` command: the one installed (install.sh / install-cli.sh links it), else the one bundled with the app
-// this package came from (<resources>/app/integrations/shared → <resources>/app/bin), else one built in this checkout,
-// else `co-review` on PATH (the Windows installer puts its folder there).
+// The `co-review` command: `$CO_REVIEW_CLI`, else the one that came with this package — bundled with the app it came
+// from (<resources>/app/integrations/shared → <resources>/app/bin) or built in this checkout — so the package always
+// talks to its own Co-Review, never to an older one still linked in ~/.local/bin; else the one installed (install.sh
+// links it), else `co-review` on PATH (the Windows installer puts its folder there).
 const EXE = process.platform === "win32" ? "co-review.exe" : "co-review";
 const CLI =
 	[
-		join("/usr/local/bin", EXE),
-		join(homedir(), ".local", "bin", EXE),
+		process.env.CO_REVIEW_CLI ?? "",
 		resolve(here, "..", "..", "bin", EXE),
 		resolve(here, "..", "..", "target", "debug", EXE),
 		resolve(here, "..", "..", "target", "release", EXE),
-	].find(p => existsSync(p)) ?? "co-review";
+		join("/usr/local/bin", EXE),
+		join(homedir(), ".local", "bin", EXE),
+	].find(p => p && existsSync(p)) ?? "co-review";
 const HOME = process.env.CO_REVIEW_HOME || join(homedir(), ".co-review");
 
 /** The parts of the harness's extension context this extension uses (Pi and omp share them). */
@@ -98,7 +100,7 @@ class CoReviewConnection {
 		if (this.client) {
 			return;
 		}
-		// Start Co-Review (or reuse a running desktop/browser instance) without opening a browser.
+		// Start Co-Review (or reuse a running one) without opening a window.
 		await new Promise<void>((ok, fail) => {
 			const child = spawn(CLI, ["--no-open", root], { stdio: ["ignore", "ignore", "pipe"] });
 			let err = "";
@@ -206,7 +208,7 @@ function formatVerdict(r: Verdict): string {
 		return r.threads.map(formatThread).join("\n\n---\n\n");
 	}
 	if (r.status === "closed") {
-		return `[Co-Review] ${(r.hint ?? "The reviewer closed the review.").replace(/open_review/g, "co_review_start")}`;
+		return `[Co-Review] ${ourTools(r.hint ?? "The reviewer closed the review.")}`;
 	}
 	if (r.status !== "submitted") {
 		return "Nothing from the reviewer yet. Call co_review_wait again to keep co-reviewing.";
@@ -218,6 +220,11 @@ function formatVerdict(r: Verdict): string {
 		comments && `Open comments:\n${comments}`,
 		suggestions && `Accepted suggestions (apply each as a commit):\n${suggestions}`
 	].filter(Boolean).join("\n\n");
+}
+
+/** Co-Review's notes name its MCP tools; this extension's tools have other names. */
+function ourTools(note: string): string {
+	return note.replace(/\bopen_review\b/g, "co_review_start").replace(/\bawait_reviewer\b/g, "co_review_wait").replace(/\badd_findings\b/g, "co_review_add_findings");
 }
 
 function text(value: string) {
@@ -301,7 +308,7 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 			const listen = ctx.hasUI && harness.isMain(ctx);
 			const opened = await start(ctx, { ...params, listen });
 			const warnings = opened.format?.warnings?.length ? `\nFix the design document, then call co_review_start again: ${opened.format.warnings.join(" ")}` : "";
-			const where = (opened.url ? `Reviewer URL: ${opened.url}` : opened.note ?? "") + warnings;
+			const where = ourTools((opened.url ? `Reviewer URL: ${opened.url}` : opened.note ?? "") + warnings);
 			return text(listen
 				? `Joined review ${opened.reviewId} (${opened.openThreads} open threads). ${where}\nReviewer questions will arrive as [Co-Review] messages; answer each with co_review_reply.`
 				: `Joined review ${opened.reviewId} (${opened.openThreads} open threads). ${where}\nNow loop: co_review_wait → investigate → co_review_reply, until the reviewer says the review is done.`);

@@ -1,47 +1,34 @@
-# How to contribute
-Thank you for your interest in contributing to Lapce! No contribution is too small and we consider _all_ contributions to the project. There are many ways to contribute (a few are listed here) but if you think of something else, join us on [Discord](https://discord.gg/n8tGJ6Rn6D) or let us know via an [issue](https://github.com/lapce/lapce/issues).
+# Contributing to Co-Review
 
-## Questions
+Co-Review is a fork of [Lapce](https://lapce.dev). Lapce's own contributing guide is in
+[docs/lapce/CONTRIBUTING.md](docs/lapce/CONTRIBUTING.md); editor bugs that aren't about reviewing are best fixed
+upstream.
 
-We're always around hanging on our [Discord](https://discord.gg/n8tGJ6Rn6D) server but if you're only participating on GitHub, you can open a [Discussion](https://github.com/lapce/lapce/discussions)
+## Questions, bugs and ideas
 
-## Feature Requests
+Open an [issue](https://github.com/sdsvn/co-review/issues). For a bug, say what you did, what you expected and what
+happened, and add the relevant lines of `co-review logs`.
 
-A feature request is _editor behaviour that you want to have included in Lapce_. We track feature requests on GitHub via [issues](https://github.com/lapce/lapce/issues). There are generally few kinds of features:
+## Building
 
-### Core features
+You need Rust (`rustup` installs the version in `rust-toolchain.toml`), Git, and Node.js for `make prompts` and the
+website. On macOS, the Command Line Tools; on Linux, `sudo make -f Makefile.lapce ubuntu-deps`; on Windows, MSVC.
 
-A feature more suited to the core development of Lapce. If this is the case please make a suggestion in an [issue](https://github.com/lapce/lapce/issues).
+```bash
+make build                    # the app and the `co-review` command (debug)
+make run REPO=/path/to/repo   # run the app on a repository
+make test                     # version and prompt checks, and the review crates' tests
+make lint                     # clippy
+```
 
-### Programming language support (autocompletion/intellisense/formatting)
+[Building and running](docs/running-and-packaging.md) has packaging, installing and configuration.
 
-A feature that relates to specific programming language or development tool that provides intellisense, or various editor commands.
-We do not track plugins development here, each plugin should have own issue tracker with eventual issues linked/referenced to main Lapce issue tracker.
+## Pull requests
 
-### Syntax highlighting
-
-There is main issue for tracking syntax highlighting grammars support at https://github.com/lapce/lapce/issues/272.
-
----
-
-To reduce the number of duplicate requests, please search through the issues to see if something has already been suggested. If a feature you want has been suggested, then comment on that issue to let us know it's popular. You can use emoji-reactions to show us just how popular.
-
-## Bug Reports
-
-Bugs should also be reported on GitHub via [issues](https://github.com/lapce/lapce/issues). This allows us to track them and see how prevalent they are.
-
-If you encounter a bug when using Lapce, check the issues to see if anyone else has encountered it. If it already exists, you can use emoji reactions so we can see community interest in specific issues and how important they are.
-
-Please follow the rule of [NoPlusOne](https://github.com/golang/go/wiki/NoPlusOne)
-
-## Pull Requests
-
-If you want to write some code, develop the documentation, or otherwise work on a certain feature or bug, let us know by replying to or creating an [issue](https://github.com/lapce/lapce/issues).
-
-Run `cargo fmt --all` and `cargo clippy` on your code before submitting pull requests and fix any issues; this makes sure that the CI runs only fail on genuine build errors and not formatting/Clippy lints.
-
-We are currently in the process of improving the documentation for new developers/code contributors. Feel free to get started, or post a message on [Discord](https://discord.gg/n8tGJ6Rn6D) to see what can be done.
-
-## Contact
-
-As always, if you have any questions or are just not sure where to start, post a message into the [Discord](https://discord.gg/n8tGJ6Rn6D) server. We suggest you start here as it is the most popular way for Lapce's contributors and users to communicate.
+- Read [INSTRUCTIONS.md](INSTRUCTIONS.md) first: where new code goes, how edits to Lapce's files are marked
+  (`// co-review:`) and listed in [docs/co-review/fork-surface.md](docs/co-review/fork-surface.md), and the tests.
+- New behaviour starts as a change in [`openspec/`](openspec/).
+- Agent instructions are written once in [`prompts/`](prompts/README.md). Edit them there and run `make prompts`;
+  never edit a generated copy.
+- Run `cargo fmt --all`, `make lint` and `make test` before you open the pull request.
+- Update the docs (`README.md`, `docs/`, `llms.txt`) when what users see changes.

@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 //! Replays the review-directory scenarios of `fixtures/service/script.json` against the Rust
-//! `BundleService` and compares with what the TypeScript app recorded (`tests/gen/gen_service.mjs`).
+//! `BundleService` and compares with what the TypeScript app recorded.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -103,7 +103,7 @@ fn files_of(dir: &Path, skip: &Path) -> BTreeMap<String, String> {
     out
 }
 
-/// Mirrors `normalize` in `tests/gen/gen_service.mjs`: sorted keys, uuids numbered in order of
+/// Mirrors the recorder's `normalize`: sorted keys, uuids numbered in order of
 /// appearance, times zeroed, clocks and the temporary root replaced.
 fn normalize(value: &Value, root: &str) -> Value {
     fn is_uuid(text: &str) -> bool {

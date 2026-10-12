@@ -1,5 +1,5 @@
 //! Code folders on tiny temporary repositories. The `onDiff`, `baseFile` and `sidesOf` cases
-//! replay `fixtures/code_folders.json`, recorded from the TypeScript CodeFolders by `gen/gen.mjs`
+//! replay `fixtures/code_folders.json`, recorded from the TypeScript CodeFolders
 //! over the same scenario (which the fixture carries, so the repository built here matches).
 
 #![allow(clippy::unwrap_used)]

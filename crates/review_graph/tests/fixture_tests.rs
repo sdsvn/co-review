@@ -1,5 +1,5 @@
 //! Fixture tests: replay the TypeScript blastRadius and overview functions over the committed
-//! graph.json fixture and assert equality with the expected outputs produced by tests/gen/gen.mjs.
+//! graph.json fixture and assert equality with the expected outputs recorded from the Theia app.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -21,7 +21,7 @@ fn load_graph() -> GraphifyGraph {
 fn blast_radius_matches_typescript() {
     let graph = load_graph();
 
-    // Same changed lines as gen.mjs: line 447 and line 10 in review_model/src/review_model.rs
+    // Same changed lines as the recording: line 447 and line 10 in review_model/src/review_model.rs
     let mut changed_lines = BTreeMap::new();
     changed_lines.insert("review_model/src/review_model.rs".to_string(), vec![447, 10]);
 

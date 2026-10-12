@@ -8,7 +8,7 @@ license = "EPL-2.0"
 [lib]
 path = "src/review_agents.rs"
 
-# A scripted ACP agent for the tests (and the TypeScript recorder in tests/gen).
+# A scripted ACP agent for the tests.
 [[bin]]
 name = "fake-acp-agent"
 path = "tests/support/fake_agent.rs"

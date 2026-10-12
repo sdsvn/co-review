@@ -1,7 +1,6 @@
 //! Conformance test: compare Rust symbol extraction against the TypeScript reference output.
 //!
-//! Expected output is recorded by `tests/gen/gen.mjs` and stored in `tests/gen/expected.json`.
-//! Run `node tests/gen/gen.mjs` from the crate root to regenerate after changing fixtures.
+//! Expected output was recorded from the Theia app and is stored in `tests/gen/expected.json`.
 #![allow(clippy::unwrap_used)]
 
 use std::collections::HashMap;
@@ -20,7 +19,7 @@ fn fixtures_dir() -> PathBuf {
 
 fn expected_json() -> HashMap<String, Vec<(String, Vec<String>)>> {
     let path = crate_root().join("tests/gen/expected.json");
-    let content = fs::read_to_string(&path).expect("expected.json must exist — run `node tests/gen/gen.mjs`");
+    let content = fs::read_to_string(&path).expect("tests/gen/expected.json must exist");
     serde_json::from_str(&content).expect("expected.json is valid JSON")
 }
 

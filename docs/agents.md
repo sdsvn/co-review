@@ -65,7 +65,7 @@ The setup depends on the harness:
 
 ### How `co-review mcp` works
 
-`co-review mcp` uses the harness's working directory as the repository and bridges stdio to the `/mcp` endpoint of a running Co-Review (desktop or browser). When none is running, it answers the agent's handshake itself and starts Co-Review on the first tool call, so opening an agent session doesn't start the app. If Co-Review quits during the session, the calls waiting on it fail with an error rather than hang, and the next call reconnects (starting Co-Review again). When the harness ends the session, the bridge ends its Co-Review session too and exits.
+`co-review mcp` uses the harness's working directory as the repository and bridges stdio to the `/mcp` endpoint of a running Co-Review. When none is running, it answers the agent's handshake itself and starts Co-Review on the first tool call, so opening an agent session doesn't start the app. If Co-Review quits during the session, the calls waiting on it fail with an error rather than hang, and the next call reconnects (starting Co-Review again). When the harness ends the session, the bridge ends its Co-Review session too and exits.
 
 A client that speaks Streamable HTTP can also connect directly (local connections only):
 
@@ -114,8 +114,3 @@ An agent can hand over more than code: a directory with a design document and pa
 - **Suggested edits** — findings may carry `proposal: { before, after, path?, startLine? }`, and the reviewer can propose edits on the document. Accepted document edits are written into the document (`doc.version` increments). Accepted patch suggestions come back in `acceptedSuggestions` for the agent to commit on the branch.
 - **OpenSpec** — `<dir>/openspec` (or `open_review({ openspec })`) renders as cards under the document.
 - **State file** — the review is also written to `<dir>/review.json` (or `storePath`), for tools that read it from disk.
-- **Server mode** — `co-review-server` opens a directory for review from a script and serves a small HTTP API. See [`../bin/review-server.mjs`](../bin/review-server.mjs).
-  ```
-  co-review-server -dir <dir> -store <file>
-  ```
-- **Phone** — `/m/` (see [running-and-packaging.md](running-and-packaging.md#phone-view)).

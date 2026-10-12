@@ -16,10 +16,10 @@ What an agent gets:
 **Before you start:** agents launch Co-Review through the `co-review` command, so it has to be on your `PATH`.
 Check with `which co-review`.
 
-- If you installed with `install.sh`, it's already there.
+- If you installed with `install.sh`, or with the Windows installer, it's already there.
 - If you built from source, run `make install-cli`.
-- Or, inside Co-Review, open the command palette (`Cmd/Ctrl+Shift+P`) and run **Review: Install the co-review
-  Command**.
+- Or, on macOS, open the command palette in Co-Review (`Cmd+Shift+P`) and run **Install the co-review Command in
+  PATH**.
 
 ## Claude Code
 
@@ -72,9 +72,9 @@ receive it.
 
 ### The hook
 
-At session start the plugin asks a running Co-Review about open reviews of the project (`hooks/session-start.sh`,
-using `curl`). If questions are waiting, Claude Code is told, so "let's continue the review" just works. The hook
-never starts Co-Review, and prints nothing when there is nothing to say.
+At session start the plugin runs `co-review status --claude-hook` for the project (`hooks/session-start.sh`), which
+reads its reviews from `~/.co-review`. If questions are waiting, Claude Code is told, so "let's continue the review"
+just works. The hook never starts Co-Review, and prints nothing when there is nothing to say.
 
 ### Without the plugin
 
@@ -166,14 +166,13 @@ The skills live in [`plugin/skills`](../plugin/skills). The Claude Code plugin i
 
 ## Other harnesses (MCP)
 
-Every harness launches the same stdio command, `co-review mcp`. It finds the running Co-Review (desktop or
-browser) through `~/.co-review/server.json`, or starts it, and uses the harness's working directory as the
-repository.
+Every harness launches the same stdio command, `co-review mcp`. It finds the running Co-Review through
+`~/.co-review/server.json`, or starts it, and uses the harness's working directory as the repository.
 
 > [!NOTE]
 > Apps opened from the Dock (Cursor, Claude Desktop, VS Code) may not have `~/.local/bin` on their `PATH`. Use the
 > absolute path instead, for example `/usr/local/bin/co-review` or `~/.local/bin/co-review` (`which co-review`
-> shows it).
+> shows it). On Windows the installer puts `co-review` on your `PATH`; restart the harness after installing.
 >
 > Or let Co-Review write the config: **Connect an Agent** in the Review panel, then pick the harness. It merges JSON
 > configs (keeping a backup), appends to TOML ones, and copies the snippet to paste where a config can't be edited

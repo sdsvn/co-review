@@ -3,7 +3,7 @@
 //!
 //! Ports the rendering half of the Theia app's document page (`browser/document/document-render.ts`, the parts of
 //! `document-review-widget.tsx` that add text, and `text-anchor.ts`). The page's text is the text of the DOM the
-//! Theia app renders, character for character, so anchors made here and there agree: `tests/gen/record.mjs` records it
+//! Theia app renders, character for character, so anchors made here and there agree: it was recorded
 //! from the TypeScript and `tests/conformance.rs` replays it.
 //!
 //! Offsets into the page's text are UTF-16 code units, as in JavaScript.

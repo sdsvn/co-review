@@ -8,7 +8,7 @@
 
 Made for Claude Code. Native packages for Pi and Oh My Pi. Works with any MCP agent.
 
-[![Built on Eclipse Theia](https://img.shields.io/badge/built%20on-Eclipse%20Theia-4F46E5?style=flat-square)](https://theia-ide.org)
+[![Built on Lapce](https://img.shields.io/badge/built%20on-Lapce-4F46E5?style=flat-square)](https://lapce.dev)
 [![Made for Claude Code](https://img.shields.io/badge/made%20for-Claude%20Code-D97757?style=flat-square)](#claude-code)
 [![Pi and Oh My Pi](https://img.shields.io/badge/Pi%20%C2%B7%20Oh%20My%20Pi-packages-059669?style=flat-square)](#pi-and-oh-my-pi)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-1E1B4B?style=flat-square)](#install)
@@ -34,13 +34,14 @@ a first pass before you see it, so it opens on what to look at ([how each workfl
 | **Someone else's pull request**: the agent takes the first pass, you decide what goes back to the author, and post it to GitHub as a review with line comments | `/co-review:pr <n>` | `/co-review-pr <n>` |
 | **A design, before the code**: an L1 · L2 · L3 plan with Mermaid diagrams, revised from your comments before anything is built | `/co-review:design <task>` | `/co-review-design <task>` |
 
-Co-Review is a review tool with IDE features, not an IDE. It's built on [Eclipse Theia](https://theia-ide.org),
-so navigation, search, Git and language servers are the real thing; everything unrelated to reviewing is removed.
+Co-Review is a review tool with IDE features, not an IDE. It's a native desktop app, a fork of the
+[Lapce](https://lapce.dev) editor (Rust), so navigation, search, Git and language servers are the real thing;
+everything unrelated to reviewing is removed.
 
 ```
  you ── inline threads, Ask Agent, Submit review ──┐
                                                    ▼
-                     Co-Review  (desktop app or browser)
+                     Co-Review  (desktop app)
                       │  reviews live in ~/.co-review, outside the repo
        ┌──────────────┼─────────────────────┐
   Claude Code     Pi / Oh My Pi        any MCP client
@@ -70,7 +71,6 @@ so navigation, search, Git and language servers are the real thing; everything u
   commentable pages linked to the code.
 - **One verdict** — Approve, Request changes or Comment — and the agent gets every open comment in one batch. For a
   GitHub pull request, the same verdict posts to it as a review with line comments and suggestions (`gh`).
-- **Phone view** to read, reply and submit away from your desk.
 
 ## Install
 
@@ -80,9 +80,10 @@ so navigation, search, Git and language servers are the real thing; everything u
 curl -fsSL https://sdsvn.github.io/co-review/install.sh | bash
 ```
 
-This installs the desktop app (macOS on Apple silicon, Linux x64 and arm64) and the `co-review` command, which runs on
-the app's own runtime (no Node.js needed). Run it again to update; `CO_REVIEW_VERSION=v0.2.0` pins a release.
-**Windows:** use the installer from the [latest release](https://github.com/sdsvn/co-review/releases/latest).
+This installs the desktop app (macOS on Apple silicon, Linux x64 and arm64) and the `co-review` command, a native
+binary that ships with the app (no Node.js needed). Run it again to update; `CO_REVIEW_VERSION=v0.2.0` pins a release.
+**Windows (x64):** run `Co-Review-win-x64.exe` from the [latest release](https://github.com/sdsvn/co-review/releases/latest).
+It installs for your user only and puts `co-review` on your `PATH`.
 
 ```bash
 co-review ~/src/my-service     # open a repository
@@ -144,8 +145,8 @@ Codex, Gemini, OpenCode, Goose, Pi or Oh My Pi) with the model you pick. Then se
 
 ## Usage
 
-Open the **Review** panel (status bar, or `Cmd+Shift+Alt+R`) and pick what to review: the entire repository, the
-current file, a branch against its base, or a commit. Or right-click files or folders → **Start Review of Selection**.
+Open the **Review** panel (its icon in the side bar, or **Review: Toggle Review Panel** in the command palette) and
+start a review: the entire repository, the current file, a branch against its base, or a commit.
 
 | To comment on | Do this |
 |---|---|
@@ -163,8 +164,6 @@ panel lists them by file (**Open / Proposed / Resolved / All**), and **⋯** has
 - **Designs and pages:** Markdown files open rendered (the toolbar opens the source; opening at a line goes to the
   editor). Comment on text, diagram nodes and edges, or design steps. HTML files open as source; **Open in Browser**
   (editor or explorer context menu) shows the page in your browser. See [Design documents](docs/design-docs.md).
-- **Phone:** **⋯ → Open mobile view**, or `http://<host>:<port>/m/` (local connections only;
-  [over Tailscale](docs/running-and-packaging.md#phone-view)).
 
 ### Keyboard shortcuts
 
@@ -176,11 +175,9 @@ panel lists them by file (**Open / Proposed / Resolved / All**), and **⋯** has
 | `Cmd+Alt+↓` / `Cmd+Alt+↑` | Next / previous comment |
 | `Cmd+Alt+O` | Go to comment… |
 | `Cmd+Alt+V` | Mark the file as viewed (or not) |
-| `Cmd+Enter` / `Esc` | Submit / discard an empty draft |
-| `Cmd+Shift+Alt+R` | Show or hide the Review panel |
 
-Language support (TypeScript, JavaScript, JSON, Markdown, PHP, Go with `gopls`, and how to add more), configuration
-variables and themes are covered in [Running and packaging](docs/running-and-packaging.md).
+Language servers come from Lapce plugins (**Plugins** in the side bar). Configuration variables and themes are covered
+in [Building and running](docs/running-and-packaging.md).
 
 ## Documentation
 
@@ -190,41 +187,44 @@ Published at **https://sdsvn.github.io/co-review/**.
 - [Connect your agent](docs/agent-setup.md): Claude Code plugin, Pi and Oh My Pi packages, skills, MCP config
 - [Agents](docs/agents.md): ACP vs MCP, the review loop, review directories
 - [Design documents](docs/design-docs.md): the design-doc format and how to instruct agents
-- [Running and packaging](docs/running-and-packaging.md): build, run, package, languages, configuration, phone view
-- [Architecture](docs/architecture.md): how the Theia extension is organized
+- [Building and running](docs/running-and-packaging.md): build from source, package, install, configuration, languages
+- [Architecture](docs/architecture.md): the Lapce fork and the review crates
 - [llms.txt](llms.txt): the integration contract for agents
 
 ## Contributing
 
-Requires Node.js 20+, Git and a C/C++ toolchain (Xcode command-line tools on macOS, `build-essential` on Linux).
+Requires Rust (the version in `rust-toolchain.toml` is installed by `rustup`), Git and Node.js (only for `make prompts`
+and the website). On macOS, the Command Line Tools (`xcode-select --install`); no Xcode or cmake. On Linux, the
+libraries in `Makefile.lapce` (`sudo make -f Makefile.lapce ubuntu-deps`). On Windows, MSVC.
 
 ```bash
-make install                       # npm install + bundled extensions into plugins/
-make start REPO=/path/to/repo      # browser app on http://127.0.0.1:3000
-make desktop REPO=/path/to/repo    # desktop app
-make dev                           # rebuild on change
-make install-cli                   # `co-review` command running from this checkout
-make package                       # installers in applications/electron/dist
+make build                         # the app and the `co-review` command (debug, target/debug)
+make run REPO=/path/to/repo        # run the app on a repository
+make test                          # version and prompt checks, and the review crates' tests
+make install-cli                   # the `co-review` command built here, into PATH
+make package                       # this OS's release asset in target/package
+make install-app                   # package and install it, as install.sh does
 make help                          # all targets
 ```
 
-The browser and desktop apps compile native modules for different runtimes; `make browser` and `make desktop-build`
-switch between them, so build the one you run. Agent instructions (skills, commands, subagents, tool text) are
-written once in [`prompts/`](prompts/README.md): edit them there and run `make prompts`. There are no automated tests yet: changes are verified in the running
-app and with scripted MCP and ACP clients against a local server. Releases are built by
-`.github/workflows/release.yml` when a `v*` tag is pushed.
+Agent instructions (skills, commands, subagents, tool text) are written once in [`prompts/`](prompts/README.md): edit
+them there and run `make prompts`. Releases are built by `.github/workflows/release.yml` when a `v*` tag is pushed.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```
-applications/            Theia browser and desktop apps (composition, electron-builder config)
-extensions/review        the review extension (common · node · electron-node · browser)
-bin/                     co-review CLI, install-cli.sh, review server mode, gen-prompts.mjs
+lapce-app/ lapce-core/   Lapce, the editor Co-Review is a fork of (hooks marked `// co-review:`)
+lapce-proxy/ lapce-rpc/
+lapce-app/src/review/    the review UI: panel, inline threads, review pages (Floem views)
+crates/review_*          the review core: store, anchors, index, graph, MCP server, ACP agents, `co-review` command
+packaging/               release assets for macOS, Linux and Windows (package.sh, Info.plist, Inno Setup)
+bin/                     install-cli.sh, gen-prompts.mjs, check-versions.mjs
 prompts/                 the agent prompts, written once; `make prompts` copies them everywhere
 plugin/, .claude-plugin/ Claude Code plugin and its marketplace manifest
 integrations/shared      the Pi / Oh My Pi extension and slash commands
 integrations/pi, omp     Pi and Oh My Pi packages (harness adapter, co-reviewer agent)
-docs/                    guides (the source of the website's docs)
+docs/                    guides (the source of the website's docs); docs/lapce is Lapce's own
 site/                    website: Astro + Starlight (`cd site && npm run dev`), deployed from main
 llms.txt                 integration contract for agents
 ```
 
-See [Architecture](docs/architecture.md) and [Running and packaging](docs/running-and-packaging.md) for details.
+See [Architecture](docs/architecture.md) and [Building and running](docs/running-and-packaging.md) for details.

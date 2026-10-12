@@ -1,94 +1,131 @@
 # Architecture
 
-Co-Review is a Theia product, not a fork. Theia provides the IDE (editor, explorer, search, Git via `vscode.git`, terminal, LSP via VS Code built-ins). One Theia extension adds the review.
+Co-Review is a fork of [Lapce](https://lapce.dev), a native editor written in Rust. Lapce provides the IDE: the
+editor, the file explorer, search, Git, the terminal, and language servers through its plugins. Co-Review adds the
+review in its own crates (`crates/review_*`) and in one module of the app (`lapce-app/src/review/`). Lapce's own files
+carry only small hooks, each marked `// co-review:` and listed in [the fork surface](co-review/fork-surface.md).
 
 ## Directory layout
 
 ```
-applications/browser   Theia browser app (composition only)
-applications/electron  Theia desktop app + electron-builder config
-extensions/review      @co-review/review
-  src/common           Review model and RPC protocols
-  src/node             Backend: persistence, Tree-sitter,
-                       ACP client, MCP endpoint
-  src/electron-node    Desktop-only backend bindings
-  src/electron-main    Desktop app windows (background start,
-                       one window per repository)
-  src/browser          Frontend: review panel, inline editor
-                       UI, rendered Markdown, commands
-bin/co-review.mjs      CLI: start the app, `mcp` stdio bridge
-bin/gen-prompts.mjs    copies prompts/ into skills, commands,
-                       agents, app text and docs
+lapce-app/             Lapce's app (Floem UI), with Co-Review's hooks
+  src/review.rs        starts the review core with the app; connects it to windows
+  src/review/          the review UI: panel, inline threads, review pages, pickers
+lapce-core/            Lapce's core (rope, syntax, directories)
+lapce-proxy/           Lapce's proxy (files, Git, language servers, plugins)
+lapce-rpc/             messages between the app and the proxy
+crates/review_*        the review core (no UI), one crate per concern
+packaging/             release assets: package.sh, the macOS Info.plist, the Inno Setup script, icons
+bin/install-cli.sh     links the `co-review` command into PATH
+bin/gen-prompts.mjs    copies prompts/ into skills, commands, agents, the MCP server's text and docs
 prompts/               agent prompts, written once
-bin/review-server.mjs  Review server mode (co-review-server)
-integrations/shared    Pi / Oh My Pi extension and slash
-                       commands, shared by both packages
+integrations/shared    Pi / Oh My Pi extension and slash commands, shared by both packages
 integrations/pi        Pi package: adapter, subagent
 integrations/omp       Oh My Pi package: adapter, task agent
-plugin/                Claude Code plugin: MCP server + channel,
-                       skills, commands, subagent, SessionStart
-                       hook (.claude-plugin/ is its marketplace)
+plugin/                Claude Code plugin: MCP server + channel, skills, commands, subagent, SessionStart hook
+                       (.claude-plugin/ is its marketplace)
 ```
 
-The common layer defines the review model: `Review`, `ReviewThread`, `CodeLocation`, and the RPC protocols between frontend and backend.
+## One process
 
-## Backend (`src/node`)
+The app runs the review core in its own process. When it starts, it loads the store and starts the MCP server, then
+opens windows. Started with `--background` (as `co-review mcp` does for an agent), it opens no window until a review
+is shown or the app is activated.
 
-Each backend service handles one concern.
+The review crates know nothing about windows. They use plain threads and channels, and their tests run headless.
+`lapce-app/src/review/` turns their events into Floem signals on the UI thread and runs file, Git and store work off
+it.
 
-- **`ReviewStore`** — persists reviews as JSON files under `~/.co-review/workspaces/<hash>/reviews/`. All mutations are serialized per review and broadcast, so every frontend and agent sees the same state.
-- **`ReviewServiceImpl`** — JSON-RPC service, one per frontend connection (Theia `RpcConnectionHandler`).
-- **`SyntaxServiceImpl`** — Tree-sitter integration (`@vscode/tree-sitter-wasm`) for symbol paths and token anchors.
-- **`AcpAgentService`** — ACP client. Launches the review's agent, one session per thread. Streams answers and tool activity into threads, and routes permission requests to the reviewer.
-- **`CoReviewerMcp`** — the `/mcp` endpoint (Streamable HTTP) for agents in their own harness. Registers the running instance in `~/.co-review/server.json`. For Claude Code clients it also acts as a channel (`claude/channel`): questions and submissions are pushed into the session via `startChannel`.
-- **`BundleService`** — review directories: document, patches, `PR.md`, sidecar findings (proposed, idempotent), suggested edits (document rewrite / patch hand-off), OpenSpec detection, and the `review.json` state file. The companion module **`review-payloads`** maps threads to the agent-facing shapes (`t<N>` ids, targets, raw anchors).
-- **`RepoIndex`** + **`graphify`** — the repository map (Tree-sitter outline per file, cached under `~/.co-review`), coverage per area, and the overview page (`repo-overview.ts`). When the `graphify` command is installed, `graphify.ts` builds or refreshes the repository's Graphify graph (`graphify update`, code only, no LLM) before the overview is built from it, and keeps a `graphify-out/` it created out of `git status` via `.git/info/exclude`.
-- **`GitHubReviews`** (`github.ts`) — posts a pull request's review to GitHub (`gh api …/pulls/<n>/reviews`): line comments and suggestions from the open threads the reviewer stands behind, the rest in the body, the verdict as the event, with fallbacks for your own pull request and for lines no longer in the diff. The target comes from the review directory's `PR.md`.
-- **`CodeFolders`** (`code-folders.ts`) — a change review's code (`bundle.code`), so the IDE works around the diff: the repository itself for the reviewer's own change, else a git worktree of the head under `~/.co-review/worktrees/`, checked out neighbourhood first (the changed files' folders and those of its blast radius, sparse), the rest in the background; removed when the review is archived or deleted, recreated on unarchive. The review stays keyed by its review directory; its window opens on the code folder, which lists it (`ReviewStore.listForWindow`). It also reads base versions (`readBaseFile`) and turns an editor comment on a line of the diff into a comment on the diff (`onDiff`). `graphify.ts`'s `blastRadius` gives what the change touches and what depends on it, from the Graphify graph.
-- **`OverviewPages`** (`overview-page.ts`) — a review's overview page, its front page, for every review but a design or knowledge bundle (which opens on its document): the pull request (`PR.md`), the agent's overview (`open_review`'s `overview`: what it does, a Mermaid flowchart, the blast radius), the files each patch changes, every thread grouped by area, and for a repository review the repository's areas (`repo-overview.ts`). Written as Markdown under `~/.co-review/workspaces/<hash>/pages/<review>/overview.md` and rewritten when the review changes. It opens in the document view; comments on it reach agents as `target: "overview"`.
-- **`MobileReview`** — the phone view (`/m/`) and its small REST API (`/api/m`). Allowed hosts: localhost plus any listed in `CO_REVIEW_ALLOWED_HOSTS`.
-- **`AgentSetup`** — the in-app setup commands. Installs the bundled skills and writes (or hands out) each harness's MCP config, launching `co-review mcp` with this machine's paths.
-- **`HumanDecisions` / `AgentPresenceTracker`** — pending reviewer decisions (ACP permissions, `ask_reviewer`) and whether an MCP agent is currently listening.
+## The review core (`crates/`)
 
-## Desktop windows (`src/electron-main`)
+- **`review_model`**: reviews, threads, locations, anchors and the payloads agents see. The JSON field names are the
+  ones the Theia app wrote, and unknown fields are kept, so either app reads the other's data.
+- **`review_store`**: reviews as JSON files under `~/.co-review/workspaces/<hash>/reviews/` (`CO_REVIEW_HOME`
+  overrides the folder). Changes are applied one at a time per review, saved, and broadcast to every window and
+  agent.
+- **`review_anchor`**: comments that follow the code (below).
+- **`review_index`**: the repository map (a Tree-sitter outline of every source file), its areas, and coverage.
+  Symbols are cached by content (the git blob hash) in a cache shared by every worktree of the repository.
+- **`review_graph`**: runs [Graphify](https://graphify.net) (`graphify update`, code only, no LLM) when it is
+  installed, shares its output across the repository's worktrees, and builds the repository overview and a change's
+  blast radius from the graph.
+- **`review_bundle`**: review directories: the document, patches, `PR.md`, sidecar findings, suggested edits, OpenSpec
+  changes and the `review.json` state file.
+- **`review_design`**: the design-document format check ([Design documents](design-docs.md)).
+- **`review_markdown`**: rendered Markdown pages as blocks to draw, and the page's text that text anchors use.
+- **`review_mermaid`**: Mermaid diagrams parsed and laid out (ported from [Ferrite](https://github.com/OlaProeis/Ferrite)),
+  with the node and edge ids comments anchor to.
+- **`review_pages`**: every review's overview page, written at once with what is cheap; the repository overview and
+  the blast radius fill in when they are ready.
+- **`review_code`**: a change review's code: the repository itself for your own change, or a git worktree of a pull
+  request's head under `~/.co-review/worktrees/`, its changed neighbourhood first. It also reads base versions.
+- **`review_github`**: posts a pull request's review through the GitHub CLI (`gh`).
+- **`review_mcp`**: the MCP server for agents in their own harness: Streamable HTTP at
+  `http://127.0.0.1:<port>/mcp?root=<repo>`, local connections only, recorded in `~/.co-review/server.json`. The tools
+  are in [`llms.txt`](../llms.txt). It tracks which agents are listening, the reviewer's pending decisions, and the
+  Claude Code channel.
+- **`review_agents`**: the ACP client. It launches the agent the reviewer connects, with one session per thread, and
+  streams answers, tool activity and permission requests into the threads.
+- **`review_cli`**: the `co-review` command. It opens a repository, runs the stdio MCP bridge (`co-review mcp`), and
+  provides `status`, `setup pi|omp` and `logs`. It starts fast: the `mcp` path loads no UI code.
 
-**`ReviewElectronMainApplication`** replaces Theia's Electron main application. Started with `--background` (as `co-review mcp` does for an agent), it opens no window until a review is shown or the app is activated. `open_review` shows a review by launching the app again with the repository; the running instance gets it as a second instance and opens that repository's window, or focuses it if one is open, instead of opening a second one. **`ReviewWindows`** (backend) knows which workspaces have a window (each frontend says which one it shows) and which windows agents showed. When the reviewer closes a review's window, or quits (the backend's `onStop` records it before the process exits), the review is marked `closed` and its agents' `await_reviewer` returns that, also after Co-Review restarts. In an app started with `--background`, when the last agent using a window it showed is done with it (the reviewer approved the review, or the agent's MCP session ended), the window says why and closes after a countdown unless the reviewer keeps it open; with no window left, the app quits.
+## The review UI (`lapce-app/src/review/`)
 
-## Frontend (`src/browser`)
-
-The frontend renders the review UI in the Theia workbench.
-
-- **`ReviewManager`** — client-side state of the current workspace: reviews, active review, and drafts.
-- **`ReviewEditorDecorator`** + **`InlineZone`** — GitHub-style inline review. Click **+** in the gutter (or drag over several lines) to start a thread. Threads and drafts render under the code as Monaco view zones with overlay widgets, plus gutter glyphs and hovers.
-- **`ReviewWidget`** — the Review panel: agent, drafts, and threads grouped by location.
-- **`ReviewLocations`** — creates and resolves semantic locations.
-- **`DocumentReviewWidget`** (`document/`) — rendered Markdown, pseudocode tree, and Mermaid with comments on text, diagrams, nodes, edges, and steps. **`PatchReviewWidget`** (`patch/`) renders patch pages with line, range, file, and patch comments. Markdown files open rendered through the document open handler; opening at a line goes to the editor. HTML is not rendered: **Open in Browser** hands the page to the system browser (`ReviewService.openInBrowser`).
-- **`CodeNavigation`** (`review-code.ts`) + **`ReviewChange`** (`review-change.ts`) — stepping from a change review's diff into its code: a line number opens the head file (or, old side, the base version via the read-only `co-review-base:` resource), Cmd/Ctrl-click and hover ask the language server at the same position in the head file (loaded as a model, no editor), **Compare** opens a diff editor. `ReviewChange` reads the patch's files; `ReviewChangeOpenHandler` opens a modified file (from the explorer, Quick Open) as base ↔ head, `ReviewChangeDecorator` marks added and removed lines on a changed file opened as itself, `ReviewNavigatorDecorator` colours the changed files and folders in the explorer, and `ReviewNavigatorFilter` (replacing Theia's `FileNavigatorFilter`) narrows it to them on request. A thread on a file of the diff is labelled, grouped and opened by that file (`ReviewManager.patchFile`, `ReviewNavigator.openChangedFile`). Comments live on the head file, so they show on a diff editor's head side too. Diff threads on new-side lines are also placed in the head file's editor (never saved from there).
-- **`SyntaxSymbols`** — Tree-sitter document symbols for Monaco (breadcrumbs, sticky scroll, Go to Symbol, outline) for languages with a grammar, when no language server provides symbols.
-- **`ReviewShellFilter`** — removes IDE-only workbench parts (debug, tests, tasks).
-- **`ReviewSelectionActions`** — the *Ask Agent / Comment* toolbar on selections.
-- **`ReviewContribution`** — commands, menus, keybindings, review and agent pickers.
-- **`CoReviewThemeContribution`** (`theme/`) — the Co-Review Dark / Light color themes (following the OS by default), the `coReview.agent` theme color, and the favicon. Brand assets live at `docs/assets/logo.svg` and `applications/electron/resources/icon.png` (the app icon, the logo on a 1024 px grid).
+- **The Review panel** (`panel.rs`, `submit.rs`, `picker.rs`, `commands.rs`) shows the review switcher, the scope, the
+  agent, drafts, threads by file or by area, the filters, coverage, and Submit review. The pickers (Go to Comment…, the
+  ⋯ menu, Connect agent…) use Lapce's palette. The `Review:` commands live in `commands.rs`.
+- **Inline threads** (`inline.rs`, `thread.rs`, `drafts.rs`): Floem's editor can't place widgets between lines.
+  So a line with threads gets blank rows of phantom text, and an overlay draws the threads there. The gutter has
+  thread markers and **+**. Drafts are saved per review and survive a restart.
+- **Review pages** (`page.rs`) are editor tabs, like Settings and Keymap:
+  - the overview and document pages (`document.rs`, `markdown_view.rs`, `design_tree.rs`, `mermaid.rs`);
+  - the pull-request page (`pull_request.rs`), a scrolling list of per-file diffs with thread rows between lines.
+- **The change in the code** (`changed_files.rs`, `code.rs`): the project panel colours the changed files and can
+  show only them. A changed file opens as base and head side by side. From the pull-request page, a line number opens
+  the file, and go to definition and hover use the language server.
+- **Windows** (`windows.rs`, `stale.rs`): there is one window per repository, and showing a review opens or focuses
+  it. Closing a review's window, or quitting, tells its agents (`await_reviewer` returns `closed`). In an app started
+  in the background, a window an agent showed closes after a countdown once that agent is done. An app that an update
+  replaced on disk quits when it can.
 
 ## Locations that follow the code
 
-A comment tracks what happened to the code it is on, and says so when that code is gone. Line, range and document text comments carry a **tracked range** (`location.tracked`, `common/anchor-tracking.ts`): character offsets in a version of the file (a content hash), the text and 40 characters of context on each side, and a state, separate from the thread's status:
+A comment tracks what happened to the code it is on, and says so when that code is gone. Line, range and document
+text comments carry a **tracked range**: character offsets in a version of the file (a content hash), the text and 40
+characters of context on each side, and a state, separate from the thread's status:
 
-- `active` — the text is there unchanged (it may have moved);
-- `modified` — it changed but is still identified (the original quote is kept);
-- `removed` — deleted, or not located reliably;
-- `ambiguous` — several places fit about equally well.
+- `active`: the text is there unchanged (it may have moved);
+- `modified`: it changed but is still identified (the original quote is kept);
+- `removed`: deleted, or not located reliably;
+- `ambiguous`: several places fit about equally well.
 
-Removed and ambiguous comments are **out of scope**: never placed on code, shown in the panel's Out of scope tab, and back in scope if the code changes again and they can be placed.
+Removed and ambiguous comments are **out of scope**: never placed on code, shown in the panel's Out of scope filter,
+and back in scope if the code changes again and they can be placed.
 
-**`AnchorTracker`** (backend) resolves a review's anchors whenever it is read (the window, `get_review`, `await_reviewer`) or a commented file changes: from the snapshot of the anchor's version (content-addressed under `~/.co-review/workspaces/<hash>/snapshots/`), it computes the edits to the current file with **diff-match-patch** (a line diff, then characters within changed lines) and maps the range through them with **CodeMirror change sets** (`@codemirror/state`), which also say how much of it was deleted. Same text at the mapped range: active; mostly kept and similar: modified, unless the unchanged text sits, with its context, where the edits wrote (a moved block): active there. Otherwise it searches: exact occurrences scored by matching context (one clear best: active; several close: ambiguous), then a fuzzy match (diff-match-patch's matcher) near the mapped position, only ever in text the edits wrote, never on code that was already there untouched; else removed. An edit Co-Review applies itself (an accepted suggestion) is mapped exactly, without a diff. The thresholds were tuned on real history with `extensions/review/test/anchor-corpus.mjs` (`make test` runs the unit tests).
+`review_anchor` resolves a review's anchors whenever the review is read (the window, `get_review`, `await_reviewer`)
+or a commented file changes. It starts from the snapshot of the anchor's version, content-addressed under
+`~/.co-review/workspaces/<hash>/snapshots/`. It computes the edits to the current file with diff-match-patch (a line
+diff, then characters within changed lines) and maps the range through them.
 
-In an open editor, before a save, the older resolution below still places comments live:
+- Same text at the mapped range: active.
+- Mostly kept and similar: modified, unless the unchanged text sits, with its context, where the edits wrote (a moved
+  block): then it is active there.
+- Otherwise it searches. Exact occurrences are scored by matching context: one clear best is active, several close
+  ones are ambiguous. Then it tries a fuzzy match near the mapped position.
+- The search only looks in text the edits wrote, never on code that was already there untouched. If nothing fits,
+  the comment is removed.
 
-1. **Symbol** — the comment targets a symbol; resolve it by path.
-2. **Exact** — the text at the stored range is unchanged.
-3. **Moved** (token match) — the same token sequence appears elsewhere, surviving moves and reformatting. Persisted when the file is saved.
-4. **Moved** (text match, no grammar) — for languages without a Tree-sitter grammar, exact text match (neighbours break ties), then whitespace-normalised.
-5. **Outdated** — shown where it was with its original code, never moved onto code it may not describe.
+An edit Co-Review applies itself (an accepted suggestion) is mapped exactly, without a diff.
 
-Tree-sitter is used for what makes locations durable, and for a file's structure (symbols) where no language server provides it. Navigation (definition, references, hierarchies) stays with the language servers.
+In an open editor, comments follow every edit before it is saved. A comment is placed by its symbol, by its exact text,
+by token sequence (which survives reformatting), or by text for languages without a grammar. Otherwise it is shown as
+outdated where it was, with its original code.
+
+Tree-sitter is used for what makes locations durable, and for the repository map. Navigation (definition,
+references) stays with the language servers.
+
+## Tests
+
+Each crate's tests replay fixtures recorded from the Theia app that Co-Review was built on before (`tests/fixtures`,
+and the MCP sessions in `crates/review_mcp/tests/conformance/`), so agents and existing data see the same behaviour.
+`make test` runs them; CI (`.github/workflows/rust.yml`) runs them on macOS, Linux and Windows.

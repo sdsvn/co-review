@@ -2,8 +2,8 @@
 
 The instructions Co-Review gives agents live here, once. `make prompts` copies them into every place an agent reads
 them: the Claude Code plugin (skills, commands, subagent), the Pi and Oh My Pi packages, the app's MCP and ACP text
-(`extensions/review/src/node/prompts.gen.ts`), `llms.txt` and the docs. **Edit these files, then run `make prompts`.**
-`make check-prompts` fails when a copy is out of date.
+(the generated region of `crates/review_mcp/src/prompts.rs`), `llms.txt` and the docs. **Edit these files, then run
+`make prompts`.** `make check-prompts` fails when a copy is out of date.
 
 In a Markdown file, a copy sits between markers, and the generator rewrites what's in between:
 
@@ -23,7 +23,7 @@ Conventions:
   caller's line and indents its own continuation lines by three spaces.
 - Wrap at about 115 characters, except `answer-style*.md`, which are single lines embedded as strings.
 - The tool calls and result fields a fragment names (`format.warnings`, `status: "proposed"`, anchor types) are the
-  real ones from `extensions/review/src/node/co-reviewer-mcp.ts`; check there before changing one.
+  real ones from `crates/review_mcp` (`tools.rs`, `reviewer.rs`); check there before changing one.
 
 | Fragment | Used by |
 |---|---|

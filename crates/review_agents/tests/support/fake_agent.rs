@@ -1,4 +1,4 @@
-//! A scripted ACP agent over stdio, for the tests and the TypeScript recorder (`tests/gen/record.mjs`).
+//! A scripted ACP agent over stdio, for the tests (the fixtures were recorded with it from the Theia app).
 //!
 //! Every message it receives is appended to the file named by its first argument, or `$FAKE_ACP_LOG` (JSON lines), so
 //! a test can check what the client sent.

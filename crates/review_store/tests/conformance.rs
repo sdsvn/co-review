@@ -1,7 +1,7 @@
-//! Conformance test: runs the same sequence of operations as gen/gen.mjs on the
+//! Conformance test: runs the same sequence of operations as the recorder ran on the
 //! TypeScript ReviewStore and verifies the Rust store produces compatible JSON.
 //!
-//! Since gen.mjs generates different UUIDs and timestamps each run, we compare
+//! Since the recorder generated different UUIDs and timestamps each run, we compare
 //! structurally: same fields, same field names (camelCase), same types, same
 //! invariants (thread numbers, message counts, etc.).
 
@@ -87,7 +87,7 @@ mod tests {
         assert_eq!(message.status, Some(MessageStatus::Done));
     }
 
-    /// Run the same operations as gen.mjs and verify the output.
+    /// Run the same operations as the recording and verify the output.
     #[test]
     fn test_operations_match_ts() {
         let tmp = tempfile::tempdir().unwrap();

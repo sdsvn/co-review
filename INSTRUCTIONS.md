@@ -14,8 +14,7 @@ workspace:
 ```
 lapce-app/ lapce-core/ lapce-proxy/ lapce-rpc/   Lapce (upstream, Apache-2.0)
 crates/review_*                                  Co-Review's crates (EPL-2.0)
-integrations/ plugin/ prompts/ site/ docs/ llms.txt install.sh
-extensions/ applications/                        the Theia app, until the Lapce app replaces it
+integrations/ plugin/ prompts/ site/ docs/ llms.txt install.sh packaging/
 ```
 
 Building needs Rust (the version in `rust-toolchain.toml`) and the platform's C toolchain: the Command Line Tools on
@@ -32,7 +31,7 @@ git merge lapce/master
 - The remote `lapce` is https://github.com/lapce/lapce. There are no recent releases, so the base is `master`.
 - Merge, never rebase: the history must show what came from upstream. Upstream merges are their own commits
   ("Merge Lapce <short sha>"), never mixed with feature work.
-- Lapce's `README.md`, `Makefile` and docs live under `docs/lapce/` and `Makefile.lapce`. On a merge, take their
+- Lapce's `README.md`, `CONTRIBUTING.md`, `Makefile` and docs live under `docs/lapce/` and `Makefile.lapce`. On a merge, take their
   changes there, not at the root. Lapce's release workflow is not kept: Co-Review's `.github/workflows/release.yml`
   and `packaging/` build and package the app, so a merge that brings Lapce's release workflow back drops it again.
 
@@ -73,10 +72,10 @@ Agents and existing users must not notice the switch. These are fixed and covere
 together with every integration and with a version bump.
 
 1. **MCP tools**: names, arguments, defaults, result shapes, error texts and the server instructions, exactly as in
-   `llms.txt` and `extensions/review/src/node/co-reviewer-mcp.ts` of the Theia app (the reference).
+   `llms.txt` and the MCP sessions recorded from the Theia app (`crates/review_mcp/tests/conformance/`).
 2. **Data**: `~/.co-review` layout (`workspaces/<sha256(root uri)[0:16]>/reviews/*.json`, `workspace.json`,
    `snapshots/`, `pages/`, `worktrees/`, `server.json`, `logs/`), `CO_REVIEW_HOME`, and every JSON shape in
-   `review-model.ts`. The new app reads data the Theia app wrote, and the other way round, so users can switch back.
+   `review_model` (the Theia app's `review-model.ts`). The new app reads data the Theia app wrote, and the other way round, so users can switch back.
 3. **Review directories**: `review.json`, `PR.md`, `<patch>.comments.json(l)` and the anchor formats in `llms.txt`.
 4. **The `co-review` command**: subcommands, flags, exit codes and the stdio MCP bridge's behaviour (handshake
    answered locally, app started on the first tool call, reconnect, exit with the harness).
@@ -85,16 +84,19 @@ together with every integration and with a version bump.
 6. **Prompts**: `prompts/` stays the single source; `bin/gen-prompts.mjs` copies them into skills, commands, agents,
    app text and docs. Never edit a generated copy.
 
-**How it's checked.** Before writing a crate, record the reference behaviour from the Theia app (the compiled
-TypeScript in `extensions/review/lib`): each crate keeps a `tests/gen/*.mjs` recorder and the fixtures it wrote, and
-its tests replay them. MCP sessions for the four workflows live in `crates/review_mcp/tests/conformance/`.
+**How it's checked.** The reference behaviour was recorded from the Theia app before each crate was written. The
+Theia app and its recorders are gone (task 8.4); the recorded fixtures are now the reference: each crate's
+`tests/fixtures/` (and `review_index`'s `tests/gen/expected.json`), replayed by its tests, and the MCP sessions for
+the four workflows in `crates/review_mcp/tests/conformance/`. Change a fixture only for a deliberate contract change,
+and say so in the commit.
 
-## 3. Porting the TypeScript
+## 3. Where the TypeScript went
 
-Port behaviour, not structure: read the TypeScript, its tests and its docs, then write idiomatic Rust. Where the
-TypeScript works around Theia (DI, RPC between frontend and backend, Monaco view zones), drop the workaround.
+The Theia app has been removed; `git log -- extensions/` has it. Behaviour was ported, not structure: idiomatic Rust,
+checked against the recorded fixtures; workarounds for Theia (DI, RPC between frontend and backend, Monaco view
+zones) were dropped. Where each part of the Theia app went:
 
-| Theia app (extensions/review/src) | Crate | Notes |
+| Theia app (`extensions/review/src`, removed) | Crate | Notes |
 |---|---|---|
 | `common/review-model.ts`, `review-protocol.ts` | `review_model` | serde with the same field names; unknown fields kept |
 | `common/anchor-tracking.ts`, `node/anchor-tracker.ts`, `anchor-snapshots.ts` | `review_anchor`, `review_store` | diff-match-patch ported exactly; offsets in UTF-16 code units |
@@ -159,7 +161,7 @@ layout, redo its egui drawing in Floem, and keep its license notice with the por
 | Kind | Where | What |
 |---|---|---|
 | Unit | each `review_*` crate | what fixtures don't already cover |
-| Fixtures | `crates/*/tests/fixtures`, `tests/gen/*.mjs` | outputs recorded from the TypeScript, replayed exactly |
+| Fixtures | `crates/*/tests/fixtures` | outputs recorded from the TypeScript (now removed), replayed exactly |
 | Conformance | `crates/review_mcp/tests/conformance/` | recorded MCP sessions; the `co-review` bridge tests |
 | UI | `lapce-app/src/review/` | Floem views driven headless where possible; the rest checked by running the app |
 | End to end | `tests/e2e/` | the Claude Code plugin and the Pi package run each workflow against the app with a scripted reviewer |
@@ -175,9 +177,7 @@ works on macOS, Linux and Windows.
 - **Versions**: the app version is the single source; `make check-versions` fails when the plugin manifests or the
   Pi / Oh My Pi packages differ. Releases bump only the recorded version fields, never a blind search-and-replace.
 - **Docs**: the user docs (`README.md`, `docs/workflows.md`, `agents.md`, `agent-setup.md`, `design-docs.md`) are
-  updated for anything that changed (install, the desktop-only app). `docs/architecture.md` is rewritten for the
-  crates when the Theia app goes.
-- **Order of work**: follow `tasks.md`. Inside a phase, the headless crate before its UI, the recording before the
-  port.
+  updated for anything that changed. `docs/architecture.md` describes the fork and the crates.
+- **Order of work**: follow `tasks.md`. Inside a phase, the headless crate before its UI.
 - **When stuck** on Floem for more than half a day, find the Lapce view that already does something similar
   (section 4's table) and copy its shape before inventing one.

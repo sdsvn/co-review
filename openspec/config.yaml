@@ -10,9 +10,9 @@ context: |
 
   Platforms: macOS, Linux and Windows desktop. There is no browser app.
 
-  Reference implementation: the Theia app (extensions/review in this repository, release 0.6.x). Its docs
-  (docs/workflows.md, docs/agents.md, docs/architecture.md, docs/design-docs.md, llms.txt) describe the behaviour
-  these specs require.
+  Reference implementation: the Theia app (release 0.6.x), now removed from this repository. The fixtures recorded
+  from it (crates/*/tests/fixtures, crates/review_mcp/tests/conformance) and the docs (docs/workflows.md,
+  docs/agents.md, docs/design-docs.md, llms.txt) describe the behaviour these specs require.
 
 rules:
   specs:
@@ -22,5 +22,5 @@ rules:
     - The MCP tool contract in llms.txt and the data under ~/.co-review are part of the contract
     - File paths in scenarios must hold on Windows as well as macOS and Linux
   tasks:
-    - Record the Theia app's behaviour (MCP sessions, corpora) before porting a capability
+    - Check a capability against the fixtures recorded from the Theia app (MCP sessions, corpora)
     - Every task that touches files, git or processes is verified on Windows CI
