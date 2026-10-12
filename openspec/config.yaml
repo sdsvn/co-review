@@ -1,0 +1,26 @@
+schema: spec-driven
+
+context: |
+  Co-Review is a repository review app: a person reviews a whole repository, their agent's change, someone
+  else's pull request or a design document, with agents taking part as co-reviewers (MCP and ACP).
+
+  Tech stack: a fork of a native Rust editor, chosen in the change's design.md (Zed or Lapce). The host provides
+  the IDE: editor, file tree, search, Git, language servers, terminal. Co-Review adds the review in new crates named
+  review_*, with as few edits to the host's own code as possible (see INSTRUCTIONS.md).
+
+  Platforms: macOS, Linux and Windows desktop. There is no browser app.
+
+  Reference implementation: the Theia app (extensions/review in this repository, release 0.6.x). Its docs
+  (docs/workflows.md, docs/agents.md, docs/architecture.md, docs/design-docs.md, llms.txt) describe the behaviour
+  these specs require.
+
+rules:
+  specs:
+    - Name no host editor in specs or the proposal; host-specific choices belong in design.md
+    - Specify only behaviour Co-Review has today. Nothing a host editor provides, and no new features
+    - Describe what the reviewer or the agent observes; put mechanisms in design.md unless they are part of the contract
+    - The MCP tool contract in llms.txt and the data under ~/.co-review are part of the contract
+    - File paths in scenarios must hold on Windows as well as macOS and Linux
+  tasks:
+    - Record the Theia app's behaviour (MCP sessions, corpora) before porting a capability
+    - Every task that touches files, git or processes is verified on Windows CI

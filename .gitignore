@@ -27,3 +27,6 @@ node_modules/
 # Local Claude Code config (machine-specific paths)
 /.claude/launch.json
 /.claude/settings.local.json
+
+# Rust build output
+/target/
