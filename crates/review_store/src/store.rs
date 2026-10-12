@@ -188,7 +188,7 @@ impl ReviewStore {
     }
 
     /// Every review in every workspace.
-    fn list_all(&self) -> Vec<Review> {
+    pub fn list_all(&self) -> Vec<Review> {
         let Ok(entries) = fs::read_dir(self.home.join("workspaces")) else {
             return Vec::new();
         };

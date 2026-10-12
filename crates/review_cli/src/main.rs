@@ -14,7 +14,7 @@ Commands:
   mcp [dir]          MCP server on stdio for agent harnesses; bridges to Co-Review's /mcp endpoint with dir
                      (default: cwd) as repository, starting Co-Review on the first tool call
   status [dir]       this Co-Review's version and each agent integration's (flagging any that differ), then
-                     the open reviews of dir in a running Co-Review; never starts it
+                     the open reviews of dir; never starts Co-Review
                      (--claude-hook: as Claude Code SessionStart context, or nothing)
   setup <pi|omp>     install the Pi or Oh My Pi package that ships with this Co-Review
   logs               whether Co-Review answers, and its recent debug log (windows, backend, agent bridges),
@@ -23,8 +23,8 @@ Commands:
   help               print this help
 
 Options:
-  --port <n>         port of the Co-Review to use or start (default: a running one, else 3000; or $CO_REVIEW_PORT)
-  --no-open          start without opening a browser or window
+  --port <n>         port of the Co-Review to use (default: a running one, else 3000; or $CO_REVIEW_PORT)
+  --no-open          start in the background, without opening a window
   -v, --version      print the version
   -h, --help         print this help
 ";
@@ -134,15 +134,12 @@ fn run(arguments: Arguments) -> anyhow::Result<u8> {
             Ok(0)
         }
         _ => {
-            let located = App::locate();
-            let base =
-                app::ensure_server(located.as_ref(), arguments.port, &root, !arguments.no_open)?;
-            let url = format!("{base}/#{}", root.display());
-            log(&url);
-            // The desktop app opens the repository itself.
-            if !arguments.no_open && !located.as_ref().is_some_and(App::is_desktop) {
-                app::open_url(&url);
-            }
+            app::ensure_server(
+                App::locate().as_ref(),
+                arguments.port,
+                &root,
+                !arguments.no_open,
+            )?;
             Ok(0)
         }
     }
