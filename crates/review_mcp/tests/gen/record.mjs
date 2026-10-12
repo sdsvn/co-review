@@ -13,7 +13,7 @@
  */
 
 import { execFileSync } from 'child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'fs';
 import { createRequire } from 'module';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
@@ -100,6 +100,17 @@ function repository() {
         { op: 'git', args: ['-C', '{repo}', 'add', '-A'] },
         { op: 'git', args: ['-C', '{repo}', 'commit', '-q', '-m', 'Initial'] }
     ];
+}
+
+/**
+ * The repository's Graphify output, built once with `graphify update` and kept beside this script, so the overview
+ * comes from the same graph whether or not the machine replaying it has graphify.
+ */
+function graph() {
+    const here = dirname(fileURLToPath(import.meta.url));
+    return ['graph.json', 'GRAPH_REPORT.md'].map(name => ({
+        op: 'write', path: `{repo}/graphify-out/${name}`, text: readFileSync(join(here, 'graphify-out', name), 'utf8')
+    }));
 }
 
 /** Runs fixture operations (paths and arguments with placeholders). */
@@ -287,7 +298,7 @@ async function act(step, state) {
 
 // ---------------------------------------------------------------- audit: the whole repository
 await record({
-    name: 'audit', client: 'claude-code', placeholders: { repo: '{tmp}/audit' }, fixture: repository(), steps: [
+    name: 'audit', client: 'claude-code', placeholders: { repo: '{tmp}/audit' }, fixture: [...repository(), ...graph()], steps: [
         { kind: 'call', tool: 'open_review', arguments: { title: 'Audit of the shop', open: false } },
         { kind: 'call', tool: 'repo_map', arguments: {} },
         { kind: 'call', tool: 'repo_map', arguments: { path: 'src/orders' } },
