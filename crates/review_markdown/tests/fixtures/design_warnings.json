@@ -1,0 +1,64 @@
+{
+  "name": "design_warnings",
+  "fileName": "index.md",
+  "markdown": "---\nco-review: design\n---\n# Warned\n\n## Design\n* not a step\n\n## Extra\nSee a.ts:12 here.\n\n```js\nx()\n```\n",
+  "title": "Warned",
+  "pseudocode": true,
+  "blocks": [],
+  "format": {
+    "mode": "design",
+    "declared": true,
+    "warnings": [
+      "`## Design` uses `*`, `+` or numbered items; steps must be `- ` bullets.",
+      "Sections outside the contract (shown as plain Markdown): `## Extra`.",
+      "Line references (`a.ts:12`): a person reads this; describe the code in words and name only the top-level module or function.",
+      "Code blocks other than Mermaid: describe the behaviour in words; the code belongs in the implementation."
+    ]
+  },
+  "text": "Declares co-review: design, but:## Design uses *, + or numbered items; steps must be -  bullets.Sections outside the contract (shown as plain Markdown): ## Extra.Line references (a.ts:12): a person reads this; describe the code in words and name only the top-level module or function.Code blocks other than Mermaid: describe the behaviour in words; the code belongs in the implementation.WarnedDesign\nnot a step\n\nExtraSee a.ts:12 here.\nx()\n\n",
+  "selections": [
+    {
+      "text": "not a step",
+      "occurrence": 0,
+      "start": 400,
+      "end": 412,
+      "anchor": {
+        "type": "text",
+        "exact": "not a step",
+        "prefix": "ongs in the implementation.WarnedDesign\n",
+        "suffix": "\n\nExtraSee a.ts:12 here.\nx()\n\n",
+        "startOffsetHint": 401,
+        "endOffsetHint": 411
+      }
+    },
+    {
+      "text": "Declares",
+      "occurrence": 0,
+      "start": 0,
+      "end": 9,
+      "anchor": {
+        "type": "text",
+        "exact": "Declares",
+        "prefix": "",
+        "suffix": " co-review: design, but:## Design uses *",
+        "startOffsetHint": 0,
+        "endOffsetHint": 8
+      }
+    },
+    {
+      "text": "See a.ts",
+      "occurrence": 0,
+      "start": 418,
+      "end": 426,
+      "anchor": {
+        "type": "text",
+        "exact": "See a.ts",
+        "prefix": "mentation.WarnedDesign\nnot a step\n\nExtra",
+        "suffix": ":12 here.\nx()\n\n",
+        "startOffsetHint": 418,
+        "endOffsetHint": 426
+      }
+    }
+  ],
+  "located": []
+}

@@ -1,0 +1,59 @@
+{
+  "name": "bundle_page",
+  "fileName": "limiter.md",
+  "markdown": "---\ntype: Package\ndescription: Rate limiting for the API\nresource: src/limiter.go\n---\n# Limiter\n\nSee `src/limiter.go:42` and [the store](/packages/store.md), [code](src/limiter.go#L10-L20).\n",
+  "title": "Limiter",
+  "pseudocode": false,
+  "blocks": [],
+  "format": {
+    "mode": "plain",
+    "declared": false,
+    "warnings": []
+  },
+  "text": "PackageRate limiting for the APIsrc/limiter.goLimiter\nSee src/limiter.go:42 and the store, code.\n",
+  "selections": [
+    {
+      "text": "Package",
+      "occurrence": 0,
+      "start": 0,
+      "end": 7,
+      "anchor": {
+        "type": "text",
+        "exact": "Package",
+        "prefix": "",
+        "suffix": "Rate limiting for the APIsrc/limiter.goL",
+        "startOffsetHint": 0,
+        "endOffsetHint": 7
+      }
+    },
+    {
+      "text": "Rate limiting",
+      "occurrence": 0,
+      "start": 7,
+      "end": 21,
+      "anchor": {
+        "type": "text",
+        "exact": "Rate limiting",
+        "prefix": "Package",
+        "suffix": " for the APIsrc/limiter.goLimiter\nSee sr",
+        "startOffsetHint": 7,
+        "endOffsetHint": 20
+      }
+    },
+    {
+      "text": "Limiter\nSee",
+      "occurrence": 0,
+      "start": 46,
+      "end": 58,
+      "anchor": {
+        "type": "text",
+        "exact": "Limiter\nSee",
+        "prefix": "eRate limiting for the APIsrc/limiter.go",
+        "suffix": " src/limiter.go:42 and the store, code.\n",
+        "startOffsetHint": 46,
+        "endOffsetHint": 57
+      }
+    }
+  ],
+  "located": []
+}

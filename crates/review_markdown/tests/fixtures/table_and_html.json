@@ -1,0 +1,101 @@
+{
+  "name": "table_and_html",
+  "fileName": "table.md",
+  "markdown": "Intro <b>bold</b> text.\n\n| Name | Value |\n|---|--:|\n| a | 1 |\n| b |  |\n\n<div>\nblock html\n</div>\n\n~~gone~~ and https://example.com/x linked.\n\n![alt text](img.png) after image.\n\n- [ ] task\n- [x] done\n",
+  "title": "table.md",
+  "pseudocode": false,
+  "blocks": [],
+  "format": {
+    "mode": "plain",
+    "declared": false,
+    "warnings": []
+  },
+  "text": "Intro <b>bold</b> text.\n\n\n\nName\nValue\n\n\n\n\na\n1\n\n\nb\n\n\n\n\n<div>\nblock html\n</div>\ngone and https://example.com/x linked.\n after image.\n\n[ ] task\n[x] done\n\n",
+  "selections": [
+    {
+      "text": "Name",
+      "occurrence": 0,
+      "start": 26,
+      "end": 32,
+      "anchor": {
+        "type": "text",
+        "exact": "Name",
+        "prefix": "Intro <b>bold</b> text.\n\n\n\n",
+        "suffix": "\nValue\n\n\n\n\na\n1\n\n\nb\n\n\n\n\n<div>\nblock html\n",
+        "startOffsetHint": 27,
+        "endOffsetHint": 31
+      }
+    },
+    {
+      "text": "a\n1",
+      "occurrence": 0,
+      "start": 41,
+      "end": 46,
+      "anchor": {
+        "type": "text",
+        "exact": "a\n1",
+        "prefix": "tro <b>bold</b> text.\n\n\n\nName\nValue\n\n\n\n\n",
+        "suffix": "\n\n\nb\n\n\n\n\n<div>\nblock html\n</div>\ngone an",
+        "startOffsetHint": 42,
+        "endOffsetHint": 45
+      }
+    },
+    {
+      "text": "block html",
+      "occurrence": 0,
+      "start": 59,
+      "end": 71,
+      "anchor": {
+        "type": "text",
+        "exact": "block html",
+        "prefix": "xt.\n\n\n\nName\nValue\n\n\n\n\na\n1\n\n\nb\n\n\n\n\n<div>\n",
+        "suffix": "\n</div>\ngone and https://example.com/x l",
+        "startOffsetHint": 60,
+        "endOffsetHint": 70
+      }
+    },
+    {
+      "text": "gone",
+      "occurrence": 0,
+      "start": 77,
+      "end": 83,
+      "anchor": {
+        "type": "text",
+        "exact": "gone",
+        "prefix": "\n\n\n\na\n1\n\n\nb\n\n\n\n\n<div>\nblock html\n</div>\n",
+        "suffix": " and https://example.com/x linked.\n afte",
+        "startOffsetHint": 78,
+        "endOffsetHint": 82
+      }
+    },
+    {
+      "text": "after image",
+      "occurrence": 0,
+      "start": 117,
+      "end": 129,
+      "anchor": {
+        "type": "text",
+        "exact": "after image",
+        "prefix": "gone and https://example.com/x linked.\n ",
+        "suffix": ".\n\n[ ] task\n[x] done\n\n",
+        "startOffsetHint": 118,
+        "endOffsetHint": 129
+      }
+    },
+    {
+      "text": "task",
+      "occurrence": 0,
+      "start": 135,
+      "end": 141,
+      "anchor": {
+        "type": "text",
+        "exact": "task",
+        "prefix": "xample.com/x linked.\n after image.\n\n[ ] ",
+        "suffix": "\n[x] done\n\n",
+        "startOffsetHint": 136,
+        "endOffsetHint": 140
+      }
+    }
+  ],
+  "located": []
+}

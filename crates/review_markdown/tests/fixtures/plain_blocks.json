@@ -1,0 +1,147 @@
+{
+  "name": "plain_blocks",
+  "fileName": "notes.md",
+  "markdown": "# Notes\n\nA paragraph with *emphasis*, **strong**, `code` and a [link](src/a.ts:42).\nA soft break follows.  \nThen a hard break.\n\n## Lists\n\n- one\n- two\n  - nested\n- three\n\n1. first\n2. second\n\n- loose one\n\n- loose two\n\n> A quote\n> over two lines.\n\n---\n\n```rust\nfn main() {}\n```\n\n    indented code\n\nThe end.\n",
+  "title": "Notes",
+  "pseudocode": false,
+  "blocks": [],
+  "format": {
+    "mode": "plain",
+    "declared": false,
+    "warnings": []
+  },
+  "text": "Notes\nA paragraph with emphasis, strong, code and a link.\nA soft break follows.\nThen a hard break.\nLists\n\none\ntwo\n\nnested\n\n\nthree\n\n\nfirst\nsecond\n\n\n\nloose one\n\n\nloose two\n\n\n\nA quote\nover two lines.\n\n\nfn main() {}\n\nindented code\n\nThe end.\n",
+  "selections": [
+    {
+      "text": "emphasis, strong",
+      "occurrence": 0,
+      "start": 22,
+      "end": 39,
+      "anchor": {
+        "type": "text",
+        "exact": "emphasis, strong",
+        "prefix": "Notes\nA paragraph with ",
+        "suffix": ", code and a link.\nA soft break follows.",
+        "startOffsetHint": 23,
+        "endOffsetHint": 39
+      }
+    },
+    {
+      "text": "two\n\nnested",
+      "occurrence": 0,
+      "start": 109,
+      "end": 122,
+      "anchor": {
+        "type": "text",
+        "exact": "two\n\nnested",
+        "prefix": " follows.\nThen a hard break.\nLists\n\none\n",
+        "suffix": "\n\n\nthree\n\n\nfirst\nsecond\n\n\n\nloose one\n\n\nl",
+        "startOffsetHint": 110,
+        "endOffsetHint": 121
+      }
+    },
+    {
+      "text": "one",
+      "occurrence": 0,
+      "start": 105,
+      "end": 110,
+      "anchor": {
+        "type": "text",
+        "exact": "one",
+        "prefix": "reak follows.\nThen a hard break.\nLists\n\n",
+        "suffix": "\ntwo\n\nnested\n\n\nthree\n\n\nfirst\nsecond\n\n\n\nl",
+        "startOffsetHint": 106,
+        "endOffsetHint": 109
+      }
+    },
+    {
+      "text": "A quote",
+      "occurrence": 0,
+      "start": 172,
+      "end": 181,
+      "anchor": {
+        "type": "text",
+        "exact": "A quote",
+        "prefix": "irst\nsecond\n\n\n\nloose one\n\n\nloose two\n\n\n\n",
+        "suffix": "\nover two lines.\n\n\nfn main() {}\n\nindente",
+        "startOffsetHint": 173,
+        "endOffsetHint": 180
+      }
+    },
+    {
+      "text": "fn main",
+      "occurrence": 0,
+      "start": 198,
+      "end": 206,
+      "anchor": {
+        "type": "text",
+        "exact": "fn main",
+        "prefix": "\nloose two\n\n\n\nA quote\nover two lines.\n\n\n",
+        "suffix": "() {}\n\nindented code\n\nThe end.\n",
+        "startOffsetHint": 199,
+        "endOffsetHint": 206
+      }
+    },
+    {
+      "text": "The end",
+      "occurrence": 0,
+      "start": 227,
+      "end": 235,
+      "anchor": {
+        "type": "text",
+        "exact": "The end",
+        "prefix": "o lines.\n\n\nfn main() {}\n\nindented code\n\n",
+        "suffix": ".\n",
+        "startOffsetHint": 228,
+        "endOffsetHint": 235
+      }
+    },
+    {
+      "text": "link.\nA soft",
+      "occurrence": 0,
+      "start": 51,
+      "end": 65,
+      "anchor": {
+        "type": "text",
+        "exact": "link.\nA soft",
+        "prefix": "graph with emphasis, strong, code and a ",
+        "suffix": " break follows.\nThen a hard break.\nLists",
+        "startOffsetHint": 52,
+        "endOffsetHint": 64
+      }
+    },
+    {
+      "text": "Lists\n\none",
+      "occurrence": 0,
+      "start": 98,
+      "end": 110,
+      "anchor": {
+        "type": "text",
+        "exact": "Lists\n\none",
+        "prefix": " soft break follows.\nThen a hard break.\n",
+        "suffix": "\ntwo\n\nnested\n\n\nthree\n\n\nfirst\nsecond\n\n\n\nl",
+        "startOffsetHint": 99,
+        "endOffsetHint": 109
+      }
+    }
+  ],
+  "located": [
+    {
+      "anchor": {
+        "type": "text",
+        "exact": "one",
+        "prefix": "loose ",
+        "suffix": ""
+      },
+      "at": 154
+    },
+    {
+      "anchor": {
+        "type": "text",
+        "exact": "two",
+        "occurrence": 2
+      },
+      "at": 186
+    }
+  ]
+}

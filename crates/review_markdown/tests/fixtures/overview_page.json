@@ -1,0 +1,73 @@
+{
+  "name": "overview_page",
+  "fileName": "overview.md",
+  "markdown": "# PR #12: Limit resets\n\n3 threads, first pass by claude-code: 2 proposed, 1 open, 0 resolved. Accept or dismiss findings in the Review panel, open one with its link, or comment on this page.\n\n## The pull request\n\n[Limit resets](https://github.com/o/r/pull/12) · `feature/x` into `main` · 2 commits\n\n## Files changed\n\n| File | + | − |\n|---|---:|---:|\n| [src/a.ts](src/a.ts) | 10 | 2 |\n\n## Threads\n\n### src\n\n- **High** · proposed · [src/a.ts:42](src/a.ts:42) — The limit is never reset.\n  > Reset it on the window boundary.\n",
+  "title": "PR #12: Limit resets",
+  "pseudocode": false,
+  "blocks": [],
+  "format": {
+    "mode": "plain",
+    "declared": false,
+    "warnings": []
+  },
+  "text": "PR #12: Limit resets\n3 threads, first pass by claude-code: 2 proposed, 1 open, 0 resolved. Accept or dismiss findings in the Review panel, open one with its link, or comment on this page.\nThe pull request\nLimit resets · feature/x into main · 2 commits\nFiles changed\n\n\n\nFile\n+\n−\n\n\n\n\nsrc/a.ts\n10\n2\n\n\n\nThreads\nsrc\n\nHigh · proposed · src/a.ts:42 — The limit is never reset.\n\nReset it on the window boundary.\n\n\n\n",
+  "selections": [
+    {
+      "text": "first pass",
+      "occurrence": 0,
+      "start": 31,
+      "end": 43,
+      "anchor": {
+        "type": "text",
+        "exact": "first pass",
+        "prefix": "PR #12: Limit resets\n3 threads, ",
+        "suffix": " by claude-code: 2 proposed, 1 open, 0 r",
+        "startOffsetHint": 32,
+        "endOffsetHint": 42
+      }
+    },
+    {
+      "text": "src/a.ts",
+      "occurrence": 1,
+      "start": 329,
+      "end": 338,
+      "anchor": {
+        "type": "text",
+        "exact": "src/a.ts",
+        "prefix": "\n10\n2\n\n\n\nThreads\nsrc\n\nHigh · proposed · ",
+        "suffix": ":42 — The limit is never reset.\n\nReset i",
+        "startOffsetHint": 330,
+        "endOffsetHint": 338
+      }
+    },
+    {
+      "text": "never reset",
+      "occurrence": 0,
+      "start": 356,
+      "end": 368,
+      "anchor": {
+        "type": "text",
+        "exact": "never reset",
+        "prefix": "· proposed · src/a.ts:42 — The limit is ",
+        "suffix": ".\n\nReset it on the window boundary.\n\n\n\n",
+        "startOffsetHint": 357,
+        "endOffsetHint": 368
+      }
+    },
+    {
+      "text": "Reset it on",
+      "occurrence": 0,
+      "start": 370,
+      "end": 383,
+      "anchor": {
+        "type": "text",
+        "exact": "Reset it on",
+        "prefix": "rc/a.ts:42 — The limit is never reset.\n\n",
+        "suffix": " the window boundary.\n\n\n\n",
+        "startOffsetHint": 371,
+        "endOffsetHint": 382
+      }
+    }
+  ],
+  "located": []
+}
