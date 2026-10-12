@@ -22,6 +22,9 @@ export async function confirmGitHubPost(github: GitHubTarget, preview: GitHubPre
     };
     add(root, 'div', `To ${github.repo}#${github.number} as "${EVENT_LABEL[preview.event]}". Edit any of it before it goes; empty a line comment to leave it out.`
         + (github.postedRound !== undefined ? ` Round ${github.postedRound} was already posted.` : ''), 'co-review-muted');
+    if (preview.note) {
+        add(root, 'div', preview.note, 'co-review-muted');
+    }
     const section = (title: string, body: string, placeholder: string) => {
         const part = add(root, 'div', '', 'co-review-github-preview-part');
         add(part, 'div', title, 'co-review-github-preview-where');

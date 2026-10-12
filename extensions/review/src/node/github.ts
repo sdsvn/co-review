@@ -107,10 +107,26 @@ export class GitHubReviews {
         }
         const chosen = decision ?? review.verdict?.decision ?? 'comment';
         const { comments, body } = this.compose(review, chosen, summary ?? review.verdict?.summary ?? '', reworded);
+        const own = chosen !== 'comment' && await this.ownPullRequest(await this.target(review));
         return {
-            event: EVENTS[chosen], body,
+            event: own ? 'COMMENT' : EVENTS[chosen], body: own ? asComment(chosen, body) : body, note: own ? ownNote(chosen) : undefined,
             comments: comments.map(c => ({ threadId: c.threadId, path: c.path, line: c.line, startLine: c.start_line, side: c.side, body: c.body }))
         };
+    }
+
+    /**
+     * Whether the pull request is the signed-in GitHub user's own: GitHub refuses "Approve" and "Request changes" on it.
+     * Undefined when `gh` can't tell (the post then finds out from GitHub's refusal).
+     */
+    protected async ownPullRequest(target: GitHubTarget | undefined): Promise<boolean | undefined> {
+        if (!target) {
+            return undefined;
+        }
+        const [author, me] = await Promise.all([
+            this.gh(['api', `repos/${target.repo}/pulls/${target.number}`, '--jq', '.user.login'], ''),
+            this.gh(['api', 'user', '--jq', '.login'], '')
+        ]);
+        return author.ok && me.ok && !!author.stdout.trim() ? author.stdout.trim() === me.stdout.trim() : undefined;
     }
 
     /**
@@ -128,11 +144,22 @@ export class GitHubReviews {
         const composed = this.compose(review, chosen, summary ?? review.verdict?.summary ?? '', reworded);
         const endpoint = `repos/${target.repo}/pulls/${target.number}/reviews`;
         let event = EVENTS[chosen];
+        // The reviewer's edits are of the preview, which already reads as a comment on their own pull request.
         let body = edits ? edits.body.trim() : composed.body;
         let comments = (edits ? composed.comments.map(c => ({ ...c, body: (edits.comments[c.threadId] ?? c.body).trim() })) : composed.comments)
             .filter(c => c.body);
         const posted = comments.length;
         const notes: string[] = [];
+        const asOwn = () => {
+            notes.push(ownNote(chosen));
+            body = edits ? body : asComment(chosen, body);
+            event = 'COMMENT';
+        };
+        if (event !== 'COMMENT' && await this.ownPullRequest(target)) {
+            asOwn();
+        }
+        // Each fallback once: your own pull request, then lines no longer in the diff.
+        let last = '';
         for (let attempt = 0; attempt < 3; attempt++) {
             const result = await this.gh(['api', '--method', 'POST', endpoint, '--input', '-'],
                 JSON.stringify({ event, body, comments: comments.map(({ threadId, ...c }) => c) }));
@@ -148,7 +175,10 @@ export class GitHubReviews {
                 await this.store.setBundle(review.id, { ...bundle, github: { url, round: review.verdict?.count ?? 0, postedAt: Date.now() } });
                 return { url, comments: comments.length, inBody: composed.elsewhere + (comments.length ? 0 : posted), event, notes };
             }
-            const message = result.stderr || result.stdout;
+            // `gh api` puts GitHub's reason on stderr (`gh: <reason>`) and the response itself on stdout.
+            const message = [result.stderr.trim(), result.stdout.trim()].filter(Boolean).join('\n');
+            last = result.stderr.trim() || result.stdout.trim();
+            console.error(`[co-review] GitHub refused the review of ${target.repo}#${target.number} (${event}, ${comments.length} line comments): ${message}`);
             if (/ENOENT|not found: gh|command not found/i.test(message)) {
                 throw new Error('The GitHub CLI (`gh`) is not installed. Install it (https://cli.github.com) and run `gh auth login`.');
             }
@@ -157,9 +187,7 @@ export class GitHubReviews {
             }
             if (event !== 'COMMENT' && /own pull request/i.test(message)) {
                 // GitHub doesn't let you approve (or request changes on) your own pull request.
-                notes.push(`GitHub doesn't allow "${DECISION_LABEL[chosen]}" on your own pull request, so it was posted as a comment.`);
-                body = `**${DECISION_LABEL[chosen]}.** ${body}`.trim();
-                event = 'COMMENT';
+                asOwn();
                 continue;
             }
             if (comments.length && /HTTP 422|Unprocessable|line|position|diff/i.test(message)) {
@@ -170,9 +198,9 @@ export class GitHubReviews {
                 comments = [];
                 continue;
             }
-            throw new Error(`GitHub refused the review: ${message.trim().slice(0, 400)}`);
+            throw new Error(`GitHub refused the review: ${last.replace(/^gh: /, '').slice(0, 400)}`);
         }
-        throw new Error('GitHub refused the review.');
+        throw new Error(`GitHub refused the review: ${last.replace(/^gh: /, '').slice(0, 400)}`);
     }
 
     protected gh(args: string[], input: string): Promise<{ ok: boolean; stdout: string; stderr: string }> {
@@ -190,10 +218,22 @@ export class GitHubReviews {
     }
 }
 
+/** GitHub takes only a comment on your own pull request: the review's body says the decision instead. */
+function asComment(decision: ReviewDecision, body: string): string {
+    return `**${DECISION_LABEL[decision]}.** ${body}`.trim();
+}
+
+function ownNote(decision: ReviewDecision): string {
+    return `GitHub doesn't allow "${DECISION_LABEL[decision]}" on your own pull request, so it is posted as a comment that says so.`;
+}
+
 /** A preview as Markdown, for a thread that asks the reviewer to confirm a post: each part quoted as it will appear. */
 export function previewMarkdown(preview: GitHubPreview): string {
     const quote = (text: string) => text.split('\n').map(l => `> ${l}`).join('\n');
     const parts = [preview.body.trim() ? `**Review (${preview.event.toLowerCase().replace('_', ' ')}):**\n\n${quote(preview.body)}` : `**Review (${preview.event.toLowerCase().replace('_', ' ')}):** no message`];
+    if (preview.note) {
+        parts.push(`_${preview.note}_`);
+    }
     for (const c of preview.comments) {
         parts.push(`**${c.path}:${c.startLine ? `${c.startLine}-` : ''}${c.line}${c.side === 'LEFT' ? ' (old side)' : ''}:**\n\n${quote(c.body)}`);
     }

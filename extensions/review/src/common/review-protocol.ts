@@ -86,6 +86,8 @@ export interface GitHubPost {
 export interface GitHubPreview {
     event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
     body: string;
+    /** Why the event isn't the reviewer's decision (on your own pull request GitHub only takes a comment). */
+    note?: string;
     /** Each line comment and the thread it comes from. */
     comments: { threadId: string; path: string; line: number; startLine?: number; side: 'RIGHT' | 'LEFT'; body: string }[];
 }
