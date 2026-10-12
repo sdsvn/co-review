@@ -103,7 +103,8 @@ fn percent_decode(input: &str) -> String {
 /// symlinks for the parts of the path that exist, keeping the rest as-is.
 pub fn real_path(path: &Path) -> PathBuf {
     // Try the whole path first
-    if let Ok(real) = std::fs::canonicalize(path) {
+    // On Windows, std's canonicalize returns verbatim paths (\\?\C:\...) that git and file URIs reject; dunce doesn't.
+    if let Ok(real) = dunce::canonicalize(path) {
         return real;
     }
     // The path doesn't fully exist; resolve the longest existing prefix

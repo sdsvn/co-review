@@ -9,6 +9,7 @@ license.workspace = true
 path = "src/review_store.rs"
 
 [dependencies]
+dunce = "1.0"
 parking_lot.workspace = true
 review_model = { workspace = true }
 serde.workspace = true

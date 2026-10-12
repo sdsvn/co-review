@@ -10,7 +10,7 @@ mod file_uri;
 mod participants;
 mod store;
 
-pub use file_uri::{path_to_file_uri, real_path, real_uri};
+pub use file_uri::{file_uri_to_path, path_to_file_uri, real_path, real_uri};
 pub use participants::current_user;
 pub use store::{
     CreateReviewParams, MessageAdded, ReviewChange, ReviewStore, ReviewStoreError,
