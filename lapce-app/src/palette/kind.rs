@@ -25,6 +25,8 @@ pub enum PaletteKind {
     TerminalProfile,
     DiffFiles,
     HelpAndFile,
+    // co-review: review pickers and prompts in the palette (lapce-app/src/review/picker.rs).
+    Review,
 }
 
 impl PaletteKind {
@@ -50,7 +52,9 @@ impl PaletteKind {
             | PaletteKind::LineEnding
             | PaletteKind::SCMReferences
             | PaletteKind::HelpAndFile
-            | PaletteKind::DiffFiles => "",
+            | PaletteKind::DiffFiles
+            // co-review: review pickers.
+            | PaletteKind::Review => "",
             #[cfg(windows)]
             PaletteKind::WslHost => "",
         }
@@ -106,6 +110,8 @@ impl PaletteKind {
             }
             PaletteKind::TerminalProfile => None, // InternalCommand::NewTerminal
             PaletteKind::DiffFiles => Some(LapceWorkbenchCommand::DiffFiles),
+            // co-review: opened by the `Review:` commands.
+            PaletteKind::Review => None,
         }
     }
 
@@ -134,7 +140,9 @@ impl PaletteKind {
             | PaletteKind::Language
             | PaletteKind::LineEnding
             | PaletteKind::SCMReferences | PaletteKind::HelpAndFile
-            | PaletteKind::DiffFiles => input,
+            | PaletteKind::DiffFiles
+            // co-review: review pickers.
+            | PaletteKind::Review => input,
             PaletteKind::PaletteHelp
             | PaletteKind::Command
             | PaletteKind::Workspace

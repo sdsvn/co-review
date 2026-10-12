@@ -358,6 +358,8 @@ impl PaletteData {
                     "Seleft left file"
                 }
             }
+            // co-review: the open review picker's placeholder.
+            PaletteKind::Review => crate::review::picker::palette_placeholder(),
             _ => "",
         }
     }
@@ -423,6 +425,10 @@ impl PaletteData {
                 self.get_scm_references();
             }
             PaletteKind::TerminalProfile => self.get_terminal_profiles(),
+            // co-review: the open review picker's entries.
+            PaletteKind::Review => {
+                self.items.set(crate::review::picker::palette_items())
+            }
         }
     }
 
@@ -1439,6 +1445,12 @@ impl PaletteData {
                     .send(InternalCommand::NewTerminal {
                         profile: Some(profile.to_owned()),
                     }),
+                // co-review: a review picker's entry runs its action with the typed text.
+                PaletteItemContent::Review(item) => {
+                    let input =
+                        self.input.with_untracked(|input| input.input.clone());
+                    crate::review::picker::palette_selected(item, input);
+                }
             }
         } else if self.kind.get_untracked() == PaletteKind::SshHost {
             let input = self.input.with_untracked(|input| input.input.clone());
@@ -1573,6 +1585,8 @@ impl PaletteData {
                     }),
                 PaletteItemContent::SCMReference { .. } => {}
                 PaletteItemContent::TerminalProfile { .. } => {}
+                // co-review: review pickers have no preview.
+                PaletteItemContent::Review(_) => {}
             }
         }
     }
@@ -1682,6 +1696,15 @@ impl PaletteData {
             // wasting effort. This would happen, for example, on the user continuing to type.
             if run_id.load(std::sync::atomic::Ordering::Acquire) != current_run_id {
                 return None;
+            }
+
+            // co-review: a review prompt's entry is listed whatever is typed.
+            if matches!(&i.content, PaletteItemContent::Review(item) if item.always_shown)
+            {
+                let mut item = i.clone();
+                item.score = u32::MAX;
+                filtered_items.push(item);
+                continue;
             }
 
             indices.clear();

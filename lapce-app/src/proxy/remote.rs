@@ -99,12 +99,13 @@ pub fn start_remote(
     // ! Below paths have to be synced with what is
     // ! returned by Config::proxy_directory()
     let remote_proxy_path = match platform {
+        // co-review: Co-Review's data folders (lapce-core's `Directory::project_dirs`).
         Windows => format!(
-            "%HOMEDRIVE%%HOMEPATH%\\AppData\\Local\\lapce\\{}\\data\\proxy",
+            "%HOMEDRIVE%%HOMEPATH%\\AppData\\Local\\co-review\\{}\\data\\proxy",
             meta::NAME
         ),
         Darwin => format!(
-            "~/Library/Application\\ Support/dev.lapce.{}/proxy",
+            "~/Library/Application\\ Support/dev.co-review.{}/proxy",
             meta::NAME
         ),
         _ => {

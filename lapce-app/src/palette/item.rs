@@ -92,4 +92,6 @@ pub enum PaletteItemContent {
         name: String,
         profile: lapce_rpc::terminal::TerminalProfile,
     },
+    // co-review: an entry of a review picker (lapce-app/src/review/picker.rs).
+    Review(crate::review::picker::PickerItem),
 }

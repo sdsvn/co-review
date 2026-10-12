@@ -32,8 +32,9 @@ git merge lapce/master
 - The remote `lapce` is https://github.com/lapce/lapce. There are no recent releases, so the base is `master`.
 - Merge, never rebase: the history must show what came from upstream. Upstream merges are their own commits
   ("Merge Lapce <short sha>"), never mixed with feature work.
-- Lapce's `README.md`, `Makefile` and docs live under `docs/lapce/` and `Makefile.lapce`; its release workflow is
-  `.github/workflows/lapce-release.yml`. On a merge, take their changes there, not at the root.
+- Lapce's `README.md`, `Makefile` and docs live under `docs/lapce/` and `Makefile.lapce`. On a merge, take their
+  changes there, not at the root. Lapce's release workflow is not kept: Co-Review's `.github/workflows/release.yml`
+  and `packaging/` build and package the app, so a merge that brings Lapce's release workflow back drops it again.
 
 ### The fork's edit budget
 

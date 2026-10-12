@@ -682,6 +682,10 @@ impl Doc {
                 SyntaxEdit::from_delta(before_text, delta.clone())
             })
             .collect();
+        // co-review: review threads follow the edit before it is saved (comment-anchoring, live placement).
+        if let Some((before, _, _)) = deltas.first() {
+            crate::review::inline::doc_edited(self, before);
+        }
         self.on_update(Some(edits));
     }
 
@@ -1985,6 +1989,13 @@ impl DocumentPhantom for Doc {
             .preedit_phantom(Some(config.color(LapceColor::EDITOR_FOREGROUND)), line)
         {
             text.push(preedit)
+        }
+
+        // co-review: blank rows under the line for the review threads shown there (inline-review).
+        if let Some(rows) =
+            crate::review::inline::phantom_text(self, line, end_offset - start_offset)
+        {
+            text.push(rows);
         }
 
         text.sort_by(|a, b| {

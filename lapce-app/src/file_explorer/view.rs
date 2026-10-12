@@ -22,7 +22,8 @@ use lapce_rpc::{
 };
 use lapce_xi_rope::Rope;
 
-use super::{data::FileExplorerData, node::FileNodeVirtualList};
+// co-review: the tree's rows come from `review::changed_files::ChangedFiles::explorer_list`.
+use super::data::FileExplorerData;
 use crate::{
     app::clickable_icon,
     command::InternalCommand,
@@ -78,8 +79,17 @@ pub fn file_explorer_panel(
         )
         .add(
             "File Explorer",
-            container(file_explorer_view(data, source_control))
-                .style(|s| s.size_full()),
+            // co-review: the change's "Changed files only" switch above the tree, and the change for the tree.
+            container(crate::review::changed_files::explorer_section(
+                window_tab_data.review.change.clone(),
+                data.clone(),
+                file_explorer_view(
+                    data,
+                    source_control,
+                    window_tab_data.review.change.clone(),
+                ),
+            ))
+            .style(|s| s.size_full()),
             window_tab_data
                 .panel
                 .section_open(PanelSection::FileExplorer),
@@ -127,7 +137,14 @@ fn file_node_text_color(
     config: ReadSignal<Arc<LapceConfig>>,
     node: FileNodeViewData,
     source_control: SourceControlData,
+    // co-review: files and folders of the window's change review are coloured as the change.
+    change: &crate::review::changed_files::ChangedFiles,
 ) -> Color {
+    if let FileNodeViewKind::Path(path) = &node.kind
+        && let Some(color) = change.color(path, node.is_dir)
+    {
+        return config.get().color(color);
+    }
     let diff = source_control.file_diffs.with(|file_diffs| {
         let FileNodeViewKind::Path(path) = &node.kind else {
             return None;
@@ -159,6 +176,8 @@ fn file_node_text_view(
     data: FileExplorerData,
     node: FileNodeViewData,
     source_control: SourceControlData,
+    // co-review: the window's change review, for the colours.
+    change: crate::review::changed_files::ChangedFiles,
 ) -> impl View {
     let config = data.common.config;
     let ui_line_height = data.common.ui_line_height;
@@ -179,6 +198,7 @@ fn file_node_text_view(
                                 config,
                                 node.clone(),
                                 source_control.clone(),
+                                &change,
                             ))
                             .padding_right(5.0)
                             .selectable(false)
@@ -208,6 +228,7 @@ fn file_node_text_view(
                                 config,
                                 node.clone(),
                                 source_control.clone(),
+                                &change,
                             ))
                             .selectable(false)
                     }),
@@ -307,6 +328,8 @@ fn file_node_input_view(data: FileExplorerData, err: Option<String>) -> Containe
 fn file_explorer_view(
     data: FileExplorerData,
     source_control: SourceControlData,
+    // co-review: the window's change review: its filter, colours and counts.
+    change: crate::review::changed_files::ChangedFiles,
 ) -> impl View {
     let root = data.root;
     let ui_line_height = data.common.ui_line_height;
@@ -320,7 +343,11 @@ fn file_explorer_view(
 
     scroll(
         virtual_stack(
-            move || FileNodeVirtualList::new(root.get(), data.naming.get()),
+            // co-review: with "Changed files only", the part of the tree holding the change.
+            {
+                let change = change.clone();
+                move || change.explorer_list(root.get(), data.naming.get())
+            },
             move |node| (node.kind.clone(), node.is_dir, node.open, node.level),
             move |node| {
                 let level = node.level;
@@ -396,7 +423,19 @@ fn file_explorer_view(
                                 })
                         })
                     },
-                    file_node_text_view(data, node, source_control.clone()),
+                    file_node_text_view(
+                        data,
+                        node.clone(),
+                        source_control.clone(),
+                        change.clone(),
+                    ),
+                    // co-review: a changed file's or folder's lines added and removed.
+                    crate::review::changed_files::explorer_decoration(
+                        change.clone(),
+                        kind.path().map(Path::to_path_buf),
+                        is_dir,
+                        config,
+                    ),
                 ))
                 .style({
                     let kind = kind.clone();

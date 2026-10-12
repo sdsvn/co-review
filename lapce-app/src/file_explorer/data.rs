@@ -689,6 +689,18 @@ impl FileExplorerData {
             ))
         }
 
+        // co-review: comments on a file, a folder or the repository (inline-review).
+        menu = menu.separator();
+        for (title, ask) in [("Comment", false), ("Ask Agent", true)] {
+            let (internal_command, path) = (common.internal_command, path_a.clone());
+            menu = menu.entry(MenuItem::new(title).action(move || {
+                internal_command.send(InternalCommand::ReviewCommentOnPath {
+                    path: path.clone(),
+                    ask,
+                });
+            }));
+        }
+
         menu = menu.separator();
 
         let internal_command = common.internal_command;

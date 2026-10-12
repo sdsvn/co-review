@@ -115,7 +115,8 @@ mod grammars;
 mod logging;
 
 #[derive(Parser)]
-#[clap(name = "Lapce")]
+// co-review: branding.
+#[clap(name = "Co-Review")]
 #[clap(version=meta::VERSION)]
 #[derive(Debug)]
 struct Cli {
@@ -211,7 +212,8 @@ impl AppData {
     fn default_window_config(&self) -> WindowConfig {
         WindowConfig::default()
             .apply_default_theme(false)
-            .title("Lapce")
+            // co-review: branding.
+            .title("Co-Review")
     }
 
     pub fn new_window(&self, folder: Option<PathBuf>) {
@@ -2596,6 +2598,10 @@ fn palette_item(
                 .style(|s| s.align_items(Some(AlignItems::Center)).max_width_full()),
             )
         }
+        // co-review: an entry of a review picker.
+        PaletteItemContent::Review(picker_item) => {
+            crate::review::picker::palette_item_view(&item, picker_item, config)
+        }
         PaletteItemContent::FileChooserEntry { is_dir, .. } => {
             let file_name = item.filter_text;
             let indices = item.indices;
@@ -3760,9 +3766,10 @@ fn window(window_data: WindowData) -> impl View {
             .get(active)
             .or_else(|| window_tabs.last())
             .and_then(|(_, window_tab)| window_tab.workspace.display());
+        // co-review: branding.
         match workspace {
-            Some(workspace) => format!("{workspace} - Lapce"),
-            None => "Lapce".to_string(),
+            Some(workspace) => format!("{workspace} - Co-Review"),
+            None => "Co-Review".to_string(),
         }
     })
     .on_event_stop(EventListener::ImeEnabled, move |_| {
@@ -3790,7 +3797,8 @@ fn window(window_data: WindowData) -> impl View {
             let lapce_command = window_tab.common.lapce_command;
             window_menu(lapce_command, workbench_command)
         } else {
-            Menu::new("Lapce")
+            // co-review: branding.
+            Menu::new("Co-Review")
         }
     })
     .style(|s| s.size_full())
@@ -4289,10 +4297,11 @@ pub fn window_menu(
     lapce_command: Listener<LapceCommand>,
     workbench_command: Listener<LapceWorkbenchCommand>,
 ) -> Menu {
-    Menu::new("Lapce")
+    // co-review: branding (the app menu's items).
+    Menu::new("Co-Review")
         .entry({
-            let mut menu = Menu::new("Lapce")
-                .entry(MenuItem::new("About Lapce").action(move || {
+            let mut menu = Menu::new("Co-Review")
+                .entry(MenuItem::new("About Co-Review").action(move || {
                     workbench_command.send(LapceWorkbenchCommand::ShowAbout)
                 }))
                 .separator()
@@ -4311,13 +4320,13 @@ pub fn window_menu(
                         )),
                 )
                 .separator()
-                .entry(MenuItem::new("Quit Lapce").action(move || {
+                .entry(MenuItem::new("Quit Co-Review").action(move || {
                     workbench_command.send(LapceWorkbenchCommand::Quit);
                 }));
             if cfg!(target_os = "macos") {
                 menu = menu
                     .separator()
-                    .entry(MenuItem::new("Hide Lapce"))
+                    .entry(MenuItem::new("Hide Co-Review"))
                     .entry(MenuItem::new("Hide Others"))
                     .entry(MenuItem::new("Show All"))
             }

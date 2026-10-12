@@ -64,9 +64,17 @@ zip              = { version = "0.6.6", default-features = false, features = ["d
 percent-encoding = { version = "2.3.1" }
 
 # co-review: the review core and MCP server run in the app process (design.md, decision 4).
-review_mcp   = { path = "../crates/review_mcp" }
-review_model = { workspace = true }
-review_store = { workspace = true }
+review_agents = { path = "../crates/review_agents" }
+review_anchor = { workspace = true }
+review_bundle = { workspace = true }
+review_code   = { workspace = true }
+review_github = { workspace = true }
+review_index  = { workspace = true }
+review_markdown = { path = "../crates/review_markdown" }
+review_mermaid  = { path = "../crates/review_mermaid" }
+review_mcp    = { path = "../crates/review_mcp" }
+review_model  = { workspace = true }
+review_store  = { workspace = true }
 
 [target.'cfg(target_os="macos")'.dependencies]
 fs_extra = "1.2.0"

@@ -13,7 +13,8 @@ impl Directory {
 
     #[cfg(not(feature = "portable"))]
     fn project_dirs() -> Option<ProjectDirs> {
-        ProjectDirs::from("dev", "lapce", NAME)
+        // co-review: Co-Review's own config and data folders, never an installed Lapce's.
+        ProjectDirs::from("dev", "co-review", NAME)
     }
 
     /// Return path adjacent to lapce executable when built as portable

@@ -555,21 +555,23 @@ pub enum LapceWorkbenchCommand {
     #[strum(serialize = "restart_to_update")]
     RestartToUpdate,
 
+    // co-review: branding.
     #[strum(serialize = "show_about")]
-    #[strum(message = "About Lapce")]
+    #[strum(message = "About Co-Review")]
     ShowAbout,
 
     #[strum(message = "Save All Files")]
     #[strum(serialize = "save_all")]
     SaveAll,
 
+    // co-review: installs the bundled `co-review` command, not the app's executable.
     #[cfg(target_os = "macos")]
-    #[strum(message = "Install Lapce to PATH")]
+    #[strum(message = "Install the co-review Command in PATH")]
     #[strum(serialize = "install_to_path")]
     InstallToPATH,
 
     #[cfg(target_os = "macos")]
-    #[strum(message = "Uninstall Lapce from PATH")]
+    #[strum(message = "Uninstall the co-review Command from PATH")]
     #[strum(serialize = "uninstall_from_path")]
     UninstallFromPATH,
 
@@ -625,11 +627,93 @@ pub enum LapceWorkbenchCommand {
     #[strum(serialize = "review.open_overview")]
     #[strum(message = "Review: Open Review Overview")]
     ReviewOpenOverview,
+
+    #[strum(serialize = "review.new")]
+    #[strum(message = "Review: New Review…")]
+    ReviewNew,
+
+    #[strum(serialize = "review.switch")]
+    #[strum(message = "Review: Switch Review…")]
+    ReviewSwitch,
+
+    #[strum(serialize = "review.rename")]
+    #[strum(message = "Review: Rename Review…")]
+    ReviewRename,
+
+    #[strum(serialize = "review.delete")]
+    #[strum(message = "Review: Delete Review…")]
+    ReviewDelete,
+
+    #[strum(serialize = "review.archive")]
+    #[strum(message = "Review: Archive Review")]
+    ReviewArchive,
+
+    #[strum(serialize = "review.show_archived")]
+    #[strum(message = "Review: Show Archived Reviews…")]
+    ReviewShowArchived,
+
+    #[strum(serialize = "review.actions")]
+    #[strum(message = "Review: Review Actions…")]
+    ReviewActions,
+
+    #[strum(serialize = "review.go_to_comment")]
+    #[strum(message = "Review: Go to Comment…")]
+    ReviewGoToComment,
+
+    #[strum(serialize = "review.toggle_viewed")]
+    #[strum(message = "Review: Mark File as Viewed / Not Viewed")]
+    ReviewToggleViewed,
+
+    #[strum(serialize = "review.connect_agent")]
+    #[strum(message = "Review: Connect ACP Agent…")]
+    ReviewConnectAgent,
+
+    #[strum(serialize = "review.choose_agent_model")]
+    #[strum(message = "Review: Choose Agent Model…")]
+    ReviewChooseAgentModel,
+
+    #[strum(serialize = "review.submit")]
+    #[strum(message = "Review: Submit Review…")]
+    ReviewSubmit,
+
+    #[strum(serialize = "review.comment_repository")]
+    #[strum(message = "Review: Add Repository Comment")]
+    ReviewCommentRepository,
+
+    // co-review: starting threads, moving between them and folding them in the editor (inline-review).
+    #[strum(serialize = "review.comment")]
+    #[strum(message = "Review: Comment")]
+    ReviewComment,
+
+    #[strum(serialize = "review.ask_agent")]
+    #[strum(message = "Review: Ask Agent")]
+    ReviewAskAgent,
+
+    #[strum(serialize = "review.next_comment")]
+    #[strum(message = "Review: Next Comment")]
+    ReviewNextComment,
+
+    #[strum(serialize = "review.previous_comment")]
+    #[strum(message = "Review: Previous Comment")]
+    ReviewPreviousComment,
+
+    #[strum(serialize = "review.collapse_comments")]
+    #[strum(message = "Review: Collapse All Comments")]
+    ReviewCollapseComments,
+
+    #[strum(serialize = "review.expand_comments")]
+    #[strum(message = "Review: Expand All Comments")]
+    ReviewExpandComments,
 }
 
 #[derive(Clone, Debug)]
 pub enum InternalCommand {
     ReloadConfig,
+    // co-review: Comment on / Ask Agent about a file or folder, from the file explorer (inline-review).
+    ReviewCommentOnPath {
+        path: PathBuf,
+        ask: bool,
+    },
     OpenFile {
         path: PathBuf,
     },

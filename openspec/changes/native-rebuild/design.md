@@ -87,6 +87,8 @@ no cmake) in about 10 GB.
 | `review_bundle` | review directories, patches, `PR.md`, sidecar findings, suggested edits, OpenSpec, `review.json` | `node/bundle-service.ts`, `review-payloads.ts`, `common/patch.ts` |
 | `review_design` | design-document parsing and format warnings | `common/design-format.ts` |
 | `review_pages` | overview pages | `node/overview-page.ts` |
+| `review_markdown` | Markdown pages as blocks, the page's text and text anchors (as the Theia DOM has them), links, OpenSpec cards | `browser/document/document-render.ts`, `text-anchor.ts` |
+| `review_mermaid` | Mermaid parsing, layout and drawing as primitives with hit areas | Ferrite's `src/markdown/mermaid/` (MIT) |
 | `review_github` | posting through `gh` | `node/github.ts` |
 | `review_code` | code folders, worktrees, base versions | `node/code-folders.ts` |
 | `review_mcp` | MCP server, `server.json`, presence, decisions, channel | `node/co-reviewer-mcp.ts`, `agent-coordination.ts` |

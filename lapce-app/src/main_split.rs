@@ -769,7 +769,8 @@ impl MainSplitData {
         editor_tab
     }
 
-    fn get_editor_tab_child(
+    // co-review: `pub` so the pull-request page can open base versions and base ↔ head diffs (review/code.rs).
+    pub fn get_editor_tab_child(
         &self,
         source: EditorTabChildSource,
         ignore_unconfirmed: bool,

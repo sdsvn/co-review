@@ -24,9 +24,10 @@ fn main() -> Result<()> {
 
     let ReleaseInfo { version, branch } = release_info;
 
+    // co-review: the product's name, for its own config and data folders (never shared with an installed Lapce).
     #[rustfmt::skip]
     let meta = format!(r#"
-        pub const NAME: &str = "Lapce-{branch}";
+        pub const NAME: &str = "Co-Review-{branch}";
         pub const VERSION: &str = "{version}";
         pub const RELEASE: ReleaseType = ReleaseType::{branch};
     "#);

@@ -6,8 +6,21 @@
 //! [`connect`]. Lapce's own files only call in here through hooks marked `// co-review:`
 //! (`docs/co-review/fork-surface.md`).
 
+pub mod changed_files;
+pub mod code;
+pub mod commands;
+mod design_tree;
+pub mod document;
+mod markdown_view;
+mod mermaid;
 mod page;
 mod panel;
+pub mod picker;
+pub mod pull_request;
+mod submit;
+pub mod drafts;
+pub mod inline;
+pub mod thread;
 mod windows;
 mod workspace;
 
@@ -22,7 +35,8 @@ use std::{
 use floem::{
     ext_event::create_signal_from_channel,
     reactive::{
-        ReadSignal, SignalGet, SignalWith, create_effect, provide_context,
+        ReadSignal, RwSignal, SignalGet, SignalUpdate, SignalWith,
+        create_effect, create_rw_signal, provide_context,
         use_context,
     },
 };
@@ -31,9 +45,11 @@ pub use page::{
     review_page_view_info,
 };
 pub use panel::review_panel;
+use review_agents::AgentService;
 use review_mcp::{CoReviewer, ServerHandle, ServerOptions, Services};
 use review_store::{ReviewChange, ReviewStore};
 use sha2::{Digest, Sha256};
+pub use changed_files::open_changed_file;
 pub use windows::{WindowRequest, open_or_focus_folder};
 pub use workspace::ReviewWorkspaceData;
 
@@ -43,6 +59,11 @@ use crate::{app::AppData, panel::kind::PanelKind, window_tab::WindowTabData};
 pub struct ReviewCore {
     /// The store and the review crates, the same instances the MCP server uses.
     pub services: Services,
+    /// The ACP agents of every review (Connect agent…, questions in threads, Stop), sharing the MCP server's
+    /// decisions so permission requests are answered like `ask_reviewer` questions.
+    pub agents: Arc<AgentService>,
+    /// Whether each review's MCP agent is waiting for the reviewer (`await_reviewer`), by review id.
+    pub listening: RwSignal<im::HashMap<String, bool>>,
     /// The latest store change, on the UI thread. Every change is delivered, in order; read it in an effect.
     pub changes: ReadSignal<Option<ReviewChange>>,
     /// Started with `--background`: no window until a review is shown or the app is activated.
@@ -51,7 +72,7 @@ pub struct ReviewCore {
     reviewer: Option<Arc<CoReviewer>>,
     requests: ReadSignal<Option<WindowRequest>>,
     /// Pages to open once the window of their workspace (a resolved path) exists.
-    pending_pages: RefCell<HashMap<PathBuf, ReviewPage>>,
+    pending_pages: RefCell<HashMap<PathBuf, Vec<ReviewPage>>>,
     /// The workspaces (resolved paths) that have a window, as last told to the MCP server.
     open_workspaces: RefCell<HashSet<PathBuf>>,
 }
@@ -65,7 +86,11 @@ impl ReviewCore {
         let (request_sender, request_receiver) = mpsc::channel();
         let services = Services::new(
             Arc::clone(&store),
-            Arc::new(windows::AppWindows::new(request_sender)),
+            Arc::new(windows::AppWindows::new(
+                request_sender,
+                Arc::clone(&store),
+                background,
+            )),
         );
         let options = ServerOptions {
             port: std::env::var("CO_REVIEW_PORT")
@@ -86,7 +111,17 @@ impl ReviewCore {
             }
         };
         record_app(&home);
+        let agents = AgentService::new(
+            Arc::clone(&services.store),
+            Arc::clone(&services.decisions),
+        );
+        if let Err(error) = agents.watch_store() {
+            tracing::error!("ACP agents will not follow review changes: {error:#}");
+        }
+        let listening = presence_signal(&services);
         let core = Rc::new(ReviewCore {
+            agents,
+            listening,
             reviewer: server.as_ref().map(|server| Arc::clone(server.reviewer())),
             server: RefCell::new(server),
             changes: store_changes(&store),
@@ -116,11 +151,13 @@ impl ReviewCore {
         if let Some(server) = self.server.borrow_mut().take() {
             server.stop();
         }
+        self.agents.shutdown();
     }
 
     /// Tells the MCP server which workspaces gained or lost their window, off the UI thread (it reads and writes
     /// reviews).
-    fn workspaces_changed(&self, workspaces: HashSet<PathBuf>) {
+    /// `wait`: the app is about to quit, so the agents must have heard before this returns.
+    fn workspaces_changed(&self, workspaces: HashSet<PathBuf>, wait: bool) {
         let (opened, closed): (Vec<PathBuf>, Vec<PathBuf>) = {
             let mut open = self.open_workspaces.borrow_mut();
             let opened = workspaces.difference(&open).cloned().collect();
@@ -134,7 +171,7 @@ impl ReviewCore {
         if opened.is_empty() && closed.is_empty() {
             return;
         }
-        std::thread::spawn(move || {
+        let told = std::thread::spawn(move || {
             for workspace in opened {
                 reviewer.window_opened(&workspace_uri(&workspace));
             }
@@ -142,6 +179,9 @@ impl ReviewCore {
                 reviewer.window_closed(&workspace_uri(&workspace));
             }
         });
+        if wait && told.join().is_err() {
+            tracing::error!("telling agents their review windows closed failed");
+        }
     }
 }
 
@@ -158,7 +198,8 @@ pub fn connect(core: Rc<ReviewCore>, app_data: AppData) {
         });
     }
     let windows = app_data.windows;
-    create_effect(move |_| {
+    create_effect(move |had_windows: Option<bool>| {
+        let has_windows = windows.with(|windows| !windows.is_empty());
         let window_tabs: Vec<Rc<WindowTabData>> = windows.with(|windows| {
             windows
                 .values()
@@ -171,18 +212,28 @@ pub fn connect(core: Rc<ReviewCore>, app_data: AppData) {
             let Some(root) = window_tab.review.root.clone() else {
                 continue;
             };
+            // The workspace's unsent comments, kept across restarts (once per window tab).
+            floem::reactive::untrack(|| drafts::keep(&window_tab));
             let pending = core.pending_pages.borrow_mut().remove(&root);
-            if let Some(page) = pending {
+            for page in pending.into_iter().flatten() {
                 reveal_page(&window_tab, page);
             }
             workspaces.insert(root);
         }
-        core.workspaces_changed(workspaces);
+        // Started in the background (by an agent): with no window left, the app quits.
+        let quit = core.background && had_windows == Some(true) && !has_windows;
+        core.workspaces_changed(workspaces, quit);
+        if quit {
+            tracing::info!("the last window closed; quitting (started in the background)");
+            floem::quit_app();
+        }
+        has_windows
     });
 }
 
 /// Opens `page` in the window tab and shows the Review panel beside it.
 pub fn reveal_page(window_tab: &WindowTabData, page: ReviewPage) {
+    window_tab.review.active.set(Some(page.review_id.clone()));
     window_tab.show_panel(PanelKind::Review);
     window_tab.main_split.open_review_page(page);
 }
@@ -249,4 +300,32 @@ fn record_app(home: &Path) {
     if let Err(error) = written {
         tracing::error!("could not record the app in {}: {error}", logs.display());
     }
+}
+
+/// MCP agents' presence as a signal: the tracker broadcasts on a smol channel, Floem reads std channels.
+fn presence_signal(services: &Services) -> RwSignal<im::HashMap<String, bool>> {
+    let listening = create_rw_signal(im::HashMap::new());
+    let presence = services.presence.subscribe();
+    let (sender, receiver) = mpsc::channel();
+    let forwarded = std::thread::Builder::new()
+        .name("ReviewAgentPresence".to_owned())
+        .spawn(move || {
+            while let Ok(update) = presence.recv_blocking() {
+                if sender.send(update).is_err() {
+                    break;
+                }
+            }
+        });
+    if let Err(error) = forwarded {
+        tracing::error!("agents' listening status will not reach the window: {error}");
+    }
+    let updates = create_signal_from_channel(receiver);
+    create_effect(move |_| {
+        if let Some(update) = updates.get() {
+            listening.update(|listening| {
+                listening.insert(update.review_id, update.listening);
+            });
+        }
+    });
+    listening
 }

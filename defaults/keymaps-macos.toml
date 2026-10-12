@@ -163,13 +163,15 @@ mode = "i"
 
 # ------------------------------------ Multi cursor -------------------------------------
 
+# co-review: alt+meta+up goes to the previous review comment; adding a cursor moves to shift.
 [[keymaps]]
-key = "alt+meta+up"
+key = "alt+meta+shift+up"
 command = "insert_cursor_above"
 mode = "i"
 
+# co-review: alt+meta+down goes to the next review comment; adding a cursor moves to shift.
 [[keymaps]]
-key = "alt+meta+down"
+key = "alt+meta+shift+down"
 command = "insert_cursor_below"
 mode = "i"
 
@@ -303,3 +305,29 @@ command = "palette.workspace_symbol"
 [[keymaps]]
 key = "ctrl+g"
 command = "palette.line"
+
+# co-review: threads in the editor (inline-review).
+[[keymaps]]
+key = "meta+alt+m"
+command = "review.comment"
+
+[[keymaps]]
+key = "meta+alt+a"
+command = "review.ask_agent"
+
+[[keymaps]]
+key = "meta+alt+down"
+command = "review.next_comment"
+
+[[keymaps]]
+key = "meta+alt+up"
+command = "review.previous_comment"
+
+# co-review: Go to Comment… and Mark File as Viewed (review-panel).
+[[keymaps]]
+key = "meta+alt+o"
+command = "review.go_to_comment"
+
+[[keymaps]]
+key = "meta+alt+v"
+command = "review.toggle_viewed"

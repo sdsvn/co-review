@@ -41,7 +41,8 @@ pub mod terminal;
 pub mod ui;
 pub mod watcher;
 
-pub const LOGO: &str = include_str!("../../extra/images/logo.svg");
+// co-review: Co-Review's logo (the About dialog).
+pub const LOGO: &str = include_str!("../../docs/assets/logo.svg");
 const DEFAULT_SETTINGS: &str = include_str!("../../defaults/settings.toml");
 const DEFAULT_LIGHT_THEME: &str = include_str!("../../defaults/light-theme.toml");
 const DEFAULT_DARK_THEME: &str = include_str!("../../defaults/dark-theme.toml");

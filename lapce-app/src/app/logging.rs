@@ -139,11 +139,12 @@ pub(super) fn error_modal(title: &str, msg: &str) -> i32 {
 pub fn error_notification(title: &str, msg: &str) {
     let res = std::process::Command::new("notify-send")
         .args([
+            // co-review: branding.
             "-a",
-            "dev.lapce.lapce",
+            "dev.co-review.app",
             "-w",
             "-n",
-            "dev.lapce.lapce",
+            "dev.co-review.app",
             "-c",
             "error",
             title,

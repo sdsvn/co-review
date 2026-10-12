@@ -1366,6 +1366,8 @@ pub fn editor_container_view(
                 viewport,
             ),
             editor_content(editor, debug_breakline, is_active),
+            // co-review: review threads on rows between the editor's lines (inline-review).
+            crate::review::inline::editor_threads(window_tab_data.clone(), editor),
             empty().style(move |s| {
                 let config = config.get();
                 s.absolute()
@@ -1958,6 +1960,12 @@ fn editor_gutter(
         editor_gutter_breakpoints(window_tab_data.clone(), e_data, icon_padding),
         clip(
             stack((
+                // co-review: thread markers and the + to start a thread (inline-review).
+                crate::review::inline::gutter_column(
+                    window_tab_data.clone(),
+                    e_data,
+                    icon_padding,
+                ),
                 editor_gutter_code_lens(
                     window_tab_data.clone(),
                     doc,

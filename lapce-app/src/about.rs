@@ -20,11 +20,11 @@ use crate::{
 
 struct AboutUri {}
 
+// co-review: branding: Co-Review's links, and Lapce (which it is built on) under the attributions.
 impl AboutUri {
-    const LAPCE: &'static str = "https://lapce.dev";
-    const GITHUB: &'static str = "https://github.com/lapce/lapce";
-    const MATRIX: &'static str = "https://matrix.to/#/#lapce-editor:matrix.org";
-    const DISCORD: &'static str = "https://discord.gg/n8tGJ6Rn6D";
+    const WEBSITE: &'static str = "https://sdsvn.github.io/co-review/";
+    const GITHUB: &'static str = "https://github.com/sdsvn/co-review";
+    const LAPCE: &'static str = "https://github.com/lapce/lapce";
     const CODICONS: &'static str = "https://github.com/microsoft/vscode-codicons";
 }
 
@@ -101,11 +101,10 @@ pub fn about_popup(window_tab_data: Rc<WindowTabData>) -> impl View {
 
     exclusive_popup(window_tab_data, about_data.visible, move || {
         stack((
-            svg(move || (config.get()).logo_svg()).style(move |s| {
-                s.size(logo_size, logo_size)
-                    .color(config.get().color(LapceColor::EDITOR_FOREGROUND))
-            }),
-            label(|| "Lapce".to_string()).style(move |s| {
+            // co-review: Co-Review's logo keeps its own colours.
+            svg(move || (config.get()).logo_svg())
+                .style(move |s| s.size(logo_size, logo_size)),
+            label(|| "Co-Review".to_string()).style(move |s| {
                 s.font_bold()
                     .margin_top(10.0)
                     .color(config.get().color(LapceColor::EDITOR_FOREGROUND))
@@ -116,7 +115,7 @@ pub fn about_popup(window_tab_data: Rc<WindowTabData>) -> impl View {
             }),
             web_link(
                 || "Website".to_string(),
-                || AboutUri::LAPCE.to_string(),
+                || AboutUri::WEBSITE.to_string(),
                 move || config.get().color(LapceColor::EDITOR_LINK),
                 internal_command,
             )
@@ -128,25 +127,18 @@ pub fn about_popup(window_tab_data: Rc<WindowTabData>) -> impl View {
                 internal_command,
             )
             .style(|s| s.margin_top(10.0)),
-            web_link(
-                || "Discord".to_string(),
-                || AboutUri::DISCORD.to_string(),
-                move || config.get().color(LapceColor::EDITOR_LINK),
-                internal_command,
-            )
-            .style(|s| s.margin_top(10.0)),
-            web_link(
-                || "Matrix".to_string(),
-                || AboutUri::MATRIX.to_string(),
-                move || config.get().color(LapceColor::EDITOR_LINK),
-                internal_command,
-            )
-            .style(|s| s.margin_top(10.0)),
             label(|| "Attributions".to_string()).style(move |s| {
                 s.font_bold()
                     .color(config.get().color(LapceColor::EDITOR_DIM))
                     .margin_top(40.0)
             }),
+            web_link(
+                || "Built on Lapce (Apache-2.0)".to_string(),
+                || AboutUri::LAPCE.to_string(),
+                move || config.get().color(LapceColor::EDITOR_LINK),
+                internal_command,
+            )
+            .style(|s| s.margin_top(10.0)),
             web_link(
                 || "Codicons (CC-BY-4.0)".to_string(),
                 || AboutUri::CODICONS.to_string(),

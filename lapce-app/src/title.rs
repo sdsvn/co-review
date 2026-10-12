@@ -377,7 +377,8 @@ fn right(
                         MenuItem::new("No update available").enabled(false)
                     })
                     .separator()
-                    .entry(MenuItem::new("About Lapce").action(move || {
+                    // co-review: branding.
+                    .entry(MenuItem::new("About Co-Review").action(move || {
                         workbench_command.send(LapceWorkbenchCommand::ShowAbout)
                     }))
             }),

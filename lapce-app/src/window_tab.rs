@@ -1432,19 +1432,32 @@ impl WindowTabData {
             // ==== Movement ====
             #[cfg(target_os = "macos")]
             InstallToPATH => {
-                self.common.internal_command.send(
-                    InternalCommand::ExecuteProcess {
-                        program: String::from("osascript"),
-                        arguments: vec![String::from("-e"), format!(r#"do shell script "ln -sf '{}' /usr/local/bin/lapce" with administrator privileges"#, std::env::args().next().unwrap())],
-                    }
-                )
+                // co-review: links the `co-review` command bundled with the app (Contents/Resources/app/bin), or
+                // the one built beside it, as /usr/local/bin/co-review.
+                let command = env::current_exe().ok().and_then(|exe| {
+                    let directory = exe.parent()?;
+                    [
+                        directory.join("../Resources/app/bin/co-review"),
+                        directory.join("co-review"),
+                    ]
+                    .into_iter()
+                    .find(|candidate| candidate.is_file())
+                });
+                if let Some(command) = command {
+                    self.common.internal_command.send(
+                        InternalCommand::ExecuteProcess {
+                            program: String::from("osascript"),
+                            arguments: vec![String::from("-e"), format!(r#"do shell script "ln -sf '{}' /usr/local/bin/co-review" with administrator privileges"#, command.display())],
+                        }
+                    )
+                }
             }
             #[cfg(target_os = "macos")]
             UninstallFromPATH => {
                 self.common.internal_command.send(
                     InternalCommand::ExecuteProcess {
                         program: String::from("osascript"),
-                        arguments: vec![String::from("-e"), String::from(r#"do shell script "rm /usr/local/bin/lapce" with administrator privileges"#)],
+                        arguments: vec![String::from("-e"), String::from(r#"do shell script "rm /usr/local/bin/co-review" with administrator privileges"#)],
                     }
                 )
             }
@@ -1636,6 +1649,27 @@ impl WindowTabData {
             ReviewOpenOverview => {
                 crate::review::open_overview(self);
             }
+            ReviewNew | ReviewSwitch | ReviewRename | ReviewDelete
+            | ReviewArchive | ReviewShowArchived | ReviewActions
+            | ReviewGoToComment | ReviewToggleViewed | ReviewConnectAgent
+            | ReviewChooseAgentModel | ReviewSubmit | ReviewCommentRepository => {
+                crate::review::commands::run(self, &cmd);
+            }
+            // co-review: threads in the editor (inline-review).
+            ReviewComment => crate::review::inline::comment_on_selection(
+                self,
+                review_model::ThreadIntent::Comment,
+            ),
+            ReviewAskAgent => crate::review::inline::comment_on_selection(
+                self,
+                review_model::ThreadIntent::Question,
+            ),
+            ReviewNextComment => crate::review::inline::go_to_next_thread(self, true),
+            ReviewPreviousComment => {
+                crate::review::inline::go_to_next_thread(self, false)
+            }
+            ReviewCollapseComments => crate::review::inline::fold_all(self, true),
+            ReviewExpandComments => crate::review::inline::fold_all(self, false),
         }
     }
 
@@ -1655,6 +1689,14 @@ impl WindowTabData {
                 }
             }
             InternalCommand::OpenFile { path } => {
+                // co-review: a file of the window's change opens as the change (base ↔ head).
+                if crate::review::open_changed_file(self, &path) {
+                    return;
+                }
+                // co-review: a Markdown file opens rendered while the window has a review (at a line: the editor).
+                if crate::review::document::open_rendered(self, &path) {
+                    return;
+                }
                 self.main_split.jump_to_location(
                     EditorLocation {
                         path,
@@ -1667,6 +1709,10 @@ impl WindowTabData {
                 );
             }
             InternalCommand::OpenAndConfirmedFile { path } => {
+                // co-review: a file of the window's change opens as the change (base ↔ head).
+                if crate::review::open_changed_file(self, &path) {
+                    return;
+                }
                 self.main_split.jump_to_location(
                     EditorLocation {
                         path,
@@ -1698,6 +1744,15 @@ impl WindowTabData {
             }
             InternalCommand::ReloadFileExplorer => {
                 self.file_explorer.reload();
+            }
+            // co-review: a comment on a file or folder (inline-review).
+            InternalCommand::ReviewCommentOnPath { path, ask } => {
+                let intent = if ask {
+                    review_model::ThreadIntent::Question
+                } else {
+                    review_model::ThreadIntent::Comment
+                };
+                crate::review::inline::comment_on_path(self, &path, intent);
             }
             InternalCommand::TestPathCreation { new_path } => {
                 let naming = self.file_explorer.naming;

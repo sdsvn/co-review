@@ -1034,7 +1034,7 @@ dependencies = [
  "nom",
  "pathdiff",
  "serde",
- "toml 0.5.9",
+ "toml",
 ]
 
 [[package]]
@@ -3349,7 +3349,7 @@ dependencies = [
 
 [[package]]
 name = "lapce"
-version = "0.4.6"
+version = "0.6.3"
 dependencies = [
  "lapce-app",
  "lapce-proxy",
@@ -3357,7 +3357,7 @@ dependencies = [
 
 [[package]]
 name = "lapce-app"
-version = "0.4.6"
+version = "0.6.3"
 dependencies = [
  "Inflector",
  "alacritty_terminal",
@@ -3395,7 +3395,15 @@ dependencies = [
  "rayon",
  "regex",
  "reqwest 0.11.27",
+ "review_agents",
+ "review_anchor",
+ "review_bundle",
+ "review_code",
+ "review_github",
+ "review_index",
+ "review_markdown",
  "review_mcp",
+ "review_mermaid",
  "review_model",
  "review_store",
  "semver",
@@ -3409,7 +3417,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror 1.0.69",
- "toml 0.8.2",
+ "toml",
  "toml_edit 0.20.2",
  "tracing 0.2.0",
  "tracing-appender",
@@ -3417,14 +3425,14 @@ dependencies = [
  "tracing-subscriber",
  "unicode-width",
  "url",
- "windows-sys 0.61.2",
+ "windows-sys 0.45.0",
  "zip",
  "zstd",
 ]
 
 [[package]]
 name = "lapce-core"
-version = "0.4.6"
+version = "0.6.3"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3452,7 +3460,7 @@ dependencies = [
 
 [[package]]
 name = "lapce-proxy"
-version = "0.4.6"
+version = "0.6.3"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -3486,7 +3494,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tar",
- "toml 0.8.2",
+ "toml",
  "tracing 0.2.0",
  "tracing-log",
  "trash",
@@ -3501,7 +3509,7 @@ dependencies = [
 
 [[package]]
 name = "lapce-rpc"
-version = "0.4.6"
+version = "0.6.3"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
@@ -5182,11 +5190,13 @@ dependencies = [
 
 [[package]]
 name = "review_cli"
-version = "0.1.0"
+version = "0.6.3"
 dependencies = [
  "anyhow",
  "chrono",
  "libc",
+ "review_model",
+ "review_store",
  "serde",
  "serde_json",
  "tempfile",
@@ -5276,6 +5286,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "review_markdown"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "pulldown-cmark",
+ "regex",
+ "review_design",
+ "review_model",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "review_mcp"
 version = "0.1.0"
 dependencies = [
@@ -5303,6 +5326,14 @@ dependencies = [
  "tokio",
  "tokio-util",
  "uuid",
+]
+
+[[package]]
+name = "review_mermaid"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "pretty_assertions",
 ]
 
 [[package]]
@@ -6659,18 +6690,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "toml"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "185d8ab0dfbb35cf1399a6344d8484209c088f75f8f68230da55d48d95d43e3d"
-dependencies = [
- "serde",
- "serde_spanned",
- "toml_datetime 0.6.3",
- "toml_edit 0.20.2",
-]
-
-[[package]]
 name = "toml_datetime"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7549,7 +7568,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "sha2",
- "toml 0.5.9",
+ "toml",
  "windows-sys 0.48.0",
  "zstd",
 ]

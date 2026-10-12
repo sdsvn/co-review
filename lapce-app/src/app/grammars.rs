@@ -26,10 +26,16 @@ pub fn find_grammar_release() -> Result<ReleaseInfo> {
 
     use lapce_core::meta::{RELEASE, ReleaseType, VERSION};
 
+    // co-review: the app's version is Co-Review's, not Lapce's, and its base is Lapce's master: every build uses the
+    // latest grammars, as Lapce's own nightly does.
+    const GRAMMARS_MATCH_APP_VERSION: bool = false;
+
     let releases = releases
         .into_iter()
         .filter_map(|f| {
-            if matches!(RELEASE, ReleaseType::Debug | ReleaseType::Nightly) {
+            if !GRAMMARS_MATCH_APP_VERSION
+                || matches!(RELEASE, ReleaseType::Debug | ReleaseType::Nightly)
+            {
                 return Some(f);
             }
 
