@@ -1,0 +1,425 @@
+{
+  "scenario": {
+    "base": {
+      "src/app.rs": "base line 1\nbase line 2\nbase line 3\nbase line 4\nbase line 5\nbase line 6\nbase line 7\nbase line 8\nbase line 9\nbase line 10\nbase line 11\nbase line 12\nbase line 13\nbase line 14\nbase line 15\nbase line 16\nbase line 17\nbase line 18\nbase line 19\nbase line 20\n",
+      "src/lib.rs": "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\npub fn sub(a: i32, b: i32) -> i32 {\n    a - b\n}\n",
+      "README.md": "# Demo\n",
+      "docs/guide.md": "Guide\n"
+    },
+    "head": {
+      "src/app.rs": "base line 1\nhead line 2\nbase line 3\nbase line 4\nbase line 5\nbase line 6\nbase line 7\nbase line 8\nbase line 9\nbase line 10\nbase line 11\nbase line 12\nbase line 13\nbase line 14\nbase line 15\nbase line 16\nbase line 17\nbase line 18\ninserted line\nbase line 19\nbase line 20\n",
+      "src/library.rs": "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\npub fn sub(a: i32, b: i32) -> i32 {\n    b - a\n}\n",
+      "src/utils/helper.rs": "pub fn help() {}\n",
+      "src/notes v2.txt": "first\nsecond\n",
+      "docs/guide.md": "Guide\n"
+    }
+  },
+  "patch": "diff --git a/README.md b/README.md\ndeleted file mode 100644\nindex 0805455..0000000\n--- a/README.md\n+++ /dev/null\n@@ -1 +0,0 @@\n-# Demo\ndiff --git a/src/app.rs b/src/app.rs\nindex 0178636..b349c0d 100644\n--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1,5 +1,5 @@\n base line 1\n-base line 2\n+head line 2\n base line 3\n base line 4\n base line 5\n@@ -16,5 +16,6 @@ base line 15\n base line 16\n base line 17\n base line 18\n+inserted line\n base line 19\n base line 20\ndiff --git a/src/lib.rs b/src/library.rs\nsimilarity index 89%\nrename from src/lib.rs\nrename to src/library.rs\nindex d21f2eb..2f899d5 100644\n--- a/src/lib.rs\n+++ b/src/library.rs\n@@ -3,5 +3,5 @@ pub fn add(a: i32, b: i32) -> i32 {\n }\n \n pub fn sub(a: i32, b: i32) -> i32 {\n-    a - b\n+    b - a\n }\ndiff --git a/src/notes v2.txt b/src/notes v2.txt\nnew file mode 100644\nindex 0000000..66a52ee\n--- /dev/null\n+++ b/src/notes v2.txt\t\n@@ -0,0 +1,2 @@\n+first\n+second\ndiff --git a/src/utils/helper.rs b/src/utils/helper.rs\nnew file mode 100644\nindex 0000000..7e82c7f\n--- /dev/null\n+++ b/src/utils/helper.rs\n@@ -0,0 +1 @@\n+pub fn help() {}\n",
+  "onDiff": [
+    {
+      "name": "added line",
+      "file": "src/app.rs",
+      "lines": [
+        2,
+        2
+      ],
+      "text": "head line 2",
+      "result": {
+        "kind": "patch",
+        "uri": "change.patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/app.rs",
+          "line": 2,
+          "side": "new",
+          "source": "head line 2"
+        },
+        "anchor": {
+          "text": "head line 2"
+        }
+      }
+    },
+    {
+      "name": "context line",
+      "file": "src/app.rs",
+      "lines": [
+        3,
+        3
+      ],
+      "text": "base line 3",
+      "result": {
+        "kind": "patch",
+        "uri": "change.patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/app.rs",
+          "line": 3,
+          "side": "new",
+          "source": "base line 3"
+        },
+        "anchor": {
+          "text": "base line 3"
+        }
+      }
+    },
+    {
+      "name": "context and added range",
+      "file": "src/app.rs",
+      "lines": [
+        2,
+        4
+      ],
+      "text": "head line 2\nbase line 3\nbase line 4",
+      "result": {
+        "kind": "patch",
+        "uri": "change.patch",
+        "patchAnchor": {
+          "type": "code-range",
+          "path": "src/app.rs",
+          "startLine": 2,
+          "endLine": 4,
+          "side": "new",
+          "source": "head line 2\nbase line 3\nbase line 4"
+        },
+        "anchor": {
+          "text": "head line 2\nbase line 3\nbase line 4"
+        }
+      }
+    },
+    {
+      "name": "range with shorter text",
+      "file": "src/app.rs",
+      "lines": [
+        2,
+        3
+      ],
+      "text": "head line 2",
+      "result": {
+        "kind": "patch",
+        "uri": "change.patch",
+        "patchAnchor": {
+          "type": "code-range",
+          "path": "src/app.rs",
+          "startLine": 2,
+          "endLine": 3,
+          "side": "new",
+          "source": "head line 2"
+        },
+        "anchor": {
+          "text": "head line 2"
+        }
+      }
+    },
+    {
+      "name": "second hunk inserted line",
+      "file": "src/app.rs",
+      "lines": [
+        19,
+        19
+      ],
+      "text": "inserted line",
+      "result": {
+        "kind": "patch",
+        "uri": "change.patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/app.rs",
+          "line": 19,
+          "side": "new",
+          "source": "inserted line"
+        },
+        "anchor": {
+          "text": "inserted line"
+        }
+      }
+    },
+    {
+      "name": "line between hunks",
+      "file": "src/app.rs",
+      "lines": [
+        10,
+        10
+      ],
+      "text": "base line 10",
+      "result": null
+    },
+    {
+      "name": "range across the gap",
+      "file": "src/app.rs",
+      "lines": [
+        5,
+        16
+      ],
+      "result": null
+    },
+    {
+      "name": "edited since the diff",
+      "file": "src/app.rs",
+      "lines": [
+        2,
+        2
+      ],
+      "text": "edited line 2",
+      "result": null
+    },
+    {
+      "name": "no anchor text",
+      "file": "src/app.rs",
+      "lines": [
+        2,
+        2
+      ],
+      "result": {
+        "kind": "patch",
+        "uri": "change.patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/app.rs",
+          "line": 2,
+          "side": "new"
+        },
+        "anchor": {
+          "text": ""
+        }
+      }
+    },
+    {
+      "name": "renamed file",
+      "file": "src/library.rs",
+      "lines": [
+        6,
+        6
+      ],
+      "text": "    b - a",
+      "result": {
+        "kind": "patch",
+        "uri": "change.patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/library.rs",
+          "line": 6,
+          "side": "new",
+          "source": "    b - a"
+        },
+        "anchor": {
+          "text": "    b - a"
+        }
+      }
+    },
+    {
+      "name": "old path of a renamed file",
+      "file": "src/lib.rs",
+      "lines": [
+        6,
+        6
+      ],
+      "text": "    a - b",
+      "result": null
+    },
+    {
+      "name": "new file",
+      "file": "src/utils/helper.rs",
+      "lines": [
+        1,
+        1
+      ],
+      "text": "pub fn help() {}",
+      "result": {
+        "kind": "patch",
+        "uri": "change.patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/utils/helper.rs",
+          "line": 1,
+          "side": "new",
+          "source": "pub fn help() {}"
+        },
+        "anchor": {
+          "text": "pub fn help() {}"
+        }
+      }
+    },
+    {
+      "name": "new file with a space",
+      "file": "src/notes v2.txt",
+      "lines": [
+        1,
+        2
+      ],
+      "text": "first\nsecond",
+      "result": {
+        "kind": "patch",
+        "uri": "change.patch",
+        "patchAnchor": {
+          "type": "code-range",
+          "path": "src/notes v2.txt",
+          "startLine": 1,
+          "endLine": 2,
+          "side": "new",
+          "source": "first\nsecond"
+        },
+        "anchor": {
+          "text": "first\nsecond"
+        }
+      }
+    },
+    {
+      "name": "deleted file",
+      "file": "README.md",
+      "lines": [
+        1,
+        1
+      ],
+      "text": "# Demo",
+      "result": null
+    },
+    {
+      "name": "unchanged file",
+      "file": "docs/guide.md",
+      "lines": [
+        1,
+        1
+      ],
+      "text": "Guide",
+      "result": null
+    },
+    {
+      "name": "outside the code folder",
+      "uri": "file:///elsewhere/src/app.rs",
+      "lines": [
+        2,
+        2
+      ],
+      "text": "head line 2",
+      "result": null
+    },
+    {
+      "name": "not a file",
+      "uri": "untitled:Untitled-1",
+      "lines": [
+        2,
+        2
+      ],
+      "text": "head line 2",
+      "result": null
+    },
+    {
+      "name": "no range",
+      "file": "src/app.rs",
+      "text": "head line 2",
+      "result": null
+    }
+  ],
+  "baseFiles": [
+    {
+      "file": "src/app.rs",
+      "result": "base line 1\nbase line 2\nbase line 3\nbase line 4\nbase line 5\nbase line 6\nbase line 7\nbase line 8\nbase line 9\nbase line 10\nbase line 11\nbase line 12\nbase line 13\nbase line 14\nbase line 15\nbase line 16\nbase line 17\nbase line 18\nbase line 19\nbase line 20\n"
+    },
+    {
+      "file": "src/lib.rs",
+      "result": "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\npub fn sub(a: i32, b: i32) -> i32 {\n    a - b\n}\n"
+    },
+    {
+      "file": "README.md",
+      "result": "# Demo\n"
+    },
+    {
+      "file": "src/library.rs",
+      "result": null
+    },
+    {
+      "file": "src/utils/helper.rs",
+      "result": null
+    },
+    {
+      "file": "../outside",
+      "result": null
+    },
+    {
+      "file": "/etc/hosts",
+      "result": null
+    },
+    {
+      "file": "src/../README.md",
+      "result": null
+    }
+  ],
+  "sides": [
+    {
+      "range": "main...feature",
+      "result": {
+        "base": "main",
+        "head": "feature",
+        "mergeBase": true
+      }
+    },
+    {
+      "range": "main..feature",
+      "result": {
+        "base": "main",
+        "head": "feature",
+        "mergeBase": false
+      }
+    },
+    {
+      "range": "...feature",
+      "result": {
+        "base": "HEAD",
+        "head": "feature",
+        "mergeBase": true
+      }
+    },
+    {
+      "range": "main...",
+      "result": {
+        "base": "main",
+        "head": "HEAD",
+        "mergeBase": true
+      }
+    },
+    {
+      "range": "..",
+      "result": {
+        "base": "HEAD",
+        "head": "HEAD",
+        "mergeBase": false
+      }
+    },
+    {
+      "range": "HEAD~1",
+      "result": {
+        "base": "HEAD~1",
+        "mergeBase": false
+      }
+    },
+    {
+      "range": "a...b...c",
+      "result": {
+        "base": "a...b...c",
+        "mergeBase": false
+      }
+    },
+    {
+      "range": "a..b..c",
+      "result": {
+        "base": "a..b..c",
+        "mergeBase": false
+      }
+    },
+    {
+      "range": "a....b",
+      "result": {
+        "base": "a",
+        "head": ".b",
+        "mergeBase": true
+      }
+    },
+    {
+      "range": "",
+      "result": {
+        "base": "",
+        "mergeBase": false
+      }
+    }
+  ]
+}
