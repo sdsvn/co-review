@@ -1,6 +1,6 @@
 //! Symbol extraction from source files via Tree-sitter.
 //!
-//! The `SymbolExtractor` trait allows swapping in Zed's language registry and outline queries later;
+//! The `SymbolExtractor` trait allows swapping in Lapce's syntax layer (lapce-core) later;
 //! `DefaultSymbolExtractor` uses native tree-sitter grammars from crates.io with the same
 //! node-kind-to-symbol mapping as the TypeScript `syntax-service-impl.ts`.
 
@@ -33,7 +33,7 @@ pub struct Symbol {
 }
 
 /// Trait for extracting symbols from source code. The default implementation uses tree-sitter
-/// grammars from crates.io; a later implementation can use Zed's language registry instead.
+/// grammars from crates.io; a later implementation can use Lapce's syntax layer (lapce-core) instead.
 pub trait SymbolExtractor: Send + Sync {
     /// Extract top-level symbols from the given source text in the given language.
     fn extract(&self, language_id: &str, source: &[u8]) -> Vec<Symbol>;
@@ -43,22 +43,31 @@ pub trait SymbolExtractor: Send + Sync {
 /// the parser. TSX shares TypeScript's definitions and C shares C++'s, as in the TypeScript.
 fn grammar_of(language_id: &str) -> Option<(&'static str, Language)> {
     Some(match language_id {
-        "go" => ("go", tree_sitter_go::LANGUAGE.into()),
-        "typescript" => ("typescript", tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
-        "typescriptreact" => ("typescript", tree_sitter_typescript::LANGUAGE_TSX.into()),
-        "javascript" | "javascriptreact" => ("javascript", tree_sitter_javascript::LANGUAGE.into()),
-        "python" => ("python", tree_sitter_python::LANGUAGE.into()),
-        "java" => ("java", tree_sitter_java::LANGUAGE.into()),
-        "rust" => ("rust", tree_sitter_rust::LANGUAGE.into()),
-        "csharp" => ("c-sharp", tree_sitter_c_sharp::LANGUAGE.into()),
-        "cpp" => ("cpp", tree_sitter_cpp::LANGUAGE.into()),
-        "c" => ("cpp", tree_sitter_c::LANGUAGE.into()),
-        "ruby" => ("ruby", tree_sitter_ruby::LANGUAGE.into()),
-        "php" => ("php", tree_sitter_php::LANGUAGE_PHP.into()),
-        "shellscript" => ("bash", tree_sitter_bash::LANGUAGE.into()),
-        "powershell" => ("powershell", tree_sitter_powershell::LANGUAGE.into()),
+        "go" => ("go", language(tree_sitter_go::LANGUAGE)),
+        "typescript" => ("typescript", language(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)),
+        "typescriptreact" => ("typescript", language(tree_sitter_typescript::LANGUAGE_TSX)),
+        "javascript" | "javascriptreact" => ("javascript", language(tree_sitter_javascript::LANGUAGE)),
+        "python" => ("python", language(tree_sitter_python::LANGUAGE)),
+        "java" => ("java", language(tree_sitter_java::LANGUAGE)),
+        "rust" => ("rust", language(tree_sitter_rust::LANGUAGE)),
+        "csharp" => ("c-sharp", language(tree_sitter_c_sharp::LANGUAGE)),
+        "cpp" => ("cpp", language(tree_sitter_cpp::LANGUAGE)),
+        "c" => ("cpp", language(tree_sitter_c::LANGUAGE)),
+        "ruby" => ("ruby", language(tree_sitter_ruby::LANGUAGE)),
+        "php" => ("php", language(tree_sitter_php::LANGUAGE_PHP)),
+        "shellscript" => ("bash", language(tree_sitter_bash::LANGUAGE)),
+        "powershell" => ("powershell", language(tree_sitter_powershell::LANGUAGE)),
         _ => return None,
     })
+}
+
+/// The grammar crates export a `tree-sitter-language` `LanguageFn`, which only tree-sitter 0.23+
+/// converts into a `Language`; this is the tree-sitter 0.22 that lapce-core uses, so convert it here.
+fn language(language_function: tree_sitter_language::LanguageFn) -> Language {
+    // SAFETY: the function returns a static `TSLanguage` pointer, and `Language` is a
+    // `#[repr(transparent)]` wrapper of `*const TSLanguage` (the same conversion tree-sitter 0.23's
+    // `From<LanguageFn>` does). The grammars are ABI 14, which `Parser::set_language` checks.
+    unsafe { std::mem::transmute::<*const (), Language>((language_function.into_raw())()) }
 }
 
 /// Definition node types per grammar, and the symbol kind each one produces (the TypeScript `DEFINITIONS`).

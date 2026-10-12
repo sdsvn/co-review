@@ -1,5 +1,6 @@
-# Tests and lints Co-Review's Rust crates (crates/review_*) on macOS, Linux and Windows, and builds the
-# `co-review` command for each. The toolchain comes from rust-toolchain.toml.
+# Builds the app (Lapce with Co-Review's crates) on macOS, Linux and Windows, lints and tests the review crates,
+# and builds the `co-review` command for each platform. The toolchain comes from rust-toolchain.toml. This replaces
+# Lapce's own ci.yml; Lapce's crates are linted as upstream does (warnings allowed), ours with warnings as errors.
 name: Rust
 
 on:
@@ -7,6 +8,7 @@ on:
     branches: [main]
     paths:
       - crates/**
+      - lapce-**
       - Cargo.toml
       - Cargo.lock
       - rust-toolchain.toml
@@ -14,6 +16,7 @@ on:
   pull_request:
     paths:
       - crates/**
+      - lapce-**
       - Cargo.toml
       - Cargo.lock
       - rust-toolchain.toml
@@ -42,16 +45,23 @@ jobs:
       - uses: actions/checkout@v7
       - name: Toolchain
         run: rustup show active-toolchain || rustup toolchain install
+      - name: System libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo make -f Makefile.lapce ubuntu-deps
       - uses: Swatinem/rust-cache@v2
       - name: Git identity
         # Tests commit to temporary repositories.
         run: |
           git config --global user.name "Co-Review CI"
           git config --global user.email "ci@co-review.invalid"
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Test
-        run: cargo test --workspace
+      - name: Clippy (review crates)
+        run: cargo clippy --workspace --exclude lapce --exclude lapce-app --exclude lapce-core --exclude lapce-proxy --exclude lapce-rpc --all-targets -- -D warnings
+      - name: Clippy (Lapce)
+        run: cargo clippy --profile ci -p lapce -p lapce-app -p lapce-core -p lapce-proxy -p lapce-rpc
+      - name: Test (review crates)
+        run: cargo test --workspace --exclude lapce --exclude lapce-app --exclude lapce-core --exclude lapce-proxy --exclude lapce-rpc
+      - name: Build the app
+        run: cargo build --profile ci --bin lapce
       - name: Build the co-review command
         run: cargo build --release -p review_cli
       - uses: actions/upload-artifact@v7

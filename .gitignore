@@ -30,3 +30,15 @@ node_modules/
 
 # Rust build output
 /target/
+
+# Lapce
+.vscode
+.lapce
+.idea
+.fleet
+shell.nix
+/lib/
+/core/languages/
+/vendor/
+*.tar
+*.gz

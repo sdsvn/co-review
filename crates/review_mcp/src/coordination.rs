@@ -1,5 +1,5 @@
 //! What agents wait for from the reviewer: decisions (buttons in a thread) and whether an agent is listening.
-//! Port of `agent-coordination.ts`. Both are executor-agnostic, so the app (GPUI) and the MCP server (tokio) share
+//! Port of `agent-coordination.ts`. Both are executor-agnostic, so the app (Lapce's UI thread) and the MCP server (tokio) share
 //! them.
 
 use std::collections::HashMap;

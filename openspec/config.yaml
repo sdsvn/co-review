@@ -4,7 +4,7 @@ context: |
   Co-Review is a repository review app: a person reviews a whole repository, their agent's change, someone
   else's pull request or a design document, with agents taking part as co-reviewers (MCP and ACP).
 
-  Tech stack: a fork of a native Rust editor, chosen in the change's design.md (Zed or Lapce). The host provides
+  Tech stack: a fork of a native Rust editor, Lapce (see the change's design.md). The host provides
   the IDE: editor, file tree, search, Git, language servers, terminal. Co-Review adds the review in new crates named
   review_*, with as few edits to the host's own code as possible (see INSTRUCTIONS.md).
 

@@ -17,7 +17,7 @@ const START_INTERVAL: Duration = Duration::from_millis(500);
 /// The Co-Review this command starts when none is running.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum App {
-    /// The desktop app (today the Theia Electron app, later the Zed-based one): started with a repository to open
+    /// The desktop app (today the Theia Electron app, later the Lapce-based one): started with a repository to open
     /// it, or with `--background` for an agent (no window until a review is shown). It records its backend in
     /// `server.json`, its process and version in `logs/app.json`.
     Desktop {
