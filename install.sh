@@ -5,8 +5,13 @@
 #
 # macOS (Apple silicon): Co-Review.app into /Applications (or ~/Applications when that isn't writable).
 # Linux (x64, arm64):    the app into ~/.local/share/co-review, with a desktop entry.
-# Both:                  the `co-review` and `co-review-server` commands, into /usr/local/bin when writable,
+# Both:                  the `co-review` command (a link to the one in the app), into /usr/local/bin when writable,
 #                        else ~/.local/bin.
+# Windows:               use the installer, Co-Review-win-x64.exe, from the release.
+#
+# The app's layout (packaging/package.sh): the app's files are in <resources>/app, with its version in `version` and
+# the command in bin/co-review; <resources> is Co-Review.app/Contents/Resources on macOS, <install dir>/resources on
+# Linux.
 #
 # Environment:
 #   CO_REVIEW_VERSION      a release tag to install, e.g. v0.2.0 (default: the latest release)
@@ -116,10 +121,13 @@ EOF
     return 0
 }
 
-# The installed version (the app's package.json) and the one this would install (the release tag; the latest
-# release's tag is where GitHub redirects /releases/latest). Unknown for a custom download URL: then it installs.
+# The installed version (the app's `version` file; package.json in the Electron app that came before) and the one
+# this would install (the release tag; the latest release's tag is where GitHub redirects /releases/latest). Unknown
+# for a custom download URL: then it installs.
 installed=""
-if [ -n "$app_res" ] && [ -f "$app_res/package.json" ]; then
+if [ -n "$app_res" ] && [ -f "$app_res/version" ]; then
+    installed=$(head -n 1 "$app_res/version" | tr -d '[:space:]')
+elif [ -n "$app_res" ] && [ -f "$app_res/package.json" ]; then
     installed=$(sed -n 's/^  "version": "\(.*\)",*$/\1/p' "$app_res/package.json" | head -n 1)
 fi
 wanted=""
@@ -157,17 +165,25 @@ Darwin)
     fetch "Co-Review-mac-arm64.zip"
     ditto -x -k "$tmp/Co-Review-mac-arm64.zip" "$tmp/app"
     mkdir -p "$apps"
-    # Replacing the app's files under a running app leaves it alive without its backend (macOS kills the helper
-    # processes, not the app), holding the single-instance lock: nothing can start until it is quit. Quit it.
-    # The app's main process only: the agents' `co-review mcp` run on the app's executable too (as Node), and
-    # stopping them would cut every agent session off Co-Review; they start the new app when next needed.
-    # Asked to quit first (windows close and agents are told, as when the reviewer quits), then SIGTERM, then
-    # SIGKILL: one without its backend may not answer the first two.
+    # A running app must quit before its files are replaced: an old version would keep serving the new command and
+    # agents, holding the single-instance lock. The app's process only: the agents' `co-review mcp` bridges (the
+    # command in Resources/app/bin; on the Electron app before it, the app's executable run as Node) stay, and start
+    # the new app when next needed. Asked to quit first (windows close and agents are told, as when the reviewer
+    # quits), then SIGTERM, then SIGKILL: one without its backend may not answer the first two.
     running="$apps/Co-Review.app/Contents/MacOS/Co-Review"
     app_pids() {
         for pid in $(pgrep -f "$running"); do
             case "$(ps -o command= -p "$pid" 2>/dev/null)" in
             *bin/co-review.mjs*) ;;
+            ?*) echo "$pid" ;;
+            esac
+        done
+    }
+    # Any other Co-Review.app's main process.
+    other_app_pids() {
+        for pid in $(pgrep -f "/Co-Review.app/Contents/MacOS/Co-Review"); do
+            case "$(ps -o command= -p "$pid" 2>/dev/null)" in
+            "$running"* | *bin/co-review.mjs*) ;;
             ?*) echo "$pid" ;;
             esac
         done
@@ -182,8 +198,12 @@ Darwin)
     pids=$(app_pids)
     if [ -n "$pids" ]; then
         say "Quitting the running Co-Review (process $(echo $pids)) for the update (reviews are saved; it starts again on the next co-review call)"
-        # Bounded: an app without its backend may never answer the request.
-        osascript -e 'with timeout of 5 seconds' -e 'quit app "Co-Review"' -e 'end timeout' >/dev/null 2>&1 || true
+        # Bounded: an app without its backend may never answer the request. Asked by name, so only when no other
+        # Co-Review.app runs (e.g. an install into CO_REVIEW_APPS_DIR beside the one in /Applications), which the
+        # request could reach instead.
+        if [ -z "$(other_app_pids)" ]; then
+            osascript -e 'with timeout of 5 seconds' -e 'quit app "Co-Review"' -e 'end timeout' >/dev/null 2>&1 || true
+        fi
         if ! quit_wait 25; then
             say "Co-Review did not quit when asked; stopping it"
             kill -TERM $(app_pids) 2>/dev/null || true
@@ -208,15 +228,18 @@ Linux)
     mkdir -p "$tmp/app"
     tar -xzf "$tmp/Co-Review-linux-$arch.tar.gz" -C "$tmp/app"
     root=$(find "$tmp/app" -mindepth 1 -maxdepth 1 -type d | head -n 1)
-    [ -x "$root/co-review" ] || fail "unexpected archive layout"
-    if pgrep -f "$dir/co-review" >/dev/null 2>&1; then
+    [ -x "$root/co-review-app" ] || fail "unexpected archive layout"
+    # The running app (co-review-app; `co-review` in the Electron app before it), not the agents' bridges
+    # (resources/app/bin/co-review), which start the new app when next needed.
+    running="^$dir/co-review(-app)?( |\$)"
+    if pgrep -f "$running" >/dev/null 2>&1; then
         say "Quitting the running Co-Review for the update (reviews are saved; it starts again on the next co-review call)"
-        pkill -TERM -f "$dir/co-review" || true
+        pkill -TERM -f "$running" || true
         for _ in $(seq 1 50); do
-            pgrep -f "$dir/co-review" >/dev/null 2>&1 || break
+            pgrep -f "$running" >/dev/null 2>&1 || break
             sleep 0.2
         done
-        pkill -KILL -f "$dir/co-review" 2>/dev/null || true
+        pkill -KILL -f "$running" 2>/dev/null || true
     fi
     rm -rf "$dir"
     mkdir -p "$(dirname "$dir")"
@@ -228,8 +251,8 @@ Linux)
 [Desktop Entry]
 Name=Co-Review
 Comment=Review code and designs with your coding agent
-Exec="$dir/co-review" %F
-Icon=$dir/resources/app/icons/icon.png
+Exec="$dir/co-review-app" %F
+Icon=$dir/resources/app/icons/co-review.png
 Terminal=false
 Type=Application
 Categories=Development;

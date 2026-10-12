@@ -9,6 +9,8 @@ on:
       - site/**
       - docs/**
       - llms.txt
+      # served at https://sdsvn.github.io/co-review/install.sh (site/scripts/sync-docs.mjs copies it)
+      - install.sh
       - .github/workflows/site.yml
   workflow_dispatch:
 

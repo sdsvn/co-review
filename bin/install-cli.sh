@@ -1,31 +1,28 @@
 #!/bin/sh
-# Installs the `co-review` command, and `co-review-server` (review server mode, see bin/review-server.mjs).
+# Installs the `co-review` command: a link to the native command that ships with the app (or was built in a checkout).
 #
-#   From the desktop app:  "/Applications/Co-Review.app/Contents/Resources/app/bin/install-cli.sh"
-#   From the Linux app:    <install dir>/resources/app/bin/install-cli.sh
-#   From a checkout:       make install-cli
+#   From the macOS app:  "/Applications/Co-Review.app/Contents/Resources/app/bin/install-cli.sh"
+#   From the Linux app:  ~/.local/share/co-review/resources/app/bin/install-cli.sh
+#   From a checkout:     make install-cli (after make build)
 #
-# The command runs on the desktop app's own runtime when installed from the app (no Node.js needed),
-# otherwise on `node` with the checkout's browser app. Target: $PREFIX/bin (default /usr/local/bin
-# when writable, else ~/.local/bin).
+# Target: $PREFIX/bin (default /usr/local/bin when writable, else ~/.local/bin). The Windows installer puts the
+# command's folder on PATH instead.
 set -e
 here=$(cd "$(dirname "$0")" && pwd -P)
 
-case "$here" in
-*.app/Contents/Resources/app/bin)
-    app=${here%/Contents/Resources/app/bin}
-    name=$(basename "$app" .app)
-    runner="ELECTRON_RUN_AS_NODE=1 exec \"$app/Contents/MacOS/$name\""
-    ;;
-*/resources/app/bin)
-    app=${here%/resources/app/bin}
-    runner="ELECTRON_RUN_AS_NODE=1 exec \"$app/co-review\""
-    ;;
-*)
-    command -v node >/dev/null || { echo "co-review: node is required for a checkout install" >&2; exit 1; }
-    runner="exec \"$(command -v node)\""
-    ;;
-esac
+if [ -x "$here/co-review" ]; then
+    command="$here/co-review"
+else
+    # A checkout: the command `make build` (or `cargo build`) built.
+    root=$(dirname "$here")
+    for candidate in "$root/target/debug/co-review" "$root/target/release/co-review"; do
+        if [ -x "$candidate" ]; then
+            command="$candidate"
+            break
+        fi
+    done
+    [ -n "${command:-}" ] || { echo "co-review: build it first (make build)" >&2; exit 1; }
+fi
 
 if [ -n "$PREFIX" ]; then
     dir="$PREFIX/bin"
@@ -35,14 +32,15 @@ else
     dir="$HOME/.local/bin"
 fi
 mkdir -p "$dir"
-for cmd in co-review:co-review.mjs co-review-server:review-server.mjs; do
-    cat > "$dir/${cmd%%:*}" <<EOF
-#!/bin/sh
-$runner "$here/${cmd#*:}" "\$@"
-EOF
-    chmod +x "$dir/${cmd%%:*}"
-    echo "installed $dir/${cmd%%:*}"
-done
+# Replaces the Node shim earlier versions wrote (a file, not a link).
+rm -f "$dir/co-review"
+ln -s "$command" "$dir/co-review"
+echo "installed $dir/co-review -> $command"
+# The review server command is gone with the browser app; remove the shim an earlier version wrote.
+if [ -f "$dir/co-review-server" ] && grep -q 'review-server.mjs' "$dir/co-review-server" 2>/dev/null; then
+    rm -f "$dir/co-review-server"
+    echo "removed $dir/co-review-server (the review server is no longer part of Co-Review)"
+fi
 case ":$PATH:" in
 *":$dir:"*) ;;
 *) echo "note: $dir is not on your PATH; add it, e.g. echo 'export PATH=\"$dir:\$PATH\"' >> ~/.zshrc" ;;

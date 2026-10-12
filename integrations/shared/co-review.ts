@@ -19,9 +19,18 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// The installed `co-review` command (desktop app or checkout), else this checkout's CLI on the harness's runtime.
-const INSTALLED = [join("/usr/local/bin", "co-review"), join(homedir(), ".local", "bin", "co-review")].find(p => existsSync(p));
-const CLI = INSTALLED ? [INSTALLED] : [process.execPath, resolve(here, "..", "..", "bin", "co-review.mjs")];
+// The `co-review` command: the one installed (install.sh / install-cli.sh links it), else the one bundled with the app
+// this package came from (<resources>/app/integrations/shared → <resources>/app/bin), else one built in this checkout,
+// else `co-review` on PATH (the Windows installer puts its folder there).
+const EXE = process.platform === "win32" ? "co-review.exe" : "co-review";
+const CLI =
+	[
+		join("/usr/local/bin", EXE),
+		join(homedir(), ".local", "bin", EXE),
+		resolve(here, "..", "..", "bin", EXE),
+		resolve(here, "..", "..", "target", "debug", EXE),
+		resolve(here, "..", "..", "target", "release", EXE),
+	].find(p => existsSync(p)) ?? "co-review";
 const HOME = process.env.CO_REVIEW_HOME || join(homedir(), ".co-review");
 
 /** The parts of the harness's extension context this extension uses (Pi and omp share them). */
@@ -91,7 +100,7 @@ class CoReviewConnection {
 		}
 		// Start Co-Review (or reuse a running desktop/browser instance) without opening a browser.
 		await new Promise<void>((ok, fail) => {
-			const child = spawn(CLI[0], [...CLI.slice(1), "--no-open", root], { stdio: ["ignore", "ignore", "pipe"] });
+			const child = spawn(CLI, ["--no-open", root], { stdio: ["ignore", "ignore", "pipe"] });
 			let err = "";
 			child.stderr.on("data", d => (err += d));
 			child.on("error", fail);

@@ -1,5 +1,6 @@
-# Builds the Co-Review desktop app for macOS, Linux and Windows. A `v*` tag publishes the builds as a GitHub
-# release, which install.sh downloads (releases/latest/download/Co-Review-<os>-<arch>.<ext>). Run it by hand to
+# Builds the Co-Review app (Lapce with Co-Review's crates) and the `co-review` command for macOS, Linux and Windows,
+# and packages them with packaging/package.sh. A `v*` tag publishes them as a GitHub release, which install.sh
+# downloads (releases/latest/download/Co-Review-<os>-<arch>.<ext>) and the app's updater checks. Run it by hand to
 # get the builds as workflow artifacts without releasing.
 name: Release
 
@@ -11,6 +12,9 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   build:
     name: build (${{ matrix.name }})
@@ -19,10 +23,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: mac-arm64, os: macos-latest, args: --mac --arm64 }
-          - { name: linux-x64, os: ubuntu-latest, args: --linux --x64 }
-          - { name: linux-arm64, os: ubuntu-24.04-arm, args: --linux --arm64 }
-          - { name: win-x64, os: windows-latest, args: --win --x64 }
+          - { name: mac-arm64, os: macos-latest }
+          # The oldest supported Ubuntu, so the binaries run on any distribution with glibc 2.35 or later.
+          - { name: linux-x64, os: ubuntu-22.04 }
+          - { name: linux-arm64, os: ubuntu-22.04-arm }
+          - { name: win-x64, os: windows-latest }
     defaults:
       run:
         shell: bash
@@ -31,45 +36,31 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: npm
-      - name: System libraries (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev libx11-dev libxkbfile-dev rpm
       - name: Versions
-        # Every agent integration ships at the app's version; a tag must match it too.
+        # Every agent integration ships at the app's version (Cargo.toml); a tag must match it too.
         run: |
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then node bin/check-versions.mjs --tag "$GITHUB_REF_NAME"; else node bin/check-versions.mjs; fi
-      - name: Install
-        run: npm ci
-      - name: VS Code extensions
-        run: npm run download:plugins
-      - name: Build
-        run: |
-          npm run -w @co-review/review build
-          cd applications/electron
-          ../../node_modules/.bin/theia rebuild:electron --cacheRoot ../..
-          ../../node_modules/.bin/theia build --mode production
-      - name: Package
-        env:
-          # Unsigned builds; install.sh signs the macOS app ad hoc on install.
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          [[ "$GITHUB_REF_TYPE" == tag ]] || version="0.0.0-dev.${GITHUB_RUN_NUMBER}"
-          rm -rf applications/electron/plugins && cp -R plugins applications/electron/plugins
-          cd applications/electron
-          ../../node_modules/.bin/electron-builder --config electron-builder.yml ${{ matrix.args }} \
-            --publish never -c.extraMetadata.version="$version"
+      - name: Toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: System libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo make -f Makefile.lapce ubuntu-deps
+      - name: Inno Setup (Windows)
+        if: runner.os == 'Windows'
+        run: command -v iscc || [ -x "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ] || choco install innosetup --no-progress -y
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+      - name: Build and package
+        # Unsigned builds; install.sh signs the macOS app ad hoc on install.
+        run: PROFILE=release-lto OUT="$PWD/dist" packaging/package.sh
       - uses: actions/upload-artifact@v7
         with:
           name: co-review-${{ matrix.name }}
           path: |
-            applications/electron/dist/Co-Review-*.zip
-            applications/electron/dist/Co-Review-*.dmg
-            applications/electron/dist/Co-Review-*.tar.gz
-            applications/electron/dist/Co-Review-*.AppImage
-            applications/electron/dist/Co-Review-*.deb
-            applications/electron/dist/Co-Review-*.exe
+            dist/Co-Review-*.zip
+            dist/Co-Review-*.tar.gz
+            dist/Co-Review-*.exe
           if-no-files-found: error
 
   release:

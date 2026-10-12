@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Co-Review.app's Info.plist; packaging/package.sh fills in @VERSION@. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleExecutable</key>
+  <string>Co-Review</string>
+  <key>CFBundleIdentifier</key>
+  <string>dev.co-review.app</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>Co-Review</string>
+  <key>CFBundleDisplayName</key>
+  <string>Co-Review</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>@VERSION@</string>
+  <key>CFBundleVersion</key>
+  <string>@VERSION@</string>
+  <key>CFBundleSupportedPlatforms</key>
+  <array>
+    <string>MacOSX</string>
+  </array>
+  <key>CFBundleIconFile</key>
+  <string>co-review.icns</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.developer-tools</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSMainNibFile</key>
+  <string></string>
+  <key>NSSupportsAutomaticGraphicsSwitching</key>
+  <true/>
+  <key>NSRequiresAquaSystemAppearance</key>
+  <string>NO</string>
+  <key>NSHumanReadableCopyright</key>
+  <string>Co-Review contributors. Built on Lapce (Apache-2.0).</string>
+  <!-- Programs started from Co-Review's terminal and agents ask for these in Co-Review's name. -->
+  <key>NSAppleEventsUsageDescription</key>
+  <string>A program started in Co-Review would like to use AppleScript.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>A program started in Co-Review would like to access the camera.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>A program started in Co-Review would like to access the microphone.</string>
+  <key>NSSystemAdministrationUsageDescription</key>
+  <string>A program started in Co-Review requires elevated permissions.</string>
+</dict>
+</plist>
