@@ -1,0 +1,39 @@
+[package]
+name = "review_index"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/review_index.rs"
+
+[dependencies]
+review_model.workspace = true
+anyhow.workspace = true
+rayon = "1.10"
+serde.workspace = true
+serde_json.workspace = true
+sha1_smol = "1.0"
+sha2.workspace = true
+tree-sitter = "0.25"
+tree-sitter-language = "0.1"
+tree-sitter-go = "0.25"
+tree-sitter-typescript = "0.23"
+tree-sitter-javascript = "0.25"
+tree-sitter-python = "0.25"
+tree-sitter-java = "0.23"
+tree-sitter-rust = "0.24"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-cpp = "0.23"
+tree-sitter-c = "0.24"
+tree-sitter-ruby = "0.23"
+tree-sitter-php = "0.25"
+tree-sitter-bash = "0.25"
+tree-sitter-powershell = "0.26"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
