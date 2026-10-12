@@ -30,6 +30,8 @@ pub mod panel;
 pub mod plugin;
 pub mod proxy;
 pub mod rename;
+// co-review: the review core and UI (new files only; see docs/co-review/fork-surface.md).
+pub mod review;
 pub mod settings;
 pub mod snippet;
 pub mod source_control;

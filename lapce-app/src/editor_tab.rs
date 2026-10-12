@@ -32,6 +32,7 @@ use crate::{
     },
     main_split::{Editors, MainSplitData},
     plugin::PluginData,
+    review::{ReviewPage, ReviewPageId},
     window_tab::WindowTabData,
 };
 
@@ -43,6 +44,8 @@ pub enum EditorTabChildInfo {
     ThemeColorSettings,
     Keymap,
     Volt(VoltID),
+    // co-review: review pages (overview, document, pull request) as tab children.
+    Review(ReviewPage),
 }
 
 impl EditorTabChildInfo {
@@ -69,6 +72,9 @@ impl EditorTabChildInfo {
             EditorTabChildInfo::Keymap => EditorTabChild::Keymap(KeymapId::next()),
             EditorTabChildInfo::Volt(id) => {
                 EditorTabChild::Volt(VoltViewId::next(), id.to_owned())
+            }
+            EditorTabChildInfo::Review(page) => {
+                EditorTabChild::Review(ReviewPageId::next(), page.to_owned())
             }
         }
     }
@@ -131,6 +137,8 @@ pub enum EditorTabChildSource {
     ThemeColorSettings,
     Keymap,
     Volt(VoltID),
+    // co-review: review pages as tab children.
+    Review(ReviewPage),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -141,6 +149,8 @@ pub enum EditorTabChild {
     ThemeColorSettings(ThemeColorSettingsId),
     Keymap(KeymapId),
     Volt(VoltViewId, VoltID),
+    // co-review: review pages as tab children (lapce-app/src/review/page.rs).
+    Review(ReviewPageId, ReviewPage),
 }
 
 #[derive(PartialEq)]
@@ -162,6 +172,7 @@ impl EditorTabChild {
             EditorTabChild::ThemeColorSettings(id) => id.to_raw(),
             EditorTabChild::Keymap(id) => id.to_raw(),
             EditorTabChild::Volt(id, _) => id.to_raw(),
+            EditorTabChild::Review(id, _) => id.to_raw(),
         }
     }
 
@@ -195,6 +206,9 @@ impl EditorTabChild {
             }
             EditorTabChild::Keymap(_) => EditorTabChildInfo::Keymap,
             EditorTabChild::Volt(_, id) => EditorTabChildInfo::Volt(id.to_owned()),
+            EditorTabChild::Review(_, page) => {
+                EditorTabChildInfo::Review(page.to_owned())
+            }
         }
     }
 
@@ -398,6 +412,9 @@ impl EditorTabChild {
                     is_pristine: true,
                 }
             }),
+            EditorTabChild::Review(_, page) => {
+                crate::review::review_page_view_info(&page, config)
+            }
         }
     }
 }

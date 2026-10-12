@@ -196,6 +196,8 @@ pub struct WindowTabData {
     pub progresses: RwSignal<IndexMap<ProgressToken, WorkProgress>>,
     pub messages: RwSignal<Vec<(String, ShowMessageParams)>>,
     pub common: Rc<CommonData>,
+    // co-review: the workspace's reviews, for the Review panel and review pages.
+    pub review: crate::review::ReviewWorkspaceData,
 }
 
 impl std::fmt::Debug for WindowTabData {
@@ -549,6 +551,8 @@ impl WindowTabData {
 
         let about_data = AboutData::new(cx, common.focus);
         let alert_data = AlertBoxData::new(cx, common.clone());
+        // co-review: the workspace's reviews, kept in step with the review store.
+        let review = crate::review::ReviewWorkspaceData::new(cx, &workspace);
 
         let window_tab_data = Self {
             scope: cx,
@@ -581,6 +585,7 @@ impl WindowTabData {
             progresses: cx.create_rw_signal(IndexMap::new()),
             messages: cx.create_rw_signal(Vec::new()),
             common,
+            review,
         };
 
         {
@@ -1622,6 +1627,14 @@ impl WindowTabData {
                 {
                     editor_data.jump_highlight(InlineFindDirection::Left);
                 }
+            }
+
+            // co-review: the `Review:` commands.
+            ReviewTogglePanel => {
+                self.toggle_panel_focus(PanelKind::Review);
+            }
+            ReviewOpenOverview => {
+                crate::review::open_overview(self);
             }
         }
     }
@@ -2678,7 +2691,9 @@ impl WindowTabData {
             | PanelKind::CallHierarchy
             | PanelKind::DocumentSymbol
             | PanelKind::References
-            | PanelKind::Implementation => {
+            | PanelKind::Implementation
+            // co-review: the Review panel takes no keyboard focus yet.
+            | PanelKind::Review => {
                 // Some panels don't accept focus (yet). Fall back to visibility check
                 // in those cases.
                 self.panel.is_panel_visible(&kind)

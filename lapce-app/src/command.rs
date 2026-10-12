@@ -616,6 +616,15 @@ pub enum LapceWorkbenchCommand {
     #[strum(serialize = "jump_highlight_prev")]
     #[strum(message = "Jump to previous document highlight")]
     JumpHighlightPrev,
+
+    // co-review: review commands, under `Review:` in the palette (handled in lapce-app/src/review.rs).
+    #[strum(serialize = "review.toggle_panel")]
+    #[strum(message = "Review: Toggle Review Panel")]
+    ReviewTogglePanel,
+
+    #[strum(serialize = "review.open_overview")]
+    #[strum(message = "Review: Open Review Overview")]
+    ReviewOpenOverview,
 }
 
 #[derive(Clone, Debug)]

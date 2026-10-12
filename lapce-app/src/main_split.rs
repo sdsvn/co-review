@@ -52,6 +52,8 @@ use crate::{
     },
     keypress::{EventRef, KeyPressData, KeyPressHandle},
     panel::implementation_view::ReferencesRoot,
+    // co-review: review pages as tab children.
+    review::ReviewPageId,
     window_tab::{CommonData, Focus, WindowTabData},
 };
 
@@ -538,6 +540,8 @@ impl MainSplitData {
             EditorTabChild::ThemeColorSettings(_) => None,
             EditorTabChild::Keymap(_) => None,
             EditorTabChild::Volt(_, _) => None,
+            // co-review: review pages behave like Settings and Keymap here.
+            EditorTabChild::Review(_, _) => None,
         }
     }
 
@@ -871,6 +875,8 @@ impl MainSplitData {
                         EditorTabChild::ThemeColorSettings(_) => true,
                         EditorTabChild::Keymap(_) => true,
                         EditorTabChild::Volt(_, _) => true,
+                        // co-review: review pages behave like Settings and Keymap here.
+                        EditorTabChild::Review(_, _) => true,
                     };
 
                     if can_be_selected {
@@ -1036,6 +1042,29 @@ impl MainSplitData {
                         })
                     }
                 }
+                // co-review: a review page's tab is found by its page.
+                EditorTabChildSource::Review(page) => {
+                    if let Some(index) =
+                        active_editor_tab.with_untracked(|editor_tab| {
+                            editor_tab.children.iter().position(|(_, _, child)| {
+                                matches!(child, EditorTabChild::Review(_, current) if current == page)
+                            })
+                        })
+                    {
+                        Some(index)
+                    } else if ignore_unconfirmed {
+                        None
+                    } else {
+                        active_editor_tab.with_untracked(|editor_tab| {
+                            editor_tab
+                                .get_unconfirmed_editor_tab_child(
+                                    editors,
+                                    &diff_editors,
+                                )
+                                .map(|(i, _)| i)
+                        })
+                    }
+                }
             }
         };
 
@@ -1093,6 +1122,10 @@ impl MainSplitData {
                 EditorTabChildSource::Volt(id) => {
                     EditorTabChild::Volt(VoltViewId::next(), id.to_owned())
                 }
+                // co-review: a new review page tab.
+                EditorTabChildSource::Review(page) => {
+                    EditorTabChild::Review(ReviewPageId::next(), page.to_owned())
+                }
                 EditorTabChildSource::DiffEditor { left, right } => {
                     let diff_editor_id = DiffEditorId::next();
                     let diff_editor = DiffEditorData::new(
@@ -1129,6 +1162,8 @@ impl MainSplitData {
                         EditorTabChild::ThemeColorSettings(_) => {}
                         EditorTabChild::Keymap(_) => {}
                         EditorTabChild::Volt(_, _) => {}
+                        // co-review: review pages behave like Settings and Keymap here.
+                        EditorTabChild::Review(_, _) => {}
                     }
                     (editor_tab_id, current_child.clone())
                 });
@@ -1195,6 +1230,8 @@ impl MainSplitData {
                 EditorTabChild::ThemeColorSettings(_) => {}
                 EditorTabChild::Keymap(_) => {}
                 EditorTabChild::Volt(_, _) => {}
+                // co-review: review pages behave like Settings and Keymap here.
+                EditorTabChild::Review(_, _) => {}
             }
 
             // Now loading the new child
@@ -1269,6 +1306,13 @@ impl MainSplitData {
                                     } else {
                                         false
                                     }
+                                }),
+                            // co-review: a review page's tab is found by its page.
+                            EditorTabChildSource::Review(page) => editor_tab
+                                .children
+                                .iter()
+                                .position(|(_, _, child)| {
+                                    matches!(child, EditorTabChild::Review(_, current) if current == page)
                                 }),
                             EditorTabChildSource::NewFileEditor => None,
                         })
@@ -1573,6 +1617,10 @@ impl MainSplitData {
             EditorTabChild::Keymap(_) => EditorTabChild::Keymap(KeymapId::next()),
             EditorTabChild::Volt(_, id) => {
                 EditorTabChild::Volt(VoltViewId::next(), id.to_owned())
+            }
+            // co-review: a review page split into another tab.
+            EditorTabChild::Review(_, page) => {
+                EditorTabChild::Review(ReviewPageId::next(), page.to_owned())
             }
         };
 
@@ -1916,6 +1964,8 @@ impl MainSplitData {
             EditorTabChild::ThemeColorSettings(_) => None,
             EditorTabChild::Keymap(_) => None,
             EditorTabChild::Volt(_, _) => None,
+            // co-review: review pages behave like Settings and Keymap here.
+            EditorTabChild::Review(_, _) => None,
         }
     }
 
@@ -2154,6 +2204,8 @@ impl MainSplitData {
             EditorTabChild::ThemeColorSettings(_) => {}
             EditorTabChild::Keymap(_) => {}
             EditorTabChild::Volt(_, _) => {}
+            // co-review: review pages behave like Settings and Keymap here.
+            EditorTabChild::Review(_, _) => {}
         }
 
         if editor_tab_children_len == 0 {
@@ -2411,6 +2463,11 @@ impl MainSplitData {
 
     pub fn open_volt_view(&self, id: VoltID) {
         self.get_editor_tab_child(EditorTabChildSource::Volt(id), false, false);
+    }
+
+    // co-review: opens a review page, or selects its tab if open.
+    pub fn open_review_page(&self, page: crate::review::ReviewPage) {
+        self.get_editor_tab_child(EditorTabChildSource::Review(page), false, false);
     }
 
     pub fn open_settings(&self) {
@@ -2747,6 +2804,8 @@ impl MainSplitData {
             EditorTabChild::ThemeColorSettings(_) => {}
             EditorTabChild::Keymap(_) => {}
             EditorTabChild::Volt(_, _) => {}
+            // co-review: review pages behave like Settings and Keymap here.
+            EditorTabChild::Review(_, _) => {}
         }
         Some(())
     }

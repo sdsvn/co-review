@@ -10,8 +10,8 @@ replaces the slow foundation. Which editor is a design decision (`design.md`); t
 - Co-Review becomes a fork of a native editor. Everything Co-Review does today is rebuilt on top of it, as specified
   by the capabilities below. Plain IDE features (editing, navigation, search, Git, language servers, terminal) come
   from the host and are not specified; nothing new is added.
-- **BREAKING (for browser users only):** the browser app is dropped for good. Co-Review is a desktop app; the phone
-  view and the review server remain for remote use. `open_review` shows the review in the app's window and returns
+- **BREAKING:** the browser app, the phone view (`/m/`) and the review server (`co-review-server`) are dropped
+  for good. Co-Review is a desktop app. `open_review` shows the review in the app's window and returns
   a `note`, never a `url`.
 - One behaviour is corrected while porting: the repository map and the Graphify graph are built once per
   repository and shared by its worktrees and across restarts, instead of rebuilt per folder.
@@ -36,7 +36,6 @@ replaces the slow foundation. Which editor is a design decision (`design.md`); t
 - `acp-agents`: agents Co-Review launches over ACP to answer in threads.
 - `desktop-app`: background start, one window per repository, window lifecycle, themes, the review-focused shell and branding.
 - `cli`: the `co-review` command, the stdio MCP bridge, setup, status, logs and stale-version handling.
-- `remote-access`: the phone view and the review server.
 
 ### Modified Capabilities
 

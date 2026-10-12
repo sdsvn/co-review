@@ -134,6 +134,11 @@ struct Cli {
     #[clap(long, action)]
     plugin_path: Vec<PathBuf>,
 
+    // co-review: `--background`, how `co-review mcp` starts the app for an agent (desktop-app spec).
+    /// Start without a window, until a review is shown or the app is activated.
+    #[clap(long, action)]
+    background: bool,
+
     /// Paths to file(s) and/or folder(s) to open.
     /// When path is a file (that exists or not),
     /// it accepts `path:line:column` syntax
@@ -1415,6 +1420,11 @@ fn editor_tab_content(
             EditorTabChild::Keymap(_) => keymap_view(editors, common).into_any(),
             EditorTabChild::Volt(_, id) => {
                 plugin_info_view(plugin.clone(), id).into_any()
+            }
+            // co-review: review pages in editor tabs.
+            EditorTabChild::Review(_, page) => {
+                crate::review::review_page_view(window_tab_data.clone(), page)
+                    .into_any()
             }
         };
         child.style(|s| s.size_full())
@@ -3872,6 +3882,12 @@ pub fn launch() {
         return;
     }
 
+    // co-review: a background start leaves a running app alone (it already serves agents) rather than
+    // handing it a launch, which would focus a window.
+    if cli.background && !cli.new && get_socket().is_ok() {
+        return;
+    }
+
     // If the cli is not requesting a new window, and we're not developing a plugin, we try to open
     // in the existing Lapce process
     if !cli.new {
@@ -3906,6 +3922,15 @@ pub fn launch() {
     };
     let scope = Scope::new();
     provide_context(db.clone());
+
+    // co-review: the review core and the MCP server start with the app (design.md, decision 4).
+    let review_core = crate::review::ReviewCore::start(
+        cli.paths
+            .iter()
+            .find(|path| path.is_dir)
+            .map(|path| path.path.clone()),
+        cli.background,
+    );
 
     let window_scale = scope.create_rw_signal(1.0);
     let latest_release = scope.create_rw_signal(Arc::new(None));
@@ -3958,7 +3983,13 @@ pub fn launch() {
         plugin_paths,
     };
 
-    let app = app_data.create_windows(db.clone(), cli.paths);
+    // co-review: started in the background, no window until a review is shown or the app is activated.
+    let app = if cli.background {
+        floem::Application::new()
+    } else {
+        app_data.create_windows(db.clone(), cli.paths)
+    };
+    crate::review::connect(review_core.clone(), app_data.clone());
 
     {
         let app_data = app_data.clone();
@@ -4064,8 +4095,17 @@ pub fn launch() {
         let app_data = app_data.clone();
         create_effect(move |_| {
             if let Some(CoreNotification::OpenPaths { paths }) = notification.get() {
+                // co-review: one window per repository: a folder opens its own window or focuses it.
+                let (folders, files): (Vec<PathObject>, Vec<PathObject>) =
+                    paths.into_iter().partition(|path| path.is_dir);
+                for folder in folders {
+                    crate::review::open_or_focus_folder(&app_data, folder.path);
+                }
+                if files.is_empty() {
+                    return;
+                }
                 if let Some(window_tab) = app_data.active_window_tab() {
-                    window_tab.open_paths(&paths);
+                    window_tab.open_paths(&files);
                     // focus window after open doc
                     floem::action::focus_window();
                 }
@@ -4094,6 +4134,8 @@ pub fn launch() {
             if let Err(err) = db.insert_app(app_data.clone()) {
                 tracing::error!("{:?}", err);
             }
+            // co-review: quitting closes every review window for its agents, and stops the MCP server.
+            review_core.shut_down();
         }
         floem::AppEvent::Reopen {
             has_visible_windows,
@@ -4168,7 +4210,8 @@ pub fn load_shell_env() {
 }
 
 pub fn get_socket() -> Result<interprocess::local_socket::LocalSocketStream> {
-    let local_socket = Directory::local_socket()
+    // co-review: one single-instance socket per `$CO_REVIEW_HOME`.
+    let local_socket = crate::review::local_socket(Directory::local_socket())
         .ok_or_else(|| anyhow!("can't get local socket folder"))?;
     let socket =
         interprocess::local_socket::LocalSocketStream::connect(local_socket)?;
@@ -4204,7 +4247,8 @@ pub fn try_open_in_existing_process(
 }
 
 fn listen_local_socket(tx: SyncSender<CoreNotification>) -> Result<()> {
-    let local_socket = Directory::local_socket()
+    // co-review: one single-instance socket per `$CO_REVIEW_HOME`.
+    let local_socket = crate::review::local_socket(Directory::local_socket())
         .ok_or_else(|| anyhow!("can't get local socket folder"))?;
     if local_socket.exists() {
         if let Err(err) = std::fs::remove_file(&local_socket) {

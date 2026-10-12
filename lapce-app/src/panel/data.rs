@@ -26,6 +26,8 @@ pub fn default_panel_order() -> PanelOrder {
         PanelPosition::LeftTop,
         im::vector![
             PanelKind::FileExplorer,
+            // co-review: the Review panel in the default layout.
+            PanelKind::Review,
             PanelKind::Plugin,
             PanelKind::SourceControl,
             PanelKind::Debug,
@@ -63,6 +65,8 @@ pub enum PanelSection {
     Variable,
     StackFrame,
     Breakpoint,
+    // co-review: the Review panel's sections (unit variants: sections are JSON map keys).
+    Reviews,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

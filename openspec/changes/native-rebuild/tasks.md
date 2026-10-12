@@ -37,10 +37,13 @@
 
 ## 7. App
 
-- [ ] 7.1 desktop-app, remaining cli, remote-access
+- [ ] 7.1 desktop-app, remaining cli
 
 ## 8. Ship
 
 - [ ] 8.1 Signing, installers, `install.sh`, release workflow
 - [ ] 8.2 Prompts, skills and `llms.txt`: "the review is open in Co-Review" instead of a URL
-- [ ] 8.3 Docs and site; retire the Theia app
+- [ ] 8.3 Docs and site
+- [ ] 8.4 Remove the TypeScript app: extensions/, applications/, the npm/Theia build, the Node launchers, and the
+      tests/gen recorders (their fixtures stay as the reference); Makefile, release workflow and install.sh build and
+      install the Lapce app only

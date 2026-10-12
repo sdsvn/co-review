@@ -43,11 +43,13 @@ no cmake) in about 10 GB.
    `panel/view.rs`), review pages as new editor-tab children like Settings and Keymap (`editor_tab.rs`), gutter
    affordance and thread markers (`editor/gutter.rs`, `editor/view.rs`), changed-file decorations and a filter in the
    file explorer (`file_explorer/`), app entry, `--background` and branding (`bin/lapce.rs`, `app.rs`), and window
-   close / open-or-focus by root (`window.rs`, `app.rs`).
+   close / open-or-focus by root (`window.rs`, `app.rs`). The review UI is not a crate: it lives in the new module
+   tree `lapce-app/src/review/`, since it needs `lapce-app`'s internal types and a `review_ui` crate that
+   `lapce-app` depends on would be a cycle.
 4. **One process.** The review core and the MCP server run in the app process (not `lapce-proxy`, which serves
    remote workspaces); started with `--background` it opens no window, so `co-review mcp` can start it for an agent.
 5. **Core crates know nothing about windows.** Model, store, anchors, index, graph, bundles, design check, pages,
-   GitHub, code folders, MCP and web are plain crates (std threads and channels); `review_ui` adapts their events
+   GitHub, code folders, MCP and web are plain crates (std threads and channels); `lapce-app/src/review/` adapts their events
    to Floem signals. They're tested headless.
 6. **ACP through the `agent-client-protocol` crate** (the protocol's Rust SDK), in `review_agents`; Lapce has no ACP
    client.
@@ -67,7 +69,10 @@ no cmake) in about 10 GB.
 13. **Desktop only.** No browser target; `open_review` returns a `note`.
 14. **Licenses and branding.** Lapce's code stays Apache-2.0; Co-Review's crates keep the project's EPL-2.0 (the
     two combine). The app is branded Co-Review: own name, icon, bundle id `dev.co-review.app`, config folder and
-    update feed; Lapce's update check and plugin registry endpoints are pointed away or disabled.
+    update feed; Lapce's update check points at Co-Review's releases. Lapce's plugin registry stays: language
+    support (language servers) comes from Lapce plugins.
+15. **Platforms**: macOS (Apple silicon), Linux (x64, arm64) and Windows (x64), as today. `CO_REVIEW_PORT` stays
+    the MCP server's port.
 
 ### Crates
 
@@ -86,9 +91,8 @@ no cmake) in about 10 GB.
 | `review_code` | code folders, worktrees, base versions | `node/code-folders.ts` |
 | `review_mcp` | MCP server, `server.json`, presence, decisions, channel | `node/co-reviewer-mcp.ts`, `agent-coordination.ts` |
 | `review_agents` | ACP participation in threads | `node/acp-agent-service.ts` |
-| `review_web` | phone view, review server API | `node/mobile-*.ts`, `bin/review-server.mjs` |
 | `review_cli` | the `co-review` command | `bin/co-review.mjs`, `node/agent-setup.ts`, `debug-log.ts` |
-| `review_ui` | Floem views: panel, inline threads, patch page, document page, Mermaid, dialogs, theme | `browser/*`, Ferrite's Mermaid |
+| `lapce-app/src/review/` (module, not a crate) | Floem views: panel, inline threads, patch page, document page, Mermaid, dialogs, theme | `browser/*`, Ferrite's Mermaid |
 
 ### Performance targets
 
@@ -113,13 +117,14 @@ diff); a regression over 20 % fails the build.
   fallback: threads as gutter markers that open a pinned popover, with full threads in the panel.
 - [Lapce upstream is slow; editor bugs are ours to fix] → accepted; keep fixes small and offer them upstream.
 - [Floem is young and thinly documented] → copy the shapes of Lapce's own views (settings, source control, diff).
-- [Text anchors in rendered Markdown] → map the rendered selection to source offsets once, in `review_ui`; verify
+- [Text anchors in rendered Markdown] → map the rendered selection to source offsets once, in `lapce-app/src/review/`; verify
   against the Theia app's anchors.
 - [Ferrite's Mermaid layout differs from mermaid.js] → node and edge ids (what anchors use) come from the source,
   not the layout, so comments survive layout differences.
 - [Behaviour drift] → recorded MCP sessions and corpora from the Theia app as conformance tests.
 - [Windows] → Windows CI from the first task.
-- [Browser users lose their app] → phone view and review server remain; release notes say so.
+- [Browser, phone and script users lose their entry points] → the browser app, the phone view and the review
+  server (`co-review-server`) are dropped (decided 2026-10-12); release notes say so.
 
 ## Migration Plan
 

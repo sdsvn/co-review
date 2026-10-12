@@ -34,7 +34,8 @@ pub enum App {
 
 impl App {
     /// `$CO_REVIEW_APP` (the desktop app's executable, or `none` to only use a running Co-Review), else the app this
-    /// command is bundled in, else the checkout's browser app, else the installed desktop app.
+    /// command is bundled in, else the Lapce-based app built beside it (`cargo build`), else the checkout's browser
+    /// app, else the installed desktop app.
     pub fn locate() -> Option<App> {
         if let Some(configured) =
             std::env::var_os("CO_REVIEW_APP").filter(|value| !value.is_empty())
@@ -46,6 +47,12 @@ impl App {
         }
         if let Some(executable) =
             installation::bundled_resources().and_then(|resources| bundle_executable(&resources))
+        {
+            return Some(App::desktop(executable));
+        }
+        if let Some(executable) = std::env::current_exe()
+            .ok()
+            .and_then(|command| built_app(command.parent()?))
         {
             return Some(App::desktop(executable));
         }
@@ -73,6 +80,18 @@ impl App {
     pub fn is_desktop(&self) -> bool {
         matches!(self, App::Desktop { .. })
     }
+}
+
+/// The app built in the same cargo profile directory as this command (`target/debug/lapce`); only there, so an
+/// unrelated `lapce` installed beside the command is never taken for Co-Review.
+fn built_app(directory: &Path) -> Option<PathBuf> {
+    if !directory.join(".fingerprint").is_dir() {
+        return None;
+    }
+    ["lapce", "lapce.exe"]
+        .into_iter()
+        .map(|name| directory.join(name))
+        .find(|candidate| candidate.is_file())
 }
 
 /// The desktop app's executable for its `resources/app` directory.
@@ -143,7 +162,8 @@ fn registered(home: &Path) -> Option<String> {
     server_record(home)?.url
 }
 
-/// Whether a Co-Review answers at `base` (its `/mcp` endpoint refuses a GET without a session).
+/// Whether a Co-Review answers at `base` (its `/mcp` endpoint refuses a GET without a session: 400 from the Theia
+/// app, 406 from the Lapce app's rmcp server, which wants `Accept: text/event-stream`).
 pub fn is_running(base: &str) -> bool {
     match http_agent()
         .get(&format!("{base}/mcp"))
@@ -151,7 +171,7 @@ pub fn is_running(base: &str) -> bool {
         .call()
     {
         Ok(_) => true,
-        Err(ureq::Error::Status(status, _)) => status == 400 || status == 404,
+        Err(ureq::Error::Status(status, _)) => matches!(status, 400 | 404 | 406),
         Err(ureq::Error::Transport(_)) => false,
     }
 }
@@ -392,4 +412,22 @@ pub fn stop_stale_desktop(home: &Path, options: &StaleOptions) -> bool {
         process::kill(pid);
     }
     true
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_app_is_found_beside_the_command_only_in_a_cargo_profile_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::write(directory.path().join("lapce"), "").unwrap();
+        assert_eq!(built_app(directory.path()), None);
+        std::fs::create_dir(directory.path().join(".fingerprint")).unwrap();
+        assert_eq!(
+            built_app(directory.path()),
+            Some(directory.path().join("lapce"))
+        );
+    }
 }

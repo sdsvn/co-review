@@ -19,6 +19,8 @@ pub enum PanelKind {
     DocumentSymbol,
     References,
     Implementation,
+    // co-review: the Review panel (lapce-app/src/review/panel.rs).
+    Review,
 }
 
 impl PanelKind {
@@ -35,6 +37,7 @@ impl PanelKind {
             PanelKind::DocumentSymbol => LapceIcons::DOCUMENT_SYMBOL,
             PanelKind::References => LapceIcons::REFERENCES,
             PanelKind::Implementation => LapceIcons::IMPLEMENTATION,
+            PanelKind::Review => LapceIcons::REVIEW,
         }
     }
 
@@ -61,6 +64,7 @@ impl PanelKind {
             PanelKind::DocumentSymbol => PanelPosition::RightTop,
             PanelKind::References => PanelPosition::BottomLeft,
             PanelKind::Implementation => PanelPosition::BottomLeft,
+            PanelKind::Review => PanelPosition::LeftTop,
         }
     }
 }

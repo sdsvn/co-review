@@ -507,6 +507,11 @@ fn panel_view(
                     implementation_panel(window_tab_data.clone(), position)
                         .into_any()
                 }
+                // co-review: the Review panel's view.
+                PanelKind::Review => {
+                    crate::review::review_panel(window_tab_data.clone(), position)
+                        .into_any()
+                }
             };
             view.style(|s| s.size_pct(100.0, 100.0))
         },
@@ -563,6 +568,7 @@ fn panel_picker(
                 PanelKind::DocumentSymbol => "Document Symbol",
                 PanelKind::References => "References",
                 PanelKind::Implementation => "Implementation",
+                PanelKind::Review => "Review",
             };
             let icon = p.svg_name();
             let is_active = {

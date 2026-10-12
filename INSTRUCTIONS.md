@@ -37,7 +37,9 @@ git merge lapce/master
 
 ### The fork's edit budget
 
-- **New code goes in new crates** named `review_*` (the crate table is in `design.md`).
+- **New code goes in new crates** named `review_*` (the crate table is in `design.md`). The one exception is the
+  review UI: it lives in the module tree `lapce-app/src/review/` (new files only), because it needs `lapce-app`'s
+  internal types and a separate crate would form a dependency cycle with `lapce-app`.
 - **An edit to a Lapce file is an extension point, not a feature.** Add the smallest hook that lets a `review_*`
   crate do the work: an enum variant, a callback, a `pub` on a private item. Never write review logic inside
   `lapce-*`.
@@ -54,6 +56,7 @@ git merge lapce/master
 | `lapce-app/src/editor/gutter.rs`, `editor/view.rs` | the **+** affordance, thread markers, thread rows between lines | inline-review |
 | `lapce-app/src/file_explorer/` | entry decorations (colour, `+12 −3`, viewed mark) and a changed-files filter | change-review, review-panel |
 | `lapce-app/src/bin/lapce.rs`, `app.rs`, `window.rs` | starting the review core, `--background`, open-or-focus by root, window close, branding | desktop-app |
+| `lapce-app/src/window_tab.rs`, `main_split.rs`, `command.rs`, `config/icon.rs` | each workspace's review data, opening review page tabs, the `Review:` commands, the review icon | review-panel, overview-page |
 | `lapce-app/src/update.rs`, `plugin.rs` | Co-Review's update feed; the plugin registry kept or disabled | desktop-app |
 
 ### Branding
@@ -105,10 +108,9 @@ TypeScript works around Theia (DI, RPC between frontend and backend, Monaco view
 | `node/code-folders.ts` | `review_code` | git worktrees, sparse checkout, base file reads |
 | `node/co-reviewer-mcp.ts`, `agent-coordination.ts` | `review_mcp` | `rmcp`, Streamable HTTP; channel push for Claude Code |
 | `node/acp-agent-service.ts`, `agent-setup.ts` (agent list) | `review_agents` | the `agent-client-protocol` crate |
-| `node/mobile-review.ts`, `mobile-page.ts`, `bin/review-server.mjs` | `review_web` | serve the same HTML; same REST API |
 | `bin/co-review.mjs`, `node/agent-setup.ts` (setup), `debug-log.ts` | `review_cli` | starts fast: no UI crates on the `mcp` path |
-| `browser/*` (panel, editor decorator, inline zone, document and patch widgets, theme) | `review_ui` | Floem views, see section 4 |
-| `electron-main/*` | Lapce hooks + `review_ui` | `--background`, single instance, window lifecycle |
+| `browser/*` (panel, editor decorator, inline zone, document and patch widgets, theme) | `lapce-app/src/review/` | Floem views, see section 4 |
+| `electron-main/*` | Lapce hooks + `lapce-app/src/review/` | `--background`, single instance, window lifecycle |
 
 Mermaid comes from Ferrite (https://github.com/OlaProeis/Ferrite, MIT, `src/markdown/mermaid/`): keep its parsers and
 layout, redo its egui drawing in Floem, and keep its license notice with the ported files.
@@ -120,7 +122,7 @@ layout, redo its egui drawing in Floem, and keep its license notice with the por
 - Library roots named after the crate (`[lib] path = "src/review_store.rs"`), no `mod.rs` files.
 - Full-word names; comments only for a non-obvious *why*.
 - Floem is reactive: state lives in signals (`RwSignal`, `create_rw_signal`), views derive from them. The review
-  crates stay UI-free; `review_ui` turns store events (channels) into signal updates on the UI thread, never
+  crates stay UI-free; `lapce-app/src/review/` turns store events (channels) into signal updates on the UI thread, never
   blocking it.
 - Look like Lapce: reuse its theme colours (`LapceColor`), icons (`LapceIcons`), config and keymap system; review
   commands appear under `Review:` in the palette; keybindings as today (`Cmd+Alt+M`, `Cmd+Alt+A`, `Cmd+Alt+↓/↑`,
@@ -158,7 +160,7 @@ layout, redo its egui drawing in Floem, and keep its license notice with the por
 | Unit | each `review_*` crate | what fixtures don't already cover |
 | Fixtures | `crates/*/tests/fixtures`, `tests/gen/*.mjs` | outputs recorded from the TypeScript, replayed exactly |
 | Conformance | `crates/review_mcp/tests/conformance/` | recorded MCP sessions; the `co-review` bridge tests |
-| UI | `review_ui` | Floem views driven headless where possible; the rest checked by running the app |
+| UI | `lapce-app/src/review/` | Floem views driven headless where possible; the rest checked by running the app |
 | End to end | `tests/e2e/` | the Claude Code plugin and the Pi package run each workflow against the app with a scripted reviewer |
 
 A feature is done when every scenario in its spec passes, its tests are in CI (`.github/workflows/rust.yml`), and it

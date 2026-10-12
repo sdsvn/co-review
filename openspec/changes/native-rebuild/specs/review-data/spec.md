@@ -37,7 +37,7 @@ the Theia app can read.
 - **THEN** every review appears with its threads, messages, drafts, statuses and viewed files
 
 ### Requirement: Consistent state for every participant
-Every change to a review (from the reviewer, an MCP agent, an ACP agent, the phone view or a sidecar file) SHALL be
+Every change to a review (from the reviewer, an MCP agent, an ACP agent or a sidecar file) SHALL be
 applied one at a time per review, saved, and shown to every open window and connected agent.
 
 #### Scenario: Simultaneous changes

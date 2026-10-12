@@ -37,6 +37,8 @@ name = "Lapce Codicons"
 "breadcrumb_separator" = "chevron-right.svg"
 "symbol_color" = "symbol-color.svg"
 "type_hierarchy" = "type-hierarchy.svg"
+# co-review: the Review panel's and review pages' icon.
+"review" = "comment-discussion.svg"
 
 "window.close" = "chrome-close.svg"
 "window.restore" = "chrome-restore.svg"

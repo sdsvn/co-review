@@ -2,7 +2,8 @@
 
 use std::io::{self, BufRead};
 
-/// The data of each `message` event of a stream, in order, until it ends or fails.
+/// The data of each `message` event of a stream, in order, until it ends or fails. An event without data is not
+/// dispatched (as the SSE spec says), e.g. the priming event rmcp sends first.
 pub struct Events<R> {
     reader: R,
     line: String,
@@ -28,12 +29,17 @@ impl<R: BufRead> Iterator for Events<R> {
             match self.reader.read_line(&mut self.line) {
                 Err(error) => return Some(Err(error)),
                 // The end of the stream also ends a last event without its blank line.
-                Ok(0) => return data.filter(|_| is_message(&event_type)).map(Ok),
+                Ok(0) => {
+                    return data
+                        .filter(|data| !data.is_empty() && is_message(&event_type))
+                        .map(Ok);
+                }
                 Ok(_) => {}
             }
             let line = self.line.trim_end_matches(['\n', '\r']);
             if line.is_empty() {
                 if let Some(data) = data.take()
+                    && !data.is_empty()
                     && is_message(&event_type)
                 {
                     return Some(Ok(data));
@@ -84,6 +90,14 @@ mod tests {
                 "id: 1\nevent: message\ndata: {\"a\":1}\n\n: comment\ndata:{\"b\":\ndata: 2}\r\n\r\nevent: ping\ndata: x\n\ndata: last"
             ),
             vec!["{\"a\":1}", "{\"b\":\n2}", "last"]
+        );
+    }
+
+    #[test]
+    fn events_without_data_are_skipped() {
+        assert_eq!(
+            events("id: 0\nretry: 3000\ndata:\n\nid: 1\ndata: {}\n\n"),
+            vec!["{}"]
         );
     }
 }
