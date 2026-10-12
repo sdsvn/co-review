@@ -572,9 +572,11 @@ impl Shared {
         let review_id = review_id.to_string();
         let watched = dir.to_path_buf();
         let thread_stop = stop.clone();
+        // Taken before the thread starts, so a change made right after opening is never mistaken for the start.
+        let known = findings_files(dir);
         let thread = thread::Builder::new()
             .name("co-review-findings-watch".into())
-            .spawn(move || watch_findings(weak, &review_id, &watched, &thread_stop));
+            .spawn(move || watch_findings(weak, &review_id, &watched, known, &thread_stop));
         match thread {
             Ok(thread) => {
                 watchers.insert(
@@ -601,8 +603,13 @@ impl Shared {
 }
 
 /// Polls `dir`'s findings files and syncs once they have been quiet for `SYNC_DEBOUNCE`.
-fn watch_findings(shared: Weak<Shared>, review_id: &str, dir: &Path, stop: &AtomicBool) {
-    let mut known = findings_files(dir);
+fn watch_findings(
+    shared: Weak<Shared>,
+    review_id: &str,
+    dir: &Path,
+    mut known: HashMap<PathBuf, (SystemTime, u64)>,
+    stop: &AtomicBool,
+) {
     let mut pending_since: Option<Instant> = None;
     while !stop.load(Ordering::Relaxed) {
         thread::sleep(WATCH_INTERVAL);
