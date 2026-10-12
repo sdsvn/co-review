@@ -510,7 +510,7 @@ pub struct Proposal {
     pub status: ProposalStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadOptions {
     #[serde(default, skip_serializing_if = "Option::is_none")]
