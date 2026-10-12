@@ -74,6 +74,18 @@ const overviewAreas = await repositoryOverview({
 writeFileSync(join(fixtureDir, 'overview_with_areas_expected.txt'), overviewAreas);
 console.log(`overview (with areas): ${overviewAreas.split('\n').length} lines`);
 
+// -- Overview of a graph with edge cases: paths encodeURI changes, line numbers after a stray
+// `L` or with a leading zero, and negative community ids (whose keys split oddly on '-').
+writeFileSync(join(tempRoot, 'graphify-out', 'graph.json'), readFileSync(join(fixtureDir, 'edge_cases_graph.json'), 'utf8'));
+const edgeCases = await repositoryOverview({
+  root: tempRoot,
+  coverage: { total: 15, viewed: 1, areas: [] },
+  outlines: new Map(),
+  graph: 'built',
+});
+writeFileSync(join(fixtureDir, 'edge_cases_overview_expected.txt'), edgeCases);
+console.log(`overview (edge cases): ${edgeCases.split('\n').length} lines`);
+
 // -- DEPENDENCIES set --
 writeFileSync(join(fixtureDir, 'dependencies.json'), JSON.stringify([...DEPENDENCIES].sort()));
 

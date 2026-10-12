@@ -1,0 +1,42 @@
+# Repository overview: test-repo
+
+Built from the Graphify graph of this repository (`graphify-out/graph.json`: 15 definitions, 5 areas). 1 of 15 source files viewed so far. Graphify's own report, [GRAPH_REPORT.md](graphify-out/GRAPH_REPORT.md), adds the import cycles and the surprising connections between distant parts of the code.
+
+## Start here
+
+The most connected code: what the rest of the repository calls, imports or implements.
+
+- [alpha](src/na%C3%AFve%20dir/a#b%20%5B1%5D.rs:5): 2 connections, in Negative
+- [delta](src/two.rs:10): 2 connections, in Two
+- [beta](src/x.rs:01): 2 connections, in Negative
+- [eta](src/zero.rs:3): 2 connections, in Zero
+- [epsilon](src/two.rs:20): 1 connections, in Two
+- [kappa](src/one.rs:6): 1 connections, in One
+- [theta](src/zero.rs:4): 1 connections, in Zero
+- [lambda](src/one.rs:7): 1 connections, in One
+
+## Areas
+
+Clusters of code that work together (Graphify communities), largest first, with their most used pieces.
+
+- **Negative** (3 files): [alpha](src/na%C3%AFve%20dir/a#b%20%5B1%5D.rs:5), [beta](src/x.rs:01), [gamma](src/y.rs)
+- **Two** (1 file): [delta](src/two.rs:10), [epsilon](src/two.rs:20), [zeta](src/two.rs:30)
+- **Zero** (1 file): [eta](src/zero.rs:3), [theta](src/zero.rs:4), [iota](src/zero.rs:5)
+- **One** (1 file): [kappa](src/one.rs:6), [lambda](src/one.rs:7), [mu](src/one.rs:8)
+- **Minus three** (1 file): [nu](src/minus.rs:9), [xi](src/minus.rs:10), [omicron](src/minus.rs:11)
+
+## How the areas connect
+
+Lines are calls, references and imports between areas; thicker means more.
+
+```mermaid
+%% id: areas
+flowchart LR
+    a-1["Negative (3)"]
+    a2["Two (3)"]
+    a0["Zero (3)"]
+    a1["One (3)"]
+    a-3["Minus three (3)"]
+    a0 ---|2| a1
+    a0 ---|2| a1
+```

@@ -21,4 +21,4 @@ mod overview;
 pub use blast_radius::{AffectedDirection, AffectedNode, BlastEdge, BlastRadius, GraphNode, blast_radius};
 pub use build::{GraphState, build_graph};
 pub use graph_model::{DEPENDENCIES, GraphifyEdge, GraphifyGraph, GraphifyNodeData};
-pub use overview::graph_overview;
+pub use overview::{encode_uri, graph_overview};

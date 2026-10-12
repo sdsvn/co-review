@@ -7,10 +7,10 @@ use std::sync::LazyLock;
 
 use anyhow::{Context as _, Result};
 use regex::Regex;
-use review_graph::{GraphState, GraphifyGraph, graph_overview};
+use review_graph::{GraphState, GraphifyGraph, encode_uri, graph_overview};
 use review_model::ReviewCoverage;
 
-use crate::text::{basename, encode_uri, is_js_space};
+use crate::text::{basename, is_js_space};
 
 /// Files that look like where a program starts.
 pub static ENTRY_POINT: LazyLock<Regex> = LazyLock::new(|| {

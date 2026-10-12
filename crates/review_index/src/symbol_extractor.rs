@@ -4,6 +4,9 @@
 //! `DefaultSymbolExtractor` uses native tree-sitter grammars from crates.io with the same
 //! node-kind-to-symbol mapping as the TypeScript `syntax-service-impl.ts`.
 
+use std::sync::LazyLock;
+
+use regex::Regex;
 use tree_sitter::{Language, Node, Parser};
 
 /// The kind of a symbol, matching the TypeScript `SyntaxSymbolKind`.
@@ -276,36 +279,14 @@ fn qualified_name(grammar: &str, node: &Node, name_node: &Node, source: &[u8]) -
     name_text
 }
 
-/// Extract the receiver type name from a Go method receiver parameter text.
-/// Handles patterns like `(s *Service)`, `(s Service)`, `(s Service[T])`, `(*Service)`.
+/// The receiver type of a Go method receiver (`(s *Service[T])` → `Service`), by the TypeScript's
+/// regex: ASCII identifiers only, and JavaScript's `\s` (Unicode white space without U+0085, plus U+FEFF).
 fn extract_go_receiver_type(receiver_text: &str) -> Option<String> {
-    // The TS uses: /([A-Za-z_]\w*)(\[[^\]]*\])?\s*\)$/
-    let trimmed = receiver_text.trim();
-    let trimmed = trimmed.strip_suffix(')')?;
-    let trimmed = trimmed.trim_end();
-    // Remove generic parameters if present.
-    let trimmed = if let Some(bracket_pos) = trimmed.rfind('[') {
-        &trimmed[..bracket_pos]
-    } else {
-        trimmed
-    };
-    let trimmed = trimmed.trim_end();
-    // Find the last word (the type name), which may be preceded by *.
-    let last_word_start = trimmed
-        .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-        .map(|i| i + 1)
-        .unwrap_or(0);
-    let type_name = &trimmed[last_word_start..];
-    if type_name.is_empty()
-        || !type_name
-            .chars()
-            .next()
-            .map(|c| c.is_alphabetic() || c == '_')
-            .unwrap_or(false)
-    {
-        return None;
-    }
-    Some(type_name.to_string())
+    static RECEIVER: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"([A-Za-z_][A-Za-z0-9_]*)(\[[^\]]*\])?[\s\x{FEFF}&&[^\x{85}]]*\)$")
+            .expect("receiver regex is valid")
+    });
+    Some(RECEIVER.captures(receiver_text)?[1].to_string())
 }
 
 #[cfg(test)]

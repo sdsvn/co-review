@@ -130,6 +130,26 @@ fn overview_with_areas_matches_typescript() {
 }
 
 #[test]
+fn edge_case_overview_matches_typescript() {
+    let text = std::fs::read_to_string(fixtures_dir().join("edge_cases_graph.json"))
+        .expect("edge_cases_graph.json must exist");
+    let graph: GraphifyGraph =
+        serde_json::from_str(&text).expect("edge_cases_graph.json must parse");
+    let coverage = ReviewCoverage {
+        total: 15,
+        viewed: 1,
+        areas: vec![],
+    };
+
+    let actual = graph_overview(&graph, &coverage, "test-repo");
+    let expected =
+        std::fs::read_to_string(fixtures_dir().join("edge_cases_overview_expected.txt"))
+            .expect("edge_cases_overview_expected.txt must exist");
+
+    pretty_assertions::assert_eq!(expected, actual);
+}
+
+#[test]
 fn dependencies_set_matches_typescript() {
     let expected_text = std::fs::read_to_string(fixtures_dir().join("dependencies.json"))
         .expect("dependencies.json must exist");

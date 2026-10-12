@@ -89,19 +89,6 @@ pub(crate) fn relative_path(from: &str, to: &str) -> String {
     parts.join("/")
 }
 
-/// `encodeURI`: percent-encodes everything but letters, digits and `;,/?:@&=+$-_.!~*'()#`.
-pub(crate) fn encode_uri(text: &str) -> String {
-    let mut encoded = String::with_capacity(text.len());
-    for byte in text.bytes() {
-        if byte.is_ascii_alphanumeric() || b";,/?:@&=+$-_.!~*'()#".contains(&byte) {
-            encoded.push(byte as char);
-        } else {
-            encoded.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    encoded
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,7 +103,6 @@ mod tests {
     #[test]
     fn file_uris_decode() {
         assert_eq!(file_uri_to_path("file:///a%20b/c.rs"), "/a b/c.rs");
-        assert_eq!(encode_uri("a b/ü.rs"), "a%20b/%C3%BC.rs");
     }
 
     #[test]

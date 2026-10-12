@@ -13,6 +13,7 @@ review_model.workspace = true
 review_store.workspace = true
 anyhow.workspace = true
 rayon = "1.10"
+regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha1_smol = "1.0"

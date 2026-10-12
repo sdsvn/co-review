@@ -177,9 +177,12 @@ pub fn graph_overview(graph: &GraphifyGraph, coverage: &ReviewCoverage, repo_nam
         .entries
         .iter()
         .filter_map(|(key, count)| {
+            // As the TypeScript reads the key back: `Number` of the first two parts of
+            // `key.split('-')`, so a negative id's minus sign makes an empty part, which is 0.
+            let number = |part: &str| if part.is_empty() { Some(0) } else { part.parse::<i64>().ok() };
             let mut parts = key.split('-');
-            let a: i64 = parts.next()?.parse().ok()?;
-            let b: i64 = parts.next()?.parse().ok()?;
+            let a = number(parts.next()?)?;
+            let b = number(parts.next()?)?;
             (shown_ids.contains(&a) && shown_ids.contains(&b) && *count >= 2).then_some((a, b, *count))
         })
         .collect();
@@ -219,28 +222,38 @@ struct CommunityInfo<'a> {
     nodes: Vec<&'a GraphifyNodeData>,
 }
 
-/// A Markdown link that opens code at a location (`path:line`).
+/// A Markdown link that opens code at a location (`path:line`), as the TypeScript `link`: the line
+/// is the digits after the first `L` that has any, kept as written (`L01` → `:01`), except `1`.
 fn link(label: &str, file: Option<&str>, location: Option<&str>) -> String {
     let Some(file) = file.filter(|f| !f.is_empty()) else {
         return format!("`{label}`");
     };
-    let cleaned_label = label.replace(['[', ']'], "");
-    let line = location.and_then(|loc| {
-        loc.chars()
-            .skip_while(|c| *c != 'L')
-            .skip(1)
-            .take_while(|c| c.is_ascii_digit())
-            .collect::<String>()
-            .parse::<u32>()
-            .ok()
-    });
+    let location = location.unwrap_or_default();
+    let line = location
+        .match_indices('L')
+        .map(|(at, _)| {
+            let rest = &location[at + 1..];
+            &rest[..rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len()]
+        })
+        .find(|digits| !digits.is_empty());
     let suffix = match line {
-        Some(l) if l > 1 => format!(":{l}"),
+        Some(line) if line != "1" => format!(":{line}"),
         _ => String::new(),
     };
-    // URI-encode the file path (matching TS encodeURI behaviour for typical paths)
-    let encoded = file.replace(' ', "%20");
-    format!("[{cleaned_label}]({encoded}{suffix})")
+    format!("[{}]({}{suffix})", label.replace(['[', ']'], ""), encode_uri(file))
+}
+
+/// JavaScript's `encodeURI`: percent-encodes everything but letters, digits and `;,/?:@&=+$-_.!~*'()#`.
+pub fn encode_uri(text: &str) -> String {
+    let mut encoded = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || b";,/?:@&=+$-_.!~*'()#".contains(&byte) {
+            encoded.push(byte as char);
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
 }
 
 #[cfg(test)]
@@ -318,5 +331,6 @@ mod tests {
         assert_eq!(link("foo", Some("a.rs"), Some("L1")), "[foo](a.rs)");
         assert_eq!(link("foo", None, None), "`foo`");
         assert_eq!(link("[bar]", Some("b.rs"), None), "[bar](b.rs)");
+        assert_eq!(link("foo", Some("a b/ü.rs"), Some("XL L01")), "[foo](a%20b/%C3%BC.rs:01)");
     }
 }
