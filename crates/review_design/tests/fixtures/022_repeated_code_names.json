@@ -1,0 +1,80 @@
+{
+  "name": "repeated_code_names",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Use `RateLimiter` to limit requests\n- Configure `RateLimiter` for each endpoint\n- Test `RateLimiter` behavior\n- Also use `JobRunner` here\n- Configure `JobRunner` there\n- Wrap `JobRunner` in try-catch\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Use `RateLimiter` to limit requests\n- Configure `RateLimiter` for each endpoint\n- Test `RateLimiter` behavior\n- Also use `JobRunner` here\n- Configure `JobRunner` there\n- Wrap `JobRunner` in try-catch\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Use `RateLimiter` to limit requests\n- Configure `RateLimiter` for each endpoint\n- Test `RateLimiter` behavior\n- Also use `JobRunner` here\n- Configure `JobRunner` there\n- Wrap `JobRunner` in try-catch\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "Code names repeated across steps: `RateLimiter` (3 steps), `JobRunner` (3 steps). Name each once where it is introduced, then refer to it in words."
+      ]
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Use `RateLimiter` to limit requests",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Configure `RateLimiter` for each endpoint",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Test `RateLimiter` behavior",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Also use `JobRunner` here",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Configure `JobRunner` there",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Wrap `JobRunner` in try-catch",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Use RateLimiter to limit requests",
+      "Configure RateLimiter for each endpoint",
+      "Test RateLimiter behavior",
+      "Also use JobRunner here",
+      "Configure JobRunner there",
+      "Wrap JobRunner in try-catch"
+    ]
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "name": "long_steps",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- This is a really long step that goes on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on about something really detailed that should be broken up\n- Another overly long step that discusses many implementation details at once without using child steps to break them into individual decisions which is a problem because it makes the step harder to comment on individually\n- Short step\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- This is a really long step that goes on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on about something really detailed that should be broken up\n- Another overly long step that discusses many implementation details at once without using child steps to break them into individual decisions which is a problem because it makes the step harder to comment on individually\n- Short step\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- This is a really long step that goes on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on about something really detailed that should be broken up\n- Another overly long step that discusses many implementation details at once without using child steps to break them into individual decisions which is a problem because it makes the step harder to comment on individually\n- Short step\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "This is a really long step that goes on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on about something really detailed that should be broken up",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Another overly long step that discusses many implementation details at once without using child steps to break them into individual decisions which is a problem because it makes the step harder to comment on individually",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Short step",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "This is a really long step that goes on and on and on and on and on and on and o",
+      "Another overly long step that discusses many implementation details at once with",
+      "Short step"
+    ]
+  }
+}

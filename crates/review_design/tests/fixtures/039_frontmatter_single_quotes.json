@@ -1,0 +1,44 @@
+{
+  "name": "frontmatter_single_quotes",
+  "input": {
+    "markdown": "---\nco-review: design\ntitle: 'Single Quoted'\n---\n## Design\n- Step one\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design",
+        "title": "Single Quoted"
+      },
+      "body": "## Design\n- Step one\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

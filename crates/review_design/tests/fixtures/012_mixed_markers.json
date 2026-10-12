@@ -1,0 +1,45 @@
+{
+  "name": "mixed_markers",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Good step\n* Bad step\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Good step\n* Bad step\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Good step\n* Bad step\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "`## Design` mixes `- ` with `*`, `+` or numbered items; only `- ` items become steps."
+      ]
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Good step * Bad step",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Good step Bad step"
+    ]
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "name": "markers_in_text",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Use `code` and **bold** and *italic* in steps\n  - Child with `another` code name\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Use `code` and **bold** and *italic* in steps\n  - Child with `another` code name\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Use `code` and **bold** and *italic* in steps\n  - Child with `another` code name\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Use `code` and **bold** and *italic* in steps",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Child with `another` code name",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "stepIds": [
+      "Use code and bold and italic in steps",
+      "Child with another code name"
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "wrong_markers_only",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n* Wrong item one\n+ Wrong item two\n1. Numbered item\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n* Wrong item one\n+ Wrong item two\n1. Numbered item\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "* Wrong item one\n+ Wrong item two\n1. Numbered item\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "`## Design` uses `*`, `+` or numbered items; steps must be `- ` bullets."
+      ]
+    },
+    "stepTrees": {
+      "design": []
+    },
+    "stepIds": []
+  }
+}

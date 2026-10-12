@@ -1,0 +1,139 @@
+{
+  "name": "doc_example_2",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Retry outbound webhooks\n\n## Context\nWebhooks are sent inside the API request (`WebhookSender`). When a customer's endpoint is down, the event is lost\nand the request slows down; about 2% of deliveries fail today. The service already runs durable background jobs on\nPostgres (`JobRunner`).\n\n## Design\n- Deliver each accepted webhook at least once\n  - Record the delivery and queue a delivery job in the request's transaction\n  - The job sends the event and marks the delivery done\n    - A crash can repeat a delivery, so every event carries a stable id that receivers can deduplicate on\n- Retry failures that can succeed later\n  - Retry timeouts, rate limiting and server errors with exponential backoff, for up to 24 hours\n  - Fail other client errors at once, without retrying\n    - When rate limited, wait as long as the endpoint asks\n- Show customers what happened\n  - List each event's attempts and final status in the existing webhook log\n\n## Alternatives\n\n### Keep sending inline and retry in the request\nNo new jobs, but a slow endpoint still slows the API, and retries can't span hours.\n\n### A dedicated message broker\nAdds infrastructure; the existing job runner already gives durable, scheduled retries.\n\nSelected: the existing job runner, because retries must be durable and delayed, and it's already in place.\n\n## Behaviour\n\n### Endpoint down for an hour\nRequest → delivery and job saved → failures, retried with backoff → success → delivered\n\n### Worker crashes after the endpoint accepted the event\nEndpoint gets the event → worker dies before marking it done → the job runs again → the endpoint gets it again,\nwith the same event id\n\n## Open Questions\n- After 24 hours of failures, should we stop delivering to that endpoint, or keep retrying new events?\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Retry outbound webhooks\n\n## Context\nWebhooks are sent inside the API request (`WebhookSender`). When a customer's endpoint is down, the event is lost\nand the request slows down; about 2% of deliveries fail today. The service already runs durable background jobs on\nPostgres (`JobRunner`).\n\n## Design\n- Deliver each accepted webhook at least once\n  - Record the delivery and queue a delivery job in the request's transaction\n  - The job sends the event and marks the delivery done\n    - A crash can repeat a delivery, so every event carries a stable id that receivers can deduplicate on\n- Retry failures that can succeed later\n  - Retry timeouts, rate limiting and server errors with exponential backoff, for up to 24 hours\n  - Fail other client errors at once, without retrying\n    - When rate limited, wait as long as the endpoint asks\n- Show customers what happened\n  - List each event's attempts and final status in the existing webhook log\n\n## Alternatives\n\n### Keep sending inline and retry in the request\nNo new jobs, but a slow endpoint still slows the API, and retries can't span hours.\n\n### A dedicated message broker\nAdds infrastructure; the existing job runner already gives durable, scheduled retries.\n\nSelected: the existing job runner, because retries must be durable and delayed, and it's already in place.\n\n## Behaviour\n\n### Endpoint down for an hour\nRequest → delivery and job saved → failures, retried with backoff → success → delivered\n\n### Worker crashes after the endpoint accepted the event\nEndpoint gets the event → worker dies before marking it done → the job runs again → the endpoint gets it again,\nwith the same event id\n\n## Open Questions\n- After 24 hours of failures, should we stop delivering to that endpoint, or keep retrying new events?\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Context",
+          "key": "context",
+          "body": "Webhooks are sent inside the API request (`WebhookSender`). When a customer's endpoint is down, the event is lost\nand the request slows down; about 2% of deliveries fail today. The service already runs durable background jobs on\nPostgres (`JobRunner`).\n\n"
+        },
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Deliver each accepted webhook at least once\n  - Record the delivery and queue a delivery job in the request's transaction\n  - The job sends the event and marks the delivery done\n    - A crash can repeat a delivery, so every event carries a stable id that receivers can deduplicate on\n- Retry failures that can succeed later\n  - Retry timeouts, rate limiting and server errors with exponential backoff, for up to 24 hours\n  - Fail other client errors at once, without retrying\n    - When rate limited, wait as long as the endpoint asks\n- Show customers what happened\n  - List each event's attempts and final status in the existing webhook log\n\n"
+        },
+        {
+          "heading": "Alternatives",
+          "key": "alternatives",
+          "body": "\n### Keep sending inline and retry in the request\nNo new jobs, but a slow endpoint still slows the API, and retries can't span hours.\n\n### A dedicated message broker\nAdds infrastructure; the existing job runner already gives durable, scheduled retries.\n\nSelected: the existing job runner, because retries must be durable and delayed, and it's already in place.\n\n"
+        },
+        {
+          "heading": "Behaviour",
+          "key": "behaviour",
+          "body": "\n### Endpoint down for an hour\nRequest → delivery and job saved → failures, retried with backoff → success → delivered\n\n### Worker crashes after the endpoint accepted the event\nEndpoint gets the event → worker dies before marking it done → the job runs again → the endpoint gets it again,\nwith the same event id\n\n"
+        },
+        {
+          "heading": "Open Questions",
+          "key": "open questions",
+          "body": "- After 24 hours of failures, should we stop delivering to that endpoint, or keep retrying new events?\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Deliver each accepted webhook at least once",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Record the delivery and queue a delivery job in the request's transaction",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            },
+            {
+              "text": "The job sends the event and marks the delivery done",
+              "indent": 2,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "A crash can repeat a delivery, so every event carries a stable id that receivers can deduplicate on",
+                  "indent": 4,
+                  "depth": 3,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "text": "Retry failures that can succeed later",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Retry timeouts, rate limiting and server errors with exponential backoff, for up to 24 hours",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            },
+            {
+              "text": "Fail other client errors at once, without retrying",
+              "indent": 2,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "When rate limited, wait as long as the endpoint asks",
+                  "indent": 4,
+                  "depth": 3,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "text": "Show customers what happened",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "List each event's attempts and final status in the existing webhook log",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            }
+          ]
+        }
+      ],
+      "open questions": [
+        {
+          "text": "After 24 hours of failures, should we stop delivering to that endpoint, or keep retrying new events?",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Deliver each accepted webhook at least once",
+      "Record the delivery and queue a delivery job in the request's transaction",
+      "The job sends the event and marks the delivery done",
+      "A crash can repeat a delivery, so every event carries a stable id that receivers",
+      "Retry failures that can succeed later",
+      "Retry timeouts, rate limiting and server errors with exponential backoff, for up",
+      "Fail other client errors at once, without retrying",
+      "When rate limited, wait as long as the endpoint asks",
+      "Show customers what happened",
+      "List each event's attempts and final status in the existing webhook log"
+    ]
+  }
+}

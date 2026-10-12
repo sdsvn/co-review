@@ -1,0 +1,45 @@
+{
+  "name": "unknown_format",
+  "input": {
+    "markdown": "---\nco-review: review\n---\n# Title\n## Design\n- Step one\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "review"
+      },
+      "body": "# Title\n## Design\n- Step one\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "plain",
+      "declared": false,
+      "warnings": [
+        "Unknown `co-review: review` — the only format is `co-review: design`; rendered as plain Markdown."
+      ]
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

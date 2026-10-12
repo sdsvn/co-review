@@ -1,0 +1,57 @@
+{
+  "name": "step_markers",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Create new `payment_outbox` table — `✎` new table for charge requests\n- Check rate limit — `⚠` provider forgets keys after 24h\n- Decide on retry policy — `?` open question about backoff\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Create new `payment_outbox` table — `✎` new table for charge requests\n- Check rate limit — `⚠` provider forgets keys after 24h\n- Decide on retry policy — `?` open question about backoff\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Create new `payment_outbox` table — `✎` new table for charge requests\n- Check rate limit — `⚠` provider forgets keys after 24h\n- Decide on retry policy — `?` open question about backoff\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Create new `payment_outbox` table — `✎` new table for charge requests",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Check rate limit — `⚠` provider forgets keys after 24h",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Decide on retry policy — `?` open question about backoff",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Create new payment_outbox table — ✎ new table for charge requests",
+      "Check rate limit — ⚠ provider forgets keys after 24h",
+      "Decide on retry policy — ? open question about backoff"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "doc_example_4",
+  "input": {
+    "markdown": "---\nco-review: design\ntitle: Charge customers through an outbox\n---\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design",
+        "title": "Charge customers through an outbox"
+      },
+      "body": ""
+    },
+    "sections": {
+      "preamble": "",
+      "sections": []
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "No `## Design` section."
+      ]
+    },
+    "stepTrees": {},
+    "stepIds": []
+  }
+}

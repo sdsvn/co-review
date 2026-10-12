@@ -1,0 +1,59 @@
+{
+  "name": "tabs_indentation",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Top level\n\t- Tab indented child\n\t\t- Double tab grandchild\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Top level\n\t- Tab indented child\n\t\t- Double tab grandchild\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Top level\n\t- Tab indented child\n\t\t- Double tab grandchild\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Top level",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Tab indented child",
+              "indent": 4,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "Double tab grandchild",
+                  "indent": 8,
+                  "depth": 3,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "stepIds": [
+      "Top level",
+      "Tab indented child",
+      "Double tab grandchild"
+    ]
+  }
+}

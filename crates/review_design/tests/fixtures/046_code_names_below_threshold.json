@@ -1,0 +1,57 @@
+{
+  "name": "code_names_below_threshold",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Use `Foo` here\n- Use `Foo` there\n- Use `Bar` once\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Use `Foo` here\n- Use `Foo` there\n- Use `Bar` once\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Use `Foo` here\n- Use `Foo` there\n- Use `Bar` once\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Use `Foo` here",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Use `Foo` there",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Use `Bar` once",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Use Foo here",
+      "Use Foo there",
+      "Use Bar once"
+    ]
+  }
+}

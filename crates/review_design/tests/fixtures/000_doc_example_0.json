@@ -1,0 +1,80 @@
+{
+  "name": "doc_example_0",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# <Title>\n\n## Context\nWhy are we changing this? What exists today? Only what's needed to understand the change.\n\n## Design\n- <L1: a responsibility or behaviour that matters from outside>\n  - <L2: how it is achieved>\n    - <L3: an edge case, failure mode or constraint that matters>\n\n## Alternatives\nOptional. Only when there is a real choice a reviewer may want to challenge.\n\n## Behaviour\nOptional. Runtime scenarios that aren't obvious from the Design.\n\n## Open Questions\nOptional. Unresolved decisions that need the reviewer.\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# <Title>\n\n## Context\nWhy are we changing this? What exists today? Only what's needed to understand the change.\n\n## Design\n- <L1: a responsibility or behaviour that matters from outside>\n  - <L2: how it is achieved>\n    - <L3: an edge case, failure mode or constraint that matters>\n\n## Alternatives\nOptional. Only when there is a real choice a reviewer may want to challenge.\n\n## Behaviour\nOptional. Runtime scenarios that aren't obvious from the Design.\n\n## Open Questions\nOptional. Unresolved decisions that need the reviewer.\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Context",
+          "key": "context",
+          "body": "Why are we changing this? What exists today? Only what's needed to understand the change.\n\n"
+        },
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- <L1: a responsibility or behaviour that matters from outside>\n  - <L2: how it is achieved>\n    - <L3: an edge case, failure mode or constraint that matters>\n\n"
+        },
+        {
+          "heading": "Alternatives",
+          "key": "alternatives",
+          "body": "Optional. Only when there is a real choice a reviewer may want to challenge.\n\n"
+        },
+        {
+          "heading": "Behaviour",
+          "key": "behaviour",
+          "body": "Optional. Runtime scenarios that aren't obvious from the Design.\n\n"
+        },
+        {
+          "heading": "Open Questions",
+          "key": "open questions",
+          "body": "Optional. Unresolved decisions that need the reviewer.\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "<L1: a responsibility or behaviour that matters from outside>",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "<L2: how it is achieved>",
+              "indent": 2,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "<L3: an edge case, failure mode or constraint that matters>",
+                  "indent": 4,
+                  "depth": 3,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "open questions": []
+    },
+    "stepIds": [
+      "<L1: a responsibility or behaviour that matters from outside>",
+      "<L2: how it is achieved>",
+      "<L3: an edge case, failure mode or constraint that matters>"
+    ]
+  }
+}

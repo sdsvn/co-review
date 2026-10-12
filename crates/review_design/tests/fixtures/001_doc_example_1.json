@@ -1,0 +1,71 @@
+{
+  "name": "doc_example_1",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Rate-limit password-reset emails\n\n## Context\nThe password-reset endpoint sends an email on every request, so anyone can flood an inbox. Login attempts are\nalready limited by the shared rate limiter (`RateLimiter`, Redis, per key).\n\n## Design\n- Send at most 3 reset emails per account per hour\n  - Reuse the shared rate limiter, keyed by account\n    - Still answer \"accepted\" when limited, so the endpoint doesn't reveal whether an account exists\n- Count limited requests in the existing auth rate-limit metric\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Rate-limit password-reset emails\n\n## Context\nThe password-reset endpoint sends an email on every request, so anyone can flood an inbox. Login attempts are\nalready limited by the shared rate limiter (`RateLimiter`, Redis, per key).\n\n## Design\n- Send at most 3 reset emails per account per hour\n  - Reuse the shared rate limiter, keyed by account\n    - Still answer \"accepted\" when limited, so the endpoint doesn't reveal whether an account exists\n- Count limited requests in the existing auth rate-limit metric\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Context",
+          "key": "context",
+          "body": "The password-reset endpoint sends an email on every request, so anyone can flood an inbox. Login attempts are\nalready limited by the shared rate limiter (`RateLimiter`, Redis, per key).\n\n"
+        },
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Send at most 3 reset emails per account per hour\n  - Reuse the shared rate limiter, keyed by account\n    - Still answer \"accepted\" when limited, so the endpoint doesn't reveal whether an account exists\n- Count limited requests in the existing auth rate-limit metric\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Send at most 3 reset emails per account per hour",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Reuse the shared rate limiter, keyed by account",
+              "indent": 2,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "Still answer \"accepted\" when limited, so the endpoint doesn't reveal whether an account exists",
+                  "indent": 4,
+                  "depth": 3,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "text": "Count limited requests in the existing auth rate-limit metric",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Send at most 3 reset emails per account per hour",
+      "Reuse the shared rate limiter, keyed by account",
+      "Still answer \"accepted\" when limited, so the endpoint doesn't reveal whether an ",
+      "Count limited requests in the existing auth rate-limit metric"
+    ]
+  }
+}

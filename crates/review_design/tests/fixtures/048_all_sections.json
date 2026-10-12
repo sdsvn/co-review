@@ -1,0 +1,76 @@
+{
+  "name": "all_sections",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Context\nContext text.\n## Design\n- Step one\n## Alternatives\nAlt text.\n## Behaviour\nBehaviour text.\n## Diagrams\nDiagram text.\n## Open Questions\n- Question one\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Context\nContext text.\n## Design\n- Step one\n## Alternatives\nAlt text.\n## Behaviour\nBehaviour text.\n## Diagrams\nDiagram text.\n## Open Questions\n- Question one\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Context",
+          "key": "context",
+          "body": "Context text.\n"
+        },
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n"
+        },
+        {
+          "heading": "Alternatives",
+          "key": "alternatives",
+          "body": "Alt text.\n"
+        },
+        {
+          "heading": "Behaviour",
+          "key": "behaviour",
+          "body": "Behaviour text.\n"
+        },
+        {
+          "heading": "Diagrams",
+          "key": "diagrams",
+          "body": "Diagram text.\n"
+        },
+        {
+          "heading": "Open Questions",
+          "key": "open questions",
+          "body": "- Question one\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ],
+      "open questions": [
+        {
+          "text": "Question one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

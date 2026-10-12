@@ -1,0 +1,41 @@
+{
+  "name": "undeclared_with_design",
+  "input": {
+    "markdown": "# Title\n## Design\n- Step one\n",
+    "fileName": "readme.md"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {},
+      "body": "# Title\n## Design\n- Step one\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": false,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

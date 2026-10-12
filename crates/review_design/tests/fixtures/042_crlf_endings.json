@@ -1,0 +1,36 @@
+{
+  "name": "crlf_endings",
+  "input": {
+    "markdown": "---\r\nco-review: design\r\n---\r\n# Title\r\n## Design\r\n- Step one\r\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\r\n## Design\r\n- Step one\r\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\r\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "`## Design` has no `- ` step list."
+      ]
+    },
+    "stepTrees": {
+      "design": []
+    },
+    "stepIds": []
+  }
+}

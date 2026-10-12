@@ -1,0 +1,60 @@
+{
+  "name": "extra_sections",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Context\nSome context.\n## Design\n- Step one\n## Implementation\nDetails here.\n## Testing\nTest plan.\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Context\nSome context.\n## Design\n- Step one\n## Implementation\nDetails here.\n## Testing\nTest plan.\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Context",
+          "key": "context",
+          "body": "Some context.\n"
+        },
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n"
+        },
+        {
+          "heading": "Implementation",
+          "key": "implementation",
+          "body": "Details here.\n"
+        },
+        {
+          "heading": "Testing",
+          "key": "testing",
+          "body": "Test plan.\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "Sections outside the contract (shown as plain Markdown): `## Implementation`, `## Testing`."
+      ]
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

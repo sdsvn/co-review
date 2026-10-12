@@ -1,0 +1,229 @@
+{
+  "name": "doc_example_3",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Charge customers through an outbox\n\n## Context\nPlacing an order (`CreateOrder`) charges the customer through the payment provider inside the database\ntransaction. The transaction holds row locks for the whole payment call (p99 1.8 s), and a provider timeout rolls\nback an order the customer may already have paid for. Support resolves about 20 such cases a week by hand.\n\nCustomers must be charged exactly once. The mobile app polls the order and shows \"processing\" for any status other\nthan paid or failed.\n\n## Design\n- Accept the order without waiting for the payment provider\n  - Save the order as \"payment pending\" together with a charge request, in one transaction\n    — `✎` new `payment_outbox` table for charge requests\n  - Respond at once with the pending status\n    - Older app versions show \"processing\" for statuses they don't know, so they keep working\n- Charge each order exactly once\n  - A background worker claims waiting charge requests, oldest first, skipping rows another worker holds\n    - Several workers can run; each request is claimed by one worker at a time\n  - Charge through the provider with the order id as the idempotency key\n    - Repeating the call after a crash returns the original charge, so the customer is never charged twice\n  - Save the result and move the order to paid or failed in one transaction\n- Retry what can succeed later\n  - Retry timeouts and provider errors with backoff, for up to 1 hour\n    — `⚠` the provider forgets idempotency keys after 24 hours; retries must stop well before that\n  - Fail the order on a card decline and send the existing \"payment failed\" email\n- Switch traffic over gradually\n  - Put the new path behind a feature flag, per region\n  - Keep the current inline path until the flag is on everywhere, then delete it\n    - Orders placed through the inline path have no charge request, so the worker never sees them\n- Make stuck payments visible\n  - Alert when the oldest waiting charge request is older than 10 minutes, as the email outbox already does\n- Settle orders whose outcome is unknown\n  - Every hour, ask the provider about orders still pending after an hour, by idempotency key\n    - Charged: mark paid. Not found: mark failed. Provider unreachable: ask again next hour\n\n## Alternatives\n\n### Keep charging inline, with a shorter timeout\nSmaller change, but it still holds locks during a network call, and a timeout still leaves the payment state\nunknown.\n\n### Publish an event and charge from a consumer\nNo new table, but saving the order and publishing the event can't be atomic without an outbox anyway.\n\nSelected: a database outbox, the same pattern as the email outbox, with no new infrastructure.\n\n## Behaviour\n\n```mermaid\n%% id: charge\nsequenceDiagram\n  participant api as Place order\n  participant db as Database\n  participant w as Charge worker\n  participant p as Provider\n  api->>db: order (pending) + charge request, one transaction\n  w->>db: claim a waiting request\n  w->>p: charge (idempotency key = order id)\n  p-->>w: charged\n  w->>db: order paid, request done, one transaction\n```\n\n```mermaid\n%% id: status\nstateDiagram-v2\n  pending: Payment pending\n  paid: Paid\n  failed: Payment failed\n  [*] --> pending: order placed\n  pending --> paid: charged\n  pending --> failed: declined, or retries exhausted\n  pending --> paid: hourly check finds the charge\n```\n\n### Two workers poll at the same time\nEach claims different charge requests, so no order is charged by both\n\n### Worker crashes after the provider charged the card\nThe request stays waiting → another worker claims it → the provider returns the original charge for the same key →\nthe order becomes paid, and the customer is charged once\n\n### Provider down for 30 minutes\nRequests back up and the alert fires after 10 minutes → retries succeed once the provider recovers → the orders\nbecome paid\n\n## Open Questions\n- Should a failed order release its reserved inventory at once, or after a grace period for the customer to retry?\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Charge customers through an outbox\n\n## Context\nPlacing an order (`CreateOrder`) charges the customer through the payment provider inside the database\ntransaction. The transaction holds row locks for the whole payment call (p99 1.8 s), and a provider timeout rolls\nback an order the customer may already have paid for. Support resolves about 20 such cases a week by hand.\n\nCustomers must be charged exactly once. The mobile app polls the order and shows \"processing\" for any status other\nthan paid or failed.\n\n## Design\n- Accept the order without waiting for the payment provider\n  - Save the order as \"payment pending\" together with a charge request, in one transaction\n    — `✎` new `payment_outbox` table for charge requests\n  - Respond at once with the pending status\n    - Older app versions show \"processing\" for statuses they don't know, so they keep working\n- Charge each order exactly once\n  - A background worker claims waiting charge requests, oldest first, skipping rows another worker holds\n    - Several workers can run; each request is claimed by one worker at a time\n  - Charge through the provider with the order id as the idempotency key\n    - Repeating the call after a crash returns the original charge, so the customer is never charged twice\n  - Save the result and move the order to paid or failed in one transaction\n- Retry what can succeed later\n  - Retry timeouts and provider errors with backoff, for up to 1 hour\n    — `⚠` the provider forgets idempotency keys after 24 hours; retries must stop well before that\n  - Fail the order on a card decline and send the existing \"payment failed\" email\n- Switch traffic over gradually\n  - Put the new path behind a feature flag, per region\n  - Keep the current inline path until the flag is on everywhere, then delete it\n    - Orders placed through the inline path have no charge request, so the worker never sees them\n- Make stuck payments visible\n  - Alert when the oldest waiting charge request is older than 10 minutes, as the email outbox already does\n- Settle orders whose outcome is unknown\n  - Every hour, ask the provider about orders still pending after an hour, by idempotency key\n    - Charged: mark paid. Not found: mark failed. Provider unreachable: ask again next hour\n\n## Alternatives\n\n### Keep charging inline, with a shorter timeout\nSmaller change, but it still holds locks during a network call, and a timeout still leaves the payment state\nunknown.\n\n### Publish an event and charge from a consumer\nNo new table, but saving the order and publishing the event can't be atomic without an outbox anyway.\n\nSelected: a database outbox, the same pattern as the email outbox, with no new infrastructure.\n\n## Behaviour\n\n```mermaid\n%% id: charge\nsequenceDiagram\n  participant api as Place order\n  participant db as Database\n  participant w as Charge worker\n  participant p as Provider\n  api->>db: order (pending) + charge request, one transaction\n  w->>db: claim a waiting request\n  w->>p: charge (idempotency key = order id)\n  p-->>w: charged\n  w->>db: order paid, request done, one transaction\n```\n\n```mermaid\n%% id: status\nstateDiagram-v2\n  pending: Payment pending\n  paid: Paid\n  failed: Payment failed\n  [*] --> pending: order placed\n  pending --> paid: charged\n  pending --> failed: declined, or retries exhausted\n  pending --> paid: hourly check finds the charge\n```\n\n### Two workers poll at the same time\nEach claims different charge requests, so no order is charged by both\n\n### Worker crashes after the provider charged the card\nThe request stays waiting → another worker claims it → the provider returns the original charge for the same key →\nthe order becomes paid, and the customer is charged once\n\n### Provider down for 30 minutes\nRequests back up and the alert fires after 10 minutes → retries succeed once the provider recovers → the orders\nbecome paid\n\n## Open Questions\n- Should a failed order release its reserved inventory at once, or after a grace period for the customer to retry?\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Context",
+          "key": "context",
+          "body": "Placing an order (`CreateOrder`) charges the customer through the payment provider inside the database\ntransaction. The transaction holds row locks for the whole payment call (p99 1.8 s), and a provider timeout rolls\nback an order the customer may already have paid for. Support resolves about 20 such cases a week by hand.\n\nCustomers must be charged exactly once. The mobile app polls the order and shows \"processing\" for any status other\nthan paid or failed.\n\n"
+        },
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Accept the order without waiting for the payment provider\n  - Save the order as \"payment pending\" together with a charge request, in one transaction\n    — `✎` new `payment_outbox` table for charge requests\n  - Respond at once with the pending status\n    - Older app versions show \"processing\" for statuses they don't know, so they keep working\n- Charge each order exactly once\n  - A background worker claims waiting charge requests, oldest first, skipping rows another worker holds\n    - Several workers can run; each request is claimed by one worker at a time\n  - Charge through the provider with the order id as the idempotency key\n    - Repeating the call after a crash returns the original charge, so the customer is never charged twice\n  - Save the result and move the order to paid or failed in one transaction\n- Retry what can succeed later\n  - Retry timeouts and provider errors with backoff, for up to 1 hour\n    — `⚠` the provider forgets idempotency keys after 24 hours; retries must stop well before that\n  - Fail the order on a card decline and send the existing \"payment failed\" email\n- Switch traffic over gradually\n  - Put the new path behind a feature flag, per region\n  - Keep the current inline path until the flag is on everywhere, then delete it\n    - Orders placed through the inline path have no charge request, so the worker never sees them\n- Make stuck payments visible\n  - Alert when the oldest waiting charge request is older than 10 minutes, as the email outbox already does\n- Settle orders whose outcome is unknown\n  - Every hour, ask the provider about orders still pending after an hour, by idempotency key\n    - Charged: mark paid. Not found: mark failed. Provider unreachable: ask again next hour\n\n"
+        },
+        {
+          "heading": "Alternatives",
+          "key": "alternatives",
+          "body": "\n### Keep charging inline, with a shorter timeout\nSmaller change, but it still holds locks during a network call, and a timeout still leaves the payment state\nunknown.\n\n### Publish an event and charge from a consumer\nNo new table, but saving the order and publishing the event can't be atomic without an outbox anyway.\n\nSelected: a database outbox, the same pattern as the email outbox, with no new infrastructure.\n\n"
+        },
+        {
+          "heading": "Behaviour",
+          "key": "behaviour",
+          "body": "\n```mermaid\n%% id: charge\nsequenceDiagram\n  participant api as Place order\n  participant db as Database\n  participant w as Charge worker\n  participant p as Provider\n  api->>db: order (pending) + charge request, one transaction\n  w->>db: claim a waiting request\n  w->>p: charge (idempotency key = order id)\n  p-->>w: charged\n  w->>db: order paid, request done, one transaction\n```\n\n```mermaid\n%% id: status\nstateDiagram-v2\n  pending: Payment pending\n  paid: Paid\n  failed: Payment failed\n  [*] --> pending: order placed\n  pending --> paid: charged\n  pending --> failed: declined, or retries exhausted\n  pending --> paid: hourly check finds the charge\n```\n\n### Two workers poll at the same time\nEach claims different charge requests, so no order is charged by both\n\n### Worker crashes after the provider charged the card\nThe request stays waiting → another worker claims it → the provider returns the original charge for the same key →\nthe order becomes paid, and the customer is charged once\n\n### Provider down for 30 minutes\nRequests back up and the alert fires after 10 minutes → retries succeed once the provider recovers → the orders\nbecome paid\n\n"
+        },
+        {
+          "heading": "Open Questions",
+          "key": "open questions",
+          "body": "- Should a failed order release its reserved inventory at once, or after a grace period for the customer to retry?\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Accept the order without waiting for the payment provider",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Save the order as \"payment pending\" together with a charge request, in one transaction — `✎` new `payment_outbox` table for charge requests",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            },
+            {
+              "text": "Respond at once with the pending status",
+              "indent": 2,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "Older app versions show \"processing\" for statuses they don't know, so they keep working",
+                  "indent": 4,
+                  "depth": 3,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "text": "Charge each order exactly once",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "A background worker claims waiting charge requests, oldest first, skipping rows another worker holds",
+              "indent": 2,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "Several workers can run; each request is claimed by one worker at a time",
+                  "indent": 4,
+                  "depth": 3,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "text": "Charge through the provider with the order id as the idempotency key",
+              "indent": 2,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "Repeating the call after a crash returns the original charge, so the customer is never charged twice",
+                  "indent": 4,
+                  "depth": 3,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "text": "Save the result and move the order to paid or failed in one transaction",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            }
+          ]
+        },
+        {
+          "text": "Retry what can succeed later",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Retry timeouts and provider errors with backoff, for up to 1 hour — `⚠` the provider forgets idempotency keys after 24 hours; retries must stop well before that",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            },
+            {
+              "text": "Fail the order on a card decline and send the existing \"payment failed\" email",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            }
+          ]
+        },
+        {
+          "text": "Switch traffic over gradually",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Put the new path behind a feature flag, per region",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            },
+            {
+              "text": "Keep the current inline path until the flag is on everywhere, then delete it",
+              "indent": 2,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "Orders placed through the inline path have no charge request, so the worker never sees them",
+                  "indent": 4,
+                  "depth": 3,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "text": "Make stuck payments visible",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Alert when the oldest waiting charge request is older than 10 minutes, as the email outbox already does",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            }
+          ]
+        },
+        {
+          "text": "Settle orders whose outcome is unknown",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Every hour, ask the provider about orders still pending after an hour, by idempotency key",
+              "indent": 2,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "Charged: mark paid. Not found: mark failed. Provider unreachable: ask again next hour",
+                  "indent": 4,
+                  "depth": 3,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "open questions": [
+        {
+          "text": "Should a failed order release its reserved inventory at once, or after a grace period for the customer to retry?",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Accept the order without waiting for the payment provider",
+      "Save the order as \"payment pending\" together with a charge request, in one trans",
+      "Respond at once with the pending status",
+      "Older app versions show \"processing\" for statuses they don't know, so they keep ",
+      "Charge each order exactly once",
+      "A background worker claims waiting charge requests, oldest first, skipping rows ",
+      "Several workers can run; each request is claimed by one worker at a time",
+      "Charge through the provider with the order id as the idempotency key",
+      "Repeating the call after a crash returns the original charge, so the customer is",
+      "Save the result and move the order to paid or failed in one transaction",
+      "Retry what can succeed later",
+      "Retry timeouts and provider errors with backoff, for up to 1 hour — ⚠ the provid",
+      "Fail the order on a card decline and send the existing \"payment failed\" email",
+      "Switch traffic over gradually",
+      "Put the new path behind a feature flag, per region",
+      "Keep the current inline path until the flag is on everywhere, then delete it",
+      "Orders placed through the inline path have no charge request, so the worker neve",
+      "Make stuck payments visible",
+      "Alert when the oldest waiting charge request is older than 10 minutes, as the em",
+      "Settle orders whose outcome is unknown",
+      "Every hour, ask the provider about orders still pending after an hour, by idempo",
+      "Charged: mark paid. Not found: mark failed. Provider unreachable: ask again next"
+    ]
+  }
+}

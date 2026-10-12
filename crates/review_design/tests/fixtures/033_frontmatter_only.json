@@ -1,0 +1,29 @@
+{
+  "name": "frontmatter_only",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": ""
+    },
+    "sections": {
+      "preamble": "",
+      "sections": []
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "No `# ` title (or `title:` in the frontmatter).",
+        "No `## Design` section."
+      ]
+    },
+    "stepTrees": {},
+    "stepIds": []
+  }
+}
