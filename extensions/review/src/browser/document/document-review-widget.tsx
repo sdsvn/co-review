@@ -1,7 +1,7 @@
 import * as React from '@theia/core/shared/react';
 import { createRoot, Root } from '@theia/core/shared/react-dom/client';
 import { BaseWidget, Message, Navigatable, codicon } from '@theia/core/lib/browser';
-import { DisposableCollection } from '@theia/core/lib/common/disposable';
+import { Disposable, DisposableCollection } from '@theia/core/lib/common/disposable';
 import URI from '@theia/core/lib/common/uri';
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
@@ -13,6 +13,7 @@ import { ReviewNavigator } from '../review-navigator';
 import { MermaidBlock, render } from './document-render';
 import { splitFrontmatter } from '../../common/design-format';
 import { markText, textAnchor, unmark } from './text-anchor';
+import { openDiagramZoom } from './diagram-zoom';
 
 const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
@@ -81,6 +82,8 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
     protected loadSeq = 0;
     /** Object URLs of the images of the current render, revoked on the next render. */
     protected imageUrls: string[] = [];
+    /** The diagram open in the zoom overlay, if any. */
+    protected zoomed: Disposable | undefined;
 
     get uri(): URI {
         return new URI(this.options.uri);
@@ -328,6 +331,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             const head = document.createElement('div');
             head.className = 'co-review-dgm-head';
             head.innerHTML = `<span class="codicon codicon-type-hierarchy-sub"></span><span>${block.id}</span><span class="co-review-spacer"></span>`
+                + '<span class="codicon codicon-screen-full action-label" title="Open full size: zoom and pan" data-zoom-diagram="1"></span>'
                 + '<span class="codicon codicon-comment action-label" title="Comment on this diagram" data-diagram="1"></span>';
             const body = document.createElement('div');
             body.className = 'co-review-dgm-body';
@@ -338,6 +342,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             try {
                 const { svg } = await mermaid.render(`co-review-m-${block.id}-${Date.now()}`, block.code);
                 body.innerHTML = svg;
+                body.title = 'Click to open full size';
                 this.wireDiagram(body);
             } catch (e) {
                 body.innerHTML = `<div class="co-review-dgm-fail">Diagram failed to render: ${String(e instanceof Error ? e.message : e).slice(0, 200)}</div>`;
@@ -454,16 +459,14 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
                 this.addDraft({ type: 'mermaid-block', blockId }, 'comment');
                 return;
             }
-            const node = target.closest('[data-node-id]');
-            if (node) {
-                const label = (node.textContent || '').trim();
-                const nodeId = node.getAttribute('data-node-id')!;
-                this.addDraft({ type: 'mermaid-node', blockId, nodeId, source: node.tagName === 'g' && node.classList.contains('actor') ? label : `${nodeId}[${label}]` }, 'comment');
+            if (this.commentOnDiagram(blockId, target)) {
                 return;
             }
-            const edge = target.closest('[data-edge-id]');
-            if (edge) {
-                this.addDraft({ type: 'mermaid-edge', blockId, edgeId: edge.getAttribute('data-edge-id')! }, 'comment');
+            const svg = host.querySelector<SVGSVGElement>('.co-review-dgm-body svg');
+            // The expand button, or a click on the diagram away from its nodes and edges (not ending a text selection).
+            if (svg && (target.closest('[data-zoom-diagram]') || (target.closest('.co-review-dgm-body') && window.getSelection()?.isCollapsed !== false))) {
+                this.zoomed?.dispose();
+                this.zoomed = openDiagramZoom(svg, blockId, t => this.commentOnDiagram(blockId, t));
                 return;
             }
         }
@@ -476,6 +479,23 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
                 this.reviews.revealThread(thread.id);
             }
         }
+    }
+
+    /** A click on a diagram's node or edge starts a comment on it. */
+    protected commentOnDiagram(blockId: string, target: Element): boolean {
+        const node = target.closest('[data-node-id]');
+        if (node) {
+            const label = (node.textContent || '').trim();
+            const nodeId = node.getAttribute('data-node-id')!;
+            this.addDraft({ type: 'mermaid-node', blockId, nodeId, source: node.tagName === 'g' && node.classList.contains('actor') ? label : `${nodeId}[${label}]` }, 'comment');
+            return true;
+        }
+        const edge = target.closest('[data-edge-id]');
+        if (edge) {
+            this.addDraft({ type: 'mermaid-edge', blockId, edgeId: edge.getAttribute('data-edge-id')! }, 'comment');
+            return true;
+        }
+        return false;
     }
 
     protected setLevel(level: number): void {
@@ -627,6 +647,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
 
     override dispose(): void {
         window.clearTimeout(this.paintTimer);
+        this.zoomed?.dispose();
         this.revokeImages();
         const roots = this.roots.splice(0);
         setTimeout(() => roots.forEach(r => r.unmount()));

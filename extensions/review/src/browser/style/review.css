@@ -189,6 +189,20 @@ mark.co-review-mark { background: rgba(230, 170, 50, 0.28); color: inherit; bord
 .co-review-dgm-body path.co-review-dgm-clickable:hover { stroke: var(--theia-focusBorder) !important; stroke-width: 3px !important; }
 .co-review-dgm-body .co-review-dgm-marked rect, .co-review-dgm-body .co-review-dgm-marked polygon,
 .co-review-dgm-body .co-review-dgm-marked circle { stroke: var(--theia-charts-yellow) !important; stroke-width: 3px !important; }
+.co-review-dgm-body { cursor: zoom-in; }
+.co-review-dgm-zoom { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: var(--theia-editor-background); }
+.co-review-dgm-zoom-bar { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-bottom: 1px solid var(--theia-panel-border); color: var(--theia-descriptionForeground); font-family: var(--theia-code-font-family); }
+.co-review-dgm-zoom-bar .action-label { cursor: pointer; padding: 3px; border-radius: 3px; }
+.co-review-dgm-zoom-bar .action-label:hover { background: var(--theia-toolbar-hoverBackground); }
+.co-review-dgm-zoom-level { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.co-review-dgm-zoom-stage { flex: 1; position: relative; overflow: hidden; cursor: grab; touch-action: none; }
+.co-review-dgm-zoom-stage.dragging { cursor: grabbing; }
+.co-review-dgm-zoom-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.co-review-dgm-zoom-canvas svg { display: block; }
+.co-review-dgm-zoom .co-review-dgm-clickable { cursor: pointer; }
+.co-review-dgm-zoom .node.co-review-dgm-clickable:hover rect, .co-review-dgm-zoom .node.co-review-dgm-clickable:hover polygon,
+.co-review-dgm-zoom .node.co-review-dgm-clickable:hover circle, .co-review-dgm-zoom .node.co-review-dgm-clickable:hover path { stroke: var(--theia-focusBorder) !important; stroke-width: 2px !important; }
+.co-review-dgm-zoom path.co-review-dgm-clickable:hover { stroke: var(--theia-focusBorder) !important; stroke-width: 3px !important; }
 .co-review-dgm-fail { color: var(--theia-errorForeground); font-size: 0.9em; }
 
 /* Pseudocode altitude tree */
