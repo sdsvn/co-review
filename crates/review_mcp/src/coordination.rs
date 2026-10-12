@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use answer_channel::{OneshotReceiver, OneshotSender, oneshot};
 use parking_lot::Mutex;
 use review_model::AgentPresence;
 
@@ -14,22 +13,16 @@ use review_model::AgentPresence;
 /// permission requests). The reviewer answers them from the thread; whoever asked is resumed.
 #[derive(Default)]
 pub struct HumanDecisions {
-    pending: Mutex<HashMap<String, OneshotSender>>,
+    pending: Mutex<HashMap<String, smol::channel::Sender<Option<String>>>>,
 }
 
 impl HumanDecisions {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// The chosen option id, or `None` when cancelled or not answered within `timeout`.
     pub async fn wait(&self, request_id: &str, timeout: Duration) -> Option<String> {
-        let receiver: OneshotReceiver = {
-            let (sender, receiver) = oneshot();
-            self.pending.lock().insert(request_id.to_string(), sender);
-            receiver
-        };
-        let answer = smol::future::or(receiver.receive(), async {
+        let (sender, receiver) = smol::channel::bounded(1);
+        self.pending.lock().insert(request_id.to_string(), sender);
+        let answered = async { receiver.recv().await.ok().flatten() };
+        let answer = smol::future::or(answered, async {
             smol::Timer::after(timeout).await;
             None
         })
@@ -41,13 +34,8 @@ impl HumanDecisions {
     /// Answers a decision (`None` cancels it). Unknown ids are ignored: the wait may have timed out.
     pub fn resolve(&self, request_id: &str, option_id: Option<String>) {
         if let Some(sender) = self.pending.lock().remove(request_id) {
-            sender.send(option_id);
+            sender.try_send(option_id).ok();
         }
-    }
-
-    /// Whether an agent is still waiting for this decision.
-    pub fn is_pending(&self, request_id: &str) -> bool {
-        self.pending.lock().contains_key(request_id)
     }
 }
 
@@ -65,10 +53,6 @@ struct Presence {
 }
 
 impl AgentPresenceTracker {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn get(&self, review_id: &str) -> Option<AgentPresence> {
         self.presence
             .lock()
@@ -145,54 +129,27 @@ pub(crate) fn now_millis() -> u64 {
         .unwrap_or(0)
 }
 
-/// A one-shot answer over a bounded smol channel, so no extra dependency is needed.
-mod answer_channel {
-    pub struct OneshotSender(smol::channel::Sender<Option<String>>);
-    pub struct OneshotReceiver(smol::channel::Receiver<Option<String>>);
-
-    pub fn oneshot() -> (OneshotSender, OneshotReceiver) {
-        let (sender, receiver) = smol::channel::bounded(1);
-        (OneshotSender(sender), OneshotReceiver(receiver))
-    }
-
-    impl OneshotSender {
-        pub fn send(self, value: Option<String>) {
-            self.0.try_send(value).ok();
-        }
-    }
-
-    impl OneshotReceiver {
-        /// The answer; `None` when the sender went away without one.
-        pub async fn receive(self) -> Option<String> {
-            self.0.recv().await.ok().flatten()
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn decisions_resolve_and_time_out() {
-        let decisions = Arc::new(HumanDecisions::new());
-        let waiting = Arc::clone(&decisions);
-        let answer = std::thread::spawn(move || {
-            smol::block_on(waiting.wait("request", Duration::from_secs(10)))
-        });
-        while !decisions.is_pending("request") {
-            std::thread::sleep(Duration::from_millis(5));
-        }
-        decisions.resolve("request", Some("1".to_string()));
-        assert_eq!(answer.join().ok().flatten(), Some("1".to_string()));
+        let decisions = HumanDecisions::default();
+        // The wait registers on its first poll, before the resolve runs.
+        let (answer, ()) = smol::block_on(smol::future::zip(
+            decisions.wait("request", Duration::from_secs(10)),
+            async { decisions.resolve("request", Some("1".to_string())) },
+        ));
+        assert_eq!(answer, Some("1".to_string()));
         let timed_out = smol::block_on(decisions.wait("other", Duration::from_millis(10)));
         assert_eq!(timed_out, None);
-        assert!(!decisions.is_pending("other"));
+        assert!(decisions.pending.lock().is_empty());
     }
 
     #[test]
     fn listening_while_guarded() {
-        let tracker = Arc::new(AgentPresenceTracker::new());
+        let tracker = Arc::new(AgentPresenceTracker::default());
         let events = tracker.subscribe();
         let first = tracker.listen("review");
         let second = tracker.listen("review");

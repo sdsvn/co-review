@@ -13,7 +13,7 @@ use serde_json::{Map, Value, json};
 
 use crate::paths::{relative, uri_to_path};
 
-pub use review_bundle::payloads::thread_ref;
+pub use review_bundle::payloads::{accepted_suggestions, thread_ref};
 
 /// Builds a JSON object in insertion order, skipping absent values as `JSON.stringify` skips `undefined`.
 #[derive(Default)]
@@ -38,9 +38,7 @@ impl Object {
 
     /// Adds every key of `other` (the TypeScript's `...other`).
     pub fn spread(mut self, other: Map<String, Value>) -> Self {
-        for (key, value) in other {
-            self.0.insert(key, value);
-        }
+        self.0.extend(other);
         self
     }
 
@@ -95,17 +93,6 @@ pub fn window_root_of(review: &Review) -> String {
         .unwrap_or_else(|| root_of(review))
 }
 
-/// Where a thread is: `doc`, `doc:<path>` (another Markdown page of the directory), `patch:<slug>`, `overview` or
-/// `code`.
-pub fn target_of(thread: &ReviewThread, dir: &str) -> String {
-    review_bundle::payloads::target_of(thread, Some(Path::new(dir)))
-}
-
-/// Accepted suggested edits on patches, for the agent to apply as commits.
-pub fn accepted_suggestions(review: &Review) -> Value {
-    to_value(review_bundle::payloads::accepted_suggestions(review))
-}
-
 /// One entry of `comments[]` (await_reviewer, get_review); code paths relative to `code_root`.
 pub fn comment_of(
     thread: &ReviewThread,
@@ -130,7 +117,10 @@ pub fn comment_of(
     Object::new()
         .set("id", thread_ref(thread))
         .set("threadId", &thread.id)
-        .set("target", target_of(thread, root))
+        .set(
+            "target",
+            review_bundle::payloads::target_of(thread, Some(Path::new(root))),
+        )
         .maybe("kind", text("type"))
         .set("where", place)
         .maybe("line", line)

@@ -9,12 +9,10 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 
 use anyhow::Result;
-use review_anchor::{AnchorStatus, Edit, TrackedRange};
+use review_anchor::{AnchorStatus, Edit, TrackedRange, index_of};
 use review_model::{CodeLocation, LocationKind, Position, Range, ThreadStatus, content_version};
-use review_store::ReviewStore;
-use review_store::snapshots::{index_of, save_snapshot, snapshots_dir};
-
-use crate::payloads::file_uri_to_path;
+use review_store::snapshots::{save_snapshot, snapshots_dir};
+use review_store::{ReviewStore, file_uri_to_path};
 
 /// An edit Co-Review applied itself to the file at `uri`, whose text was `before`.
 pub struct AppliedEdit<'a> {

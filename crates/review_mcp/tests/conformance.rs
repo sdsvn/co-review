@@ -86,6 +86,20 @@ impl Placeholders {
 struct Recorder {
     name: String,
     notifications: Arc<Mutex<Vec<Value>>>,
+    arrived: Arc<tokio::sync::Notify>,
+}
+
+impl Recorder {
+    /// Takes the notifications once there are `count` (or what came within 10 s).
+    async fn take(&self, count: usize) -> Vec<Value> {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        while self.notifications.lock().unwrap().len() < count
+            && tokio::time::timeout_at(deadline, self.arrived.notified())
+                .await
+                .is_ok()
+        {}
+        self.notifications.lock().unwrap().drain(..).collect()
+    }
 }
 
 impl ClientHandler for Recorder {
@@ -106,6 +120,7 @@ impl ClientHandler for Recorder {
             .lock()
             .unwrap()
             .push(json!({ "method": notification.method, "params": notification.params }));
+        self.arrived.notify_one();
     }
 }
 
@@ -205,7 +220,15 @@ impl Replay {
                     .decisions
                     .resolve(&permission.id, Some(text("option")));
                 // The choice is written to the thread after the decision resolves.
-                tokio::time::sleep(Duration::from_millis(200)).await;
+                for _ in 0..400 {
+                    if self.pending_permission().map(|pending| pending.id)
+                        != Some(permission.id.clone())
+                    {
+                        return;
+                    }
+                    tokio::time::sleep(Duration::from_millis(25)).await;
+                }
+                panic!("the choice was not recorded");
             }
             "submit" => {
                 let decision: ReviewDecision =
@@ -420,6 +443,7 @@ async fn replay(name: &str) {
     let recorder = Recorder {
         name: session["client"].as_str().unwrap().to_string(),
         notifications: Arc::default(),
+        arrived: Arc::default(),
     };
     let root = placeholders.substitute("{repo}", "");
     let url = format!("{}/mcp?root={}", server.url(), root.replace('/', "%2F"));
@@ -513,14 +537,12 @@ async fn replay(name: &str) {
             }
             "reviewer" => replay.act(step).await,
             "notifications" => {
-                tokio::time::sleep(Duration::from_millis(500)).await;
-                let mut actual: Vec<Value> =
-                    recorder.notifications.lock().unwrap().drain(..).collect();
-                actual.sort_by_key(|notification| notification.to_string());
                 let expected: Vec<Value> = step["notifications"]
                     .as_array()
                     .cloned()
                     .unwrap_or_default();
+                let mut actual = recorder.take(expected.len()).await;
+                actual.sort_by_key(|notification| notification.to_string());
                 let mut actual: Vec<Value> = actual
                     .iter()
                     .map(|value| normalize(value, Some(&tmp())))

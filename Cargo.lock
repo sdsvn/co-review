@@ -1233,6 +1233,7 @@ dependencies = [
 name = "review_anchor"
 version = "0.1.0"
 dependencies = [
+ "regex",
  "review_model",
  "serde_json",
 ]
@@ -1325,6 +1326,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "rayon",
+ "regex",
  "review_model",
  "review_store",
  "serde",

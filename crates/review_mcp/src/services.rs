@@ -2,17 +2,14 @@
 //! `review_bundle`, code folders from `review_code`, overview pages from `review_pages`, the repo map from
 //! `review_index`), and what the app provides: its windows, and Tree-sitter until `review_syntax` exists.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::Result;
-use parking_lot::Mutex;
 use review_bundle::BundleService;
 use review_code::CodeFolders;
 use review_github::{DefaultGhRunner, GhRunner};
-use review_model::{Range, ReviewCoverage, SyntaxAnchor};
-use review_pages::{OverviewPages, RepositorySections, SectionBuilder as _};
+use review_model::{Range, SyntaxAnchor};
+use review_pages::{OverviewPages, RepositorySections};
 use review_store::ReviewStore;
 
 use crate::coordination::{AgentPresenceTracker, HumanDecisions};
@@ -33,24 +30,11 @@ pub trait ReviewWindows: Send + Sync {
     fn done(&self, session_id: &str, message: &str, workspace_root: Option<&str>);
 }
 
-/// No app: records what would be shown, and returns the desktop note.
-#[derive(Default)]
-pub struct HeadlessWindows {
-    shown: Mutex<Vec<(String, PathBuf)>>,
-}
-
-impl HeadlessWindows {
-    /// The reviews shown so far, with their window's folder.
-    pub fn shown(&self) -> Vec<(String, PathBuf)> {
-        self.shown.lock().clone()
-    }
-}
+/// No app: shows nothing, and returns the desktop note.
+struct HeadlessWindows;
 
 impl ReviewWindows for HeadlessWindows {
-    fn show(&self, review_id: &str, workspace: &Path, _session_id: &str) -> String {
-        self.shown
-            .lock()
-            .push((review_id.to_string(), workspace.to_path_buf()));
+    fn show(&self, _review_id: &str, _workspace: &Path, _session_id: &str) -> String {
         SHOWN_NOTE.to_string()
     }
 
@@ -66,7 +50,7 @@ pub trait CodeSyntax: Send + Sync {
 }
 
 /// Until `review_syntax` exists: findings are anchored by their text, without a symbol.
-pub struct NoSyntax;
+struct NoSyntax;
 
 impl CodeSyntax for NoSyntax {
     fn capture_anchor(&self, _: &str, _: &str, _: &Range) -> Option<SyntaxAnchor> {
@@ -106,60 +90,19 @@ impl Services {
             windows,
             syntax: Arc::new(NoSyntax),
             github: Arc::new(DefaultGhRunner),
-            decisions: Arc::new(HumanDecisions::new()),
-            presence: Arc::new(AgentPresenceTracker::new()),
+            decisions: Arc::default(),
+            presence: Arc::default(),
         }
     }
 
     /// Without the app: [`HeadlessWindows`].
     pub fn headless(store: Arc<ReviewStore>) -> Self {
-        Self::new(store, Arc::new(HeadlessWindows::default()))
+        Self::new(store, Arc::new(HeadlessWindows))
     }
-}
-
-/// The repo map of `root`, as `repo_map` returns it.
-pub fn render_map(root: &Path, path: Option<&str>, query: Option<&str>) -> Result<String> {
-    let index = review_index::RepoIndex::new();
-    let map = index.build(root)?;
-    let options = review_index::RenderOptions {
-        path: path.map(str::to_string),
-        query: query.map(str::to_string),
-        ..Default::default()
-    };
-    index.render(root, &map, &options)
-}
-
-/// The repository overview: from the Graphify graph (built or refreshed first when `graphify` is installed), else
-/// from the repo map.
-pub fn repository_overview(root: &Path, viewed: Option<&HashMap<String, u64>>) -> Result<String> {
-    RepositorySections.repository_overview(root, &viewed.cloned().unwrap_or_default())
-}
-
-/// The source files the reviewer marked as viewed, overall and per area.
-pub fn coverage(root: &Path, viewed: Option<&HashMap<String, u64>>) -> Result<ReviewCoverage> {
-    let index = review_index::RepoIndex::new();
-    let map = index.build(root)?;
-    let viewed = viewed
-        .map(|viewed| {
-            viewed
-                .iter()
-                .map(|(path, at)| (path.clone(), *at as f64))
-                .collect()
-        })
-        .unwrap_or_default();
-    Ok(index.coverage(&map, &viewed))
 }
 
 /// The document of a review directory, by the review-directory rules (`index.markdown` first, …).
 pub fn document_of(dir: &str) -> Option<String> {
     review_bundle::service::document_of(Path::new(dir))
         .map(|file| file.to_string_lossy().into_owned())
-}
-
-/// The patches (`*.patch`, `*.diff`) of a review directory.
-pub fn patches_of(dir: &str) -> Vec<String> {
-    review_bundle::service::patches_of(Path::new(dir))
-        .into_iter()
-        .map(|file| file.to_string_lossy().into_owned())
-        .collect()
 }

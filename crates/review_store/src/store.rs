@@ -1,6 +1,6 @@
 //! The core review store: persistence, mutations, locking and change events.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,22 +8,16 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use review_model::{
-    ActivityKind, AgentConfig, AgentState, AgentTransport, CodeLocation, Participant,
-    ReviewActivity, ReviewBundle, ReviewDecision, ReviewMessage, ReviewScope, ReviewThread,
-    ReviewVerdict, ThreadIntent, ThreadStatus, VerdictToAgent,
+    ActivityKind, AgentConfig, AgentState, AgentTransport, CodeLocation, DocAnchorType,
+    Participant, ParticipantKind, ProposalStatus, Review, ReviewActivity, ReviewBundle,
+    ReviewClosed, ReviewDecision, ReviewMessage, ReviewScope, ReviewThread, ReviewVerdict,
+    ThreadIntent, ThreadOptions, ThreadStatus, VerdictToAgent,
 };
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::file_uri::{file_uri_to_path, path_to_file_uri, real_uri};
 use crate::snapshots;
-
-// Re-export the Review type from review_model
-pub use review_model::Review;
-
-// ---------------------------------------------------------------------------
-// Error
-// ---------------------------------------------------------------------------
 
 #[derive(Debug)]
 pub enum ReviewStoreError {
@@ -61,10 +55,6 @@ impl From<serde_json::Error> for ReviewStoreError {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Change events
-// ---------------------------------------------------------------------------
-
 /// Broadcast when a review changes or is deleted.
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
@@ -73,18 +63,6 @@ pub enum ReviewChange {
     Deleted { review_id: String, workspace_root: String },
 }
 
-/// Broadcast when a message is added to a thread.
-#[derive(Debug, Clone)]
-pub struct MessageAdded {
-    pub review: Review,
-    pub thread: ReviewThread,
-    pub message: ReviewMessage,
-}
-
-// ---------------------------------------------------------------------------
-// CreateReviewParams
-// ---------------------------------------------------------------------------
-
 pub struct CreateReviewParams {
     pub workspace_root: String,
     pub title: String,
@@ -92,117 +70,65 @@ pub struct CreateReviewParams {
     pub author: Participant,
 }
 
-// ---------------------------------------------------------------------------
-// Internals
-// ---------------------------------------------------------------------------
+/// Fields of a message to set: all of them when starting one, the given ones when updating.
+#[derive(Default)]
+pub struct MessagePatch {
+    pub body: Option<String>,
+    pub status: Option<review_model::MessageStatus>,
+    pub activity: Option<Vec<review_model::AgentActivity>>,
+    pub permission: Option<review_model::PermissionRequest>,
+    pub choice: Option<String>,
+}
 
-/// Per-review lock: held during the full read-modify-write-broadcast cycle.
-type ReviewLock = Arc<Mutex<()>>;
-
+#[derive(Default)]
 struct StoreInner {
     /// reviewId -> file path, populated lazily.
     locations: HashMap<String, PathBuf>,
-    /// Per-review mutation locks.
-    locks: HashMap<String, ReviewLock>,
-    /// Change event subscribers.
+    /// Held during a review's whole read-modify-write-broadcast cycle.
+    locks: HashMap<String, Arc<Mutex<()>>>,
     change_senders: Vec<smol::channel::Sender<ReviewChange>>,
-    /// Message event subscribers.
-    message_senders: Vec<smol::channel::Sender<MessageAdded>>,
 }
 
-// ---------------------------------------------------------------------------
-// ReviewStore
-// ---------------------------------------------------------------------------
-
-/// Local, file-based review persistence.
+/// Local, file-based review persistence, outside the repository:
+/// `<home>/workspaces/<hash of root URI>/reviews/<id>.json`.
 ///
-/// Review state lives outside the repository:
-/// `$CO_REVIEW_HOME` (default `~/.co-review`) / workspaces / <hash of root URI> / reviews / <id>.json
-///
-/// Thread-safe: mutations are serialized per review via internal locking.
-/// Executor-agnostic: no tokio, no GPUI; works from std threads and smol tasks.
+/// Mutations are serialized per review, from std threads or smol tasks alike.
 pub struct ReviewStore {
-    /// Override for `co_review_home()`; when set, all paths are under this directory.
-    home: Option<PathBuf>,
+    home: PathBuf,
     inner: Mutex<StoreInner>,
 }
 
 impl ReviewStore {
-    pub fn new() -> Self {
-        Self {
-            home: None,
-            inner: Mutex::new(StoreInner {
-                locations: HashMap::new(),
-                locks: HashMap::new(),
-                change_senders: Vec::new(),
-                message_senders: Vec::new(),
-            }),
-        }
-    }
-
-    /// Create a store rooted at a specific home directory (for testing).
+    /// A store under `home`; Co-Review's own is `crate::co_review_home()`.
     pub fn with_home(home: PathBuf) -> Self {
         Self {
-            home: Some(home),
-            inner: Mutex::new(StoreInner {
-                locations: HashMap::new(),
-                locks: HashMap::new(),
-                change_senders: Vec::new(),
-                message_senders: Vec::new(),
-            }),
+            home,
+            inner: Mutex::default(),
         }
     }
-
-    fn home(&self) -> PathBuf {
-        self.home.clone().unwrap_or_else(crate::co_review_home)
-    }
-
-    // ----- path helpers -----
 
     /// Where the reviews (and other state) of a workspace live, outside the repository.
     pub fn workspace_dir(&self, workspace_root: &str) -> PathBuf {
-        let uri = real_uri(workspace_root);
-        let hash = format!("{:x}", Sha256::digest(uri.as_bytes()));
-        let prefix = &hash[..16];
-        self.home().join("workspaces").join(prefix)
+        let hash = format!("{:x}", Sha256::digest(real_uri(workspace_root).as_bytes()));
+        self.home.join("workspaces").join(&hash[..16])
     }
 
-    /// The directory holding review JSON files for a workspace.
     fn reviews_dir(&self, workspace_root: &str) -> PathBuf {
         self.workspace_dir(workspace_root).join("reviews")
     }
 
-    // ----- subscriptions -----
-
-    /// Subscribe to review change events. Returns a channel receiver.
     pub fn subscribe_changes(&self) -> smol::channel::Receiver<ReviewChange> {
         let (sender, receiver) = smol::channel::unbounded();
         self.inner.lock().change_senders.push(sender);
         receiver
     }
 
-    /// Subscribe to message-added events. Returns a channel receiver.
-    pub fn subscribe_messages(&self) -> smol::channel::Receiver<MessageAdded> {
-        let (sender, receiver) = smol::channel::unbounded();
-        self.inner.lock().message_senders.push(sender);
-        receiver
-    }
-
     fn fire_change(&self, change: ReviewChange) {
-        let mut inner = self.inner.lock();
-        inner
+        self.inner
+            .lock()
             .change_senders
             .retain(|s| s.try_send(change.clone()).is_ok());
     }
-
-    fn fire_message(&self, event: MessageAdded) {
-        let mut inner = self.inner.lock();
-        inner
-            .message_senders
-            .retain(|s| s.try_send(event.clone()).is_ok());
-    }
-
-    // ----- location tracking -----
 
     fn remember_location(&self, review_id: &str, path: PathBuf) {
         self.inner
@@ -211,132 +137,78 @@ impl ReviewStore {
             .insert(review_id.to_string(), path);
     }
 
-    fn get_location(&self, review_id: &str) -> Option<PathBuf> {
-        self.inner.lock().locations.get(review_id).cloned()
-    }
-
-    fn remove_location(&self, review_id: &str) {
-        self.inner.lock().locations.remove(review_id);
-    }
-
-    /// Find the file of a review, searching all workspaces if not already known.
+    /// The file of a review, searching all workspaces if not already known.
     fn locate(&self, review_id: &str) -> Option<PathBuf> {
-        if let Some(known) = self.get_location(review_id) {
-            return Some(known);
+        if let Some(known) = self.inner.lock().locations.get(review_id) {
+            return Some(known.clone());
         }
-        let workspaces = self.home().join("workspaces");
-        let entries = fs::read_dir(&workspaces).ok()?;
-        for entry in entries.flatten() {
-            let file = entry.path().join("reviews").join(format!("{review_id}.json"));
-            if file.exists() {
-                self.remember_location(review_id, file.clone());
-                return Some(file);
-            }
-        }
-        None
+        let entries = fs::read_dir(self.home.join("workspaces")).ok()?;
+        let file = entries
+            .flatten()
+            .map(|entry| entry.path().join("reviews").join(format!("{review_id}.json")))
+            .find(|file| file.exists())?;
+        self.remember_location(review_id, file.clone());
+        Some(file)
     }
 
-    fn get_review_lock(&self, review_id: &str) -> ReviewLock {
-        let mut inner = self.inner.lock();
-        inner
-            .locks
-            .entry(review_id.to_string())
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone()
-    }
-
-    // ----- reads -----
-
-    /// List all reviews for a workspace, sorted by `updatedAt` descending.
+    /// The reviews of a workspace, most recently updated first.
     pub fn list(&self, workspace_root: &str) -> Vec<Review> {
-        let dir = self.reviews_dir(workspace_root);
-        let entries = match fs::read_dir(&dir) {
-            Ok(e) => e,
-            Err(_) => return Vec::new(),
+        let Ok(entries) = fs::read_dir(self.reviews_dir(workspace_root)) else {
+            return Vec::new();
         };
-        let mut reviews = Vec::new();
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            match fs::read_to_string(&path)
-                .map_err(ReviewStoreError::from)
-                .and_then(|text| serde_json::from_str::<Review>(&text).map_err(Into::into))
-            {
-                Ok(review) => {
-                    self.remember_location(&review.id, path);
-                    reviews.push(review);
-                }
-                Err(_) => continue,
-            }
-        }
+        let mut reviews: Vec<Review> = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|e| e == "json"))
+            .filter_map(|path| {
+                let review = read(&path).ok()?;
+                self.remember_location(&review.id, path);
+                Some(review)
+            })
+            .collect();
         reviews.sort_by_key(|r| std::cmp::Reverse(r.updated_at));
         reviews
     }
 
-    /// List reviews a window should show: the workspace's own, plus change reviews
-    /// whose code folder points to this workspace.
+    /// The reviews a window should show: the workspace's own, plus change reviews
+    /// whose code folder is this workspace.
     pub fn list_for_window(&self, workspace_root: &str) -> Vec<Review> {
         let root = real_uri(workspace_root);
-        let own = self.list(&root);
-        let own_ids: std::collections::HashSet<&str> =
-            own.iter().map(|r| r.id.as_str()).collect();
-        let mut coded: Vec<Review> = self
-            .list_all()
-            .into_iter()
-            .filter(|r| {
-                if let Some(bundle) = &r.bundle
-                    && let Some(code) = &bundle.code
-                {
-                    let code_uri = path_to_file_uri(code);
-                    return code_uri == root && !own_ids.contains(r.id.as_str());
-                }
-                false
-            })
-            .collect();
-        let mut all = own;
-        all.append(&mut coded);
+        let mut all = self.list(&root);
+        let own: HashSet<String> = all.iter().map(|r| r.id.clone()).collect();
+        all.extend(self.list_all().into_iter().filter(|r| {
+            !own.contains(&r.id)
+                && r.bundle
+                    .as_ref()
+                    .and_then(|bundle| bundle.code.as_deref())
+                    .is_some_and(|code| path_to_file_uri(code) == root)
+        }));
         all.sort_by_key(|r| std::cmp::Reverse(r.updated_at));
         all
     }
 
     /// Every review in every workspace.
-    pub fn list_all(&self) -> Vec<Review> {
-        let workspaces = self.home().join("workspaces");
-        let mut all = Vec::new();
-        let entries = match fs::read_dir(&workspaces) {
-            Ok(e) => e,
-            Err(_) => return all,
+    fn list_all(&self) -> Vec<Review> {
+        let Ok(entries) = fs::read_dir(self.home.join("workspaces")) else {
+            return Vec::new();
         };
-        for entry in entries.flatten() {
-            let info_path = entry.path().join("workspace.json");
-            let info_text = match fs::read_to_string(&info_path) {
-                Ok(t) => t,
-                Err(_) => continue,
-            };
-            let info: serde_json::Value = match serde_json::from_str(&info_text) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            if let Some(root) = info.get("root").and_then(|r| r.as_str()) {
-                all.extend(self.list(root));
-            }
-        }
+        let mut all: Vec<Review> = entries
+            .flatten()
+            .filter_map(|entry| {
+                let text = fs::read_to_string(entry.path().join("workspace.json")).ok()?;
+                let info: serde_json::Value = serde_json::from_str(&text).ok()?;
+                Some(self.list(info.get("root")?.as_str()?))
+            })
+            .flatten()
+            .collect();
         all.sort_by_key(|r| std::cmp::Reverse(r.updated_at));
         all
     }
 
-    /// Get a single review by id.
     pub fn get(&self, review_id: &str) -> Option<Review> {
-        let file = self.locate(review_id)?;
-        let text = fs::read_to_string(&file).ok()?;
-        serde_json::from_str(&text).ok()
+        read(&self.locate(review_id)?).ok()
     }
 
-    // ----- writes -----
-
-    /// Create a new review.
     pub fn create(&self, params: CreateReviewParams) -> Result<Review, ReviewStoreError> {
         let workspace_root = real_uri(&params.workspace_root);
         let now = now_millis();
@@ -365,9 +237,17 @@ impl ReviewStore {
             viewed: None,
             extra: serde_json::Map::new(),
         };
-        let dir = self.reviews_dir(&workspace_root);
+        let workspace_dir = self.workspace_dir(&workspace_root);
+        let dir = workspace_dir.join("reviews");
         fs::create_dir_all(&dir)?;
-        self.write_workspace_info(&workspace_root)?;
+        let info = serde_json::json!({
+            "root": workspace_root,
+            "path": file_uri_to_path(&workspace_root).unwrap_or_default(),
+        });
+        fs::write(
+            workspace_dir.join("workspace.json"),
+            serde_json::to_string_pretty(&info)?,
+        )?;
         let file = dir.join(format!("{}.json", review.id));
         self.remember_location(&review.id, file.clone());
         atomic_write(&file, &review)?;
@@ -377,16 +257,12 @@ impl ReviewStore {
         Ok(review)
     }
 
-    /// Delete a review.
     pub fn delete(&self, review_id: &str) -> Result<(), ReviewStoreError> {
-        let review = self
-            .get(review_id)
-            .ok_or_else(|| ReviewStoreError::UnknownReview(review_id.to_string()))?;
-        let file = self
-            .locate(review_id)
-            .ok_or_else(|| ReviewStoreError::UnknownReview(review_id.to_string()))?;
+        let unknown = || ReviewStoreError::UnknownReview(review_id.to_string());
+        let file = self.locate(review_id).ok_or_else(unknown)?;
+        let review = read(&file).map_err(|_| unknown())?;
         let _ = fs::remove_file(&file);
-        self.remove_location(review_id);
+        self.inner.lock().locations.remove(review_id);
         self.fire_change(ReviewChange::Deleted {
             review_id: review_id.to_string(),
             workspace_root: review.workspace_root,
@@ -394,100 +270,55 @@ impl ReviewStore {
         Ok(())
     }
 
-    /// Rename a review.
-    pub fn rename(
-        &self,
-        review_id: &str,
-        title: String,
-    ) -> Result<Review, ReviewStoreError> {
-        self.mutate(review_id, |review, _now| {
-            review.title = title;
-        })
+    pub fn rename(&self, review_id: &str, title: String) -> Result<Review, ReviewStoreError> {
+        self.mutate(review_id, |review, _| review.title = title)
     }
 
-    /// Archive or unarchive a review.
-    pub fn archive(
-        &self,
-        review_id: &str,
-        archived: bool,
-    ) -> Result<Review, ReviewStoreError> {
+    pub fn archive(&self, review_id: &str, archived: bool) -> Result<Review, ReviewStoreError> {
         self.mutate(review_id, |review, now| {
-            review.archived_at = if archived { Some(now) } else { None };
+            review.archived_at = archived.then_some(now);
         })
     }
 
-    /// Create a thread in a review. Returns the updated review.
+    /// Returns the updated review and the new thread.
     pub fn create_thread(
         &self,
         review_id: &str,
         location: CodeLocation,
         body: String,
         author: Participant,
-        options: review_model::ThreadOptions,
+        options: ThreadOptions,
     ) -> Result<(Review, ReviewThread), ReviewStoreError> {
-        let mut created_thread: Option<ReviewThread> = None;
-        let mut message_event: Option<MessageAdded> = None;
-
-        let review = self.mutate(review_id, |review, now| {
-            let thread_id = Uuid::new_v4().to_string();
-            let message_id = Uuid::new_v4().to_string();
-            let message = ReviewMessage {
-                id: message_id,
-                author: author.clone(),
-                body,
-                created_at: now,
-                status: None,
-                activity: None,
-                permission: None,
-                choice: None,
-                extra: serde_json::Map::new(),
-            };
+        self.update(review_id, |review, now| {
+            let message = new_message(author.clone(), body, now, MessagePatch::default());
             // Every new thread's target is tracked from here on, whoever makes it.
             let location =
                 snapshots::track_new(&self.workspace_dir(&review.workspace_root), location);
-            let thread = ReviewThread {
-                id: thread_id.clone(),
+            let mut thread = ReviewThread {
+                id: Uuid::new_v4().to_string(),
                 number: review.next_thread_number,
                 location,
-                messages: vec![message.clone()],
+                messages: vec![message],
                 status: options.status.unwrap_or(ThreadStatus::Open),
                 intent: options.intent.unwrap_or(ThreadIntent::Comment),
                 severity: options.severity,
-                origin: options.origin.clone(),
-                source_id: options.source_id.clone(),
-                labels: options.labels.clone(),
-                proposal: options.proposal.clone(),
+                origin: options.origin,
+                source_id: options.source_id,
+                labels: options.labels,
+                proposal: options.proposal,
                 agent_state: None,
                 created_at: now,
                 updated_at: now,
                 extra: serde_json::Map::new(),
             };
             review.next_thread_number += 1;
-            // Check agent queue status before pushing (avoids borrow conflict).
-            let should_queue = should_queue_for_agent(review, &thread);
-            let mut thread = thread;
-            if should_queue {
-                thread.agent_state = Some(AgentState::Queued);
-            }
-            let message_clone = message.clone();
+            queue_for_agent(review, &mut thread);
             review.threads.push(thread.clone());
-            record(review, ActivityKind::ThreadCreated, &author, Some(&thread_id), now);
-            created_thread = Some(thread.clone());
-            message_event = Some(MessageAdded {
-                review: review.clone(),
-                thread,
-                message: message_clone,
-            });
-        })?;
-
-        if let Some(event) = message_event {
-            self.fire_message(event);
-        }
-
-        Ok((review, created_thread.expect("set during mutate")))
+            record(review, ActivityKind::ThreadCreated, &author, Some(&thread.id), now);
+            Ok(thread)
+        })
     }
 
-    /// Add a message to a thread.
     pub fn add_message(
         &self,
         review_id: &str,
@@ -496,32 +327,15 @@ impl ReviewStore {
         author: Participant,
         choice: Option<String>,
     ) -> Result<ReviewThread, ReviewStoreError> {
-        let mut message_event: Option<MessageAdded> = None;
-        let thread = self.mutate_thread(review_id, thread_id, |review, thread, now| {
-            let message = ReviewMessage {
-                id: Uuid::new_v4().to_string(),
-                author: author.clone(),
-                body,
-                created_at: now,
-                status: None,
-                activity: None,
-                permission: None,
+        self.mutate_thread(review_id, thread_id, |review, thread, now| {
+            let init = MessagePatch {
                 choice,
-                extra: serde_json::Map::new(),
+                ..MessagePatch::default()
             };
-            thread.messages.push(message.clone());
+            thread.messages.push(new_message(author.clone(), body, now, init));
             queue_for_agent(review, thread);
             record(review, ActivityKind::MessageAdded, &author, Some(thread_id), now);
-            message_event = Some(MessageAdded {
-                review: review.clone(),
-                thread: thread.clone(),
-                message,
-            });
-        })?;
-        if let Some(event) = message_event {
-            self.fire_message(event);
-        }
-        Ok(thread)
+        })
     }
 
     /// Update thread locations from anchor tracking (no activity entry).
@@ -530,10 +344,10 @@ impl ReviewStore {
         review_id: &str,
         locations: &HashMap<String, CodeLocation>,
     ) -> Result<Review, ReviewStoreError> {
-        self.mutate(review_id, |review, _now| {
+        self.mutate(review_id, |review, _| {
             for thread in &mut review.threads {
-                if let Some(loc) = locations.get(&thread.id) {
-                    thread.location = loc.clone();
+                if let Some(location) = locations.get(&thread.id) {
+                    thread.location = location.clone();
                 }
             }
         })
@@ -545,29 +359,19 @@ impl ReviewStore {
         review_id: &str,
         thread_id: &str,
         author: Participant,
-        init: PartialMessage,
+        mut init: MessagePatch,
     ) -> Result<String, ReviewStoreError> {
-        let message_id = Uuid::new_v4().to_string();
-        let id_clone = message_id.clone();
+        let mut message_id = String::new();
         self.mutate_thread(review_id, thread_id, |review, thread, now| {
-            let message = ReviewMessage {
-                id: id_clone,
-                author: author.clone(),
-                body: init.body.unwrap_or_default(),
-                created_at: now,
-                status: init.status,
-                activity: init.activity,
-                permission: init.permission,
-                choice: init.choice,
-                extra: serde_json::Map::new(),
-            };
+            let body = init.body.take().unwrap_or_default();
+            let message = new_message(author.clone(), body, now, init);
+            message_id = message.id.clone();
             thread.messages.push(message);
             record(review, ActivityKind::MessageAdded, &author, Some(thread_id), now);
         })?;
         Ok(message_id)
     }
 
-    /// Update fields of an existing message.
     pub fn update_message(
         &self,
         review_id: &str,
@@ -575,24 +379,17 @@ impl ReviewStore {
         message_id: &str,
         patch: MessagePatch,
     ) -> Result<ReviewThread, ReviewStoreError> {
-        self.mutate_thread(review_id, thread_id, |_review, thread, _now| {
-            if let Some(message) = thread.messages.iter_mut().find(|m| m.id == message_id) {
-                if let Some(body) = patch.body {
-                    message.body = body;
-                }
-                if let Some(status) = patch.status {
-                    message.status = Some(status);
-                }
-                if let Some(activity) = patch.activity {
-                    message.activity = Some(activity);
-                }
-                if let Some(permission) = patch.permission {
-                    message.permission = Some(permission);
-                }
-                if let Some(choice) = patch.choice {
-                    message.choice = Some(choice);
-                }
+        self.mutate_thread(review_id, thread_id, |_, thread, _| {
+            let Some(message) = thread.messages.iter_mut().find(|m| m.id == message_id) else {
+                return;
+            };
+            if let Some(body) = patch.body {
+                message.body = body;
             }
+            message.status = patch.status.or(message.status);
+            message.activity = patch.activity.or(message.activity.take());
+            message.permission = patch.permission.or(message.permission.take());
+            message.choice = patch.choice.or(message.choice.take());
         })
     }
 
@@ -610,84 +407,68 @@ impl ReviewStore {
                 return;
             };
             proposal.status = if accepted {
-                review_model::ProposalStatus::Accepted
+                ProposalStatus::Accepted
             } else {
-                review_model::ProposalStatus::Rejected
+                ProposalStatus::Rejected
             };
             thread.status = ThreadStatus::Resolved;
             let system = Participant {
                 id: "system".to_string(),
-                kind: review_model::ParticipantKind::System,
+                kind: ParticipantKind::System,
                 name: "system".to_string(),
             };
-            thread.messages.push(ReviewMessage {
-                id: Uuid::new_v4().to_string(),
-                author: system,
-                body: note,
-                created_at: now,
-                status: None,
-                activity: None,
-                permission: None,
-                choice: None,
-                extra: serde_json::Map::new(),
-            });
-            if let Some(dv) = doc_version {
-                if let Some(bundle) = &mut review.bundle {
-                    bundle.doc_version = Some(dv);
-                }
-                // If the doc anchor is text, update it to the accepted replacement
-                if let Some(doc_anchor) = &thread.location.doc_anchor
-                    && doc_anchor.anchor_type == review_model::DocAnchorType::Text
-                    && let Some(after_text) = thread.proposal.as_ref().map(|p| p.after.clone())
-                {
-                    if let Some(da) = &mut thread.location.doc_anchor {
-                        da.exact = Some(after_text.clone());
-                    }
-                    if let Some(anchor) = &mut thread.location.anchor {
-                        anchor.text = after_text;
-                    }
+            thread
+                .messages
+                .push(new_message(system, note, now, MessagePatch::default()));
+            let Some(doc_version) = doc_version else {
+                return;
+            };
+            if let Some(bundle) = &mut review.bundle {
+                bundle.doc_version = Some(doc_version);
+            }
+            // A text anchor now quotes the accepted replacement.
+            if let Some(doc_anchor) = &mut thread.location.doc_anchor
+                && doc_anchor.anchor_type == DocAnchorType::Text
+            {
+                doc_anchor.exact = Some(proposal.after.clone());
+                if let Some(anchor) = &mut thread.location.anchor {
+                    anchor.text = proposal.after.clone();
                 }
             }
         })
     }
 
-    /// Set the agent state on a thread (queued, working, etc.).
     pub fn set_agent_state(
         &self,
         review_id: &str,
         thread_id: &str,
         state: AgentState,
     ) -> Result<ReviewThread, ReviewStoreError> {
-        self.mutate_thread(review_id, thread_id, |_review, thread, _now| {
+        self.mutate_thread(review_id, thread_id, |_, thread, _| {
             thread.agent_state = Some(state);
         })
     }
 
-    /// Set the intent on a thread.
     pub fn set_thread_intent(
         &self,
         review_id: &str,
         thread_id: &str,
         intent: ThreadIntent,
     ) -> Result<ReviewThread, ReviewStoreError> {
-        self.mutate_thread(review_id, thread_id, |review, thread, _now| {
+        self.mutate_thread(review_id, thread_id, |review, thread, _| {
             thread.intent = intent;
             queue_for_agent(review, thread);
         })
     }
 
-    /// Set the bundle on a review.
     pub fn set_bundle(
         &self,
         review_id: &str,
         bundle: Option<ReviewBundle>,
     ) -> Result<Review, ReviewStoreError> {
-        self.mutate(review_id, |review, _now| {
-            review.bundle = bundle;
-        })
+        self.mutate(review_id, |review, _| review.bundle = bundle)
     }
 
-    /// Submit the review with a decision.
     pub fn submit(
         &self,
         review_id: &str,
@@ -696,15 +477,11 @@ impl ReviewStore {
         actor: Participant,
     ) -> Result<Review, ReviewStoreError> {
         self.mutate(review_id, |review, now| {
-            let to_agent = if review
+            let to_agent = review
                 .agent
                 .as_ref()
                 .is_some_and(|a| a.transport == Some(AgentTransport::Mcp))
-            {
-                Some(VerdictToAgent::Waiting)
-            } else {
-                None
-            };
+                .then_some(VerdictToAgent::Waiting);
             review.verdict = Some(ReviewVerdict {
                 decision,
                 summary,
@@ -716,41 +493,28 @@ impl ReviewStore {
         })
     }
 
-    /// Set the overview text.
-    pub fn set_overview(
-        &self,
-        review_id: &str,
-        overview: String,
-    ) -> Result<Review, ReviewStoreError> {
-        self.mutate(review_id, |review, _now| {
-            review.overview = Some(overview);
-        })
+    pub fn set_overview(&self, review_id: &str, overview: String) -> Result<Review, ReviewStoreError> {
+        self.mutate(review_id, |review, _| review.overview = Some(overview))
     }
 
     /// Mark the review's window as closed or reopened.
     pub fn set_closed(
         &self,
         review_id: &str,
-        closed: Option<review_model::ReviewClosed>,
+        closed: Option<ReviewClosed>,
     ) -> Result<Review, ReviewStoreError> {
-        self.mutate(review_id, |review, _now| {
-            review.closed = closed;
-        })
+        self.mutate(review_id, |review, _| review.closed = closed)
     }
 
     /// Mark that an agent picked up the latest verdict.
-    pub fn verdict_delivered(
-        &self,
-        review_id: &str,
-    ) -> Result<Review, ReviewStoreError> {
-        self.mutate(review_id, |review, _now| {
+    pub fn verdict_delivered(&self, review_id: &str) -> Result<Review, ReviewStoreError> {
+        self.mutate(review_id, |review, _| {
             if let Some(verdict) = &mut review.verdict {
                 verdict.to_agent = Some(VerdictToAgent::Delivered);
             }
         })
     }
 
-    /// Mark files as viewed or not viewed.
     pub fn set_viewed(
         &self,
         review_id: &str,
@@ -759,28 +523,24 @@ impl ReviewStore {
     ) -> Result<Review, ReviewStoreError> {
         self.mutate(review_id, |review, now| {
             let map = review.viewed.get_or_insert_with(HashMap::new);
-            for p in paths {
+            for path in paths {
                 if viewed {
-                    map.insert(p.clone(), now);
+                    map.insert(path.clone(), now);
                 } else {
-                    map.remove(p);
+                    map.remove(path);
                 }
             }
         })
     }
 
-    /// Set the connected agent.
     pub fn set_agent(
         &self,
         review_id: &str,
         agent: Option<AgentConfig>,
     ) -> Result<Review, ReviewStoreError> {
-        self.mutate(review_id, |review, _now| {
-            review.agent = agent;
-        })
+        self.mutate(review_id, |review, _| review.agent = agent)
     }
 
-    /// Set the status on a thread (open/resolved/proposed).
     pub fn set_thread_status(
         &self,
         review_id: &str,
@@ -801,110 +561,70 @@ impl ReviewStore {
         })
     }
 
-    /// Relocate a thread (automatic bookkeeping, no activity entry).
-    pub fn relocate_thread(
+    /// Read a review, apply `f`, write it and broadcast it, all under the review's lock.
+    fn update<T>(
         &self,
         review_id: &str,
-        thread_id: &str,
-        location: CodeLocation,
-    ) -> Result<ReviewThread, ReviewStoreError> {
-        self.mutate_thread(review_id, thread_id, |_review, thread, _now| {
-            thread.location = location;
-        })
-    }
-
-    // ----- mutation infrastructure -----
-
-    /// Mutate a review atomically: read, apply `f`, write, broadcast.
-    fn mutate(
-        &self,
-        review_id: &str,
-        f: impl FnOnce(&mut Review, u64),
-    ) -> Result<Review, ReviewStoreError> {
-        let lock = self.get_review_lock(review_id);
+        f: impl FnOnce(&mut Review, u64) -> Result<T, ReviewStoreError>,
+    ) -> Result<(Review, T), ReviewStoreError> {
+        let lock = Arc::clone(self.inner.lock().locks.entry(review_id.to_string()).or_default());
         let _guard = lock.lock();
 
         let file = self
             .locate(review_id)
             .ok_or_else(|| ReviewStoreError::UnknownReview(review_id.to_string()))?;
-        let text = fs::read_to_string(&file)?;
-        let mut review: Review = serde_json::from_str(&text)?;
-
+        let mut review = read(&file)?;
         let now = now_millis();
-        f(&mut review, now);
+        let value = f(&mut review, now)?;
         review.updated_at = now;
-
         atomic_write(&file, &review)?;
         self.fire_change(ReviewChange::Changed {
             review: review.clone(),
         });
-        Ok(review)
+        Ok((review, value))
     }
 
-    /// Mutate a specific thread within a review.
+    fn mutate(
+        &self,
+        review_id: &str,
+        f: impl FnOnce(&mut Review, u64),
+    ) -> Result<Review, ReviewStoreError> {
+        self.update(review_id, |review, now| {
+            f(review, now);
+            Ok(())
+        })
+        .map(|(review, ())| review)
+    }
+
     fn mutate_thread(
         &self,
         review_id: &str,
         thread_id: &str,
         f: impl FnOnce(&mut Review, &mut ReviewThread, u64),
     ) -> Result<ReviewThread, ReviewStoreError> {
-        let lock = self.get_review_lock(review_id);
-        let _guard = lock.lock();
-
-        let file = self
-            .locate(review_id)
-            .ok_or_else(|| ReviewStoreError::UnknownReview(review_id.to_string()))?;
-        let text = fs::read_to_string(&file)?;
-        let mut review: Review = serde_json::from_str(&text)?;
-
-        let now = now_millis();
-        let thread_index = review
-            .threads
-            .iter()
-            .position(|t| t.id == thread_id)
-            .ok_or_else(|| ReviewStoreError::UnknownThread {
-                review_id: review_id.to_string(),
-                thread_id: thread_id.to_string(),
-            })?;
-        // Remove the thread temporarily so we can pass &mut Review and &mut ReviewThread
-        // without a double borrow (the thread is part of review.threads).
-        let mut thread = review.threads.remove(thread_index);
-        f(&mut review, &mut thread, now);
-        thread.updated_at = now;
-        review.threads.insert(thread_index, thread.clone());
-        review.updated_at = now;
-        atomic_write(&file, &review)?;
-        self.fire_change(ReviewChange::Changed {
-            review: review.clone(),
-        });
-        Ok(thread)
-    }
-
-    fn write_workspace_info(&self, workspace_root: &str) -> Result<(), ReviewStoreError> {
-        let root = real_uri(workspace_root);
-        let path = file_uri_to_path(&root).unwrap_or_default();
-        let info = serde_json::json!({
-            "root": root,
-            "path": path,
-        });
-        let ws_dir = self.workspace_dir(workspace_root);
-        fs::create_dir_all(&ws_dir)?;
-        let file = ws_dir.join("workspace.json");
-        let text = serde_json::to_string_pretty(&info)?;
-        fs::write(&file, text)?;
-        Ok(())
+        self.update(review_id, |review, now| {
+            let index = review
+                .threads
+                .iter()
+                .position(|t| t.id == thread_id)
+                .ok_or_else(|| ReviewStoreError::UnknownThread {
+                    review_id: review_id.to_string(),
+                    thread_id: thread_id.to_string(),
+                })?;
+            // Taken out so `f` can borrow the review and the thread mutably at once.
+            let mut thread = review.threads.remove(index);
+            f(review, &mut thread, now);
+            thread.updated_at = now;
+            review.threads.insert(index, thread.clone());
+            Ok(thread)
+        })
+        .map(|(_, thread)| thread)
     }
 }
 
-impl Default for ReviewStore {
-    fn default() -> Self {
-        Self::new()
-    }
+fn read(file: &Path) -> Result<Review, ReviewStoreError> {
+    Ok(serde_json::from_str(&fs::read_to_string(file)?)?)
 }
-
-// ---------------------------------------------------------------------------
-// Free helpers
-// ---------------------------------------------------------------------------
 
 fn now_millis() -> u64 {
     std::time::SystemTime::now()
@@ -913,13 +633,27 @@ fn now_millis() -> u64 {
         .unwrap_or(0)
 }
 
-/// Atomic write: write to a temp file, then rename.
+/// Write to a temporary file, then rename, so a crash never leaves a half-written review.
 fn atomic_write(path: &Path, review: &Review) -> Result<(), ReviewStoreError> {
     let text = serde_json::to_string_pretty(review)?;
     let tmp = path.with_extension(format!("{}.tmp", std::process::id()));
     fs::write(&tmp, &text)?;
     fs::rename(&tmp, path)?;
     Ok(())
+}
+
+fn new_message(author: Participant, body: String, now: u64, init: MessagePatch) -> ReviewMessage {
+    ReviewMessage {
+        id: Uuid::new_v4().to_string(),
+        author,
+        body,
+        created_at: now,
+        status: init.status,
+        activity: init.activity,
+        permission: init.permission,
+        choice: init.choice,
+        extra: serde_json::Map::new(),
+    }
 }
 
 fn record(
@@ -932,7 +666,7 @@ fn record(
     review.activity.push(ReviewActivity {
         kind,
         actor: actor.clone(),
-        thread_id: thread_id.map(|s| s.to_string()),
+        thread_id: thread_id.map(str::to_string),
         at,
     });
     if !review.participants.iter().any(|p| p.id == actor.id) {
@@ -940,57 +674,21 @@ fn record(
     }
 }
 
-/// Check whether a thread should be queued for the review's MCP agent.
-fn should_queue_for_agent(review: &Review, thread: &ReviewThread) -> bool {
-    if let Some(agent) = &review.agent {
-        agent.transport == Some(AgentTransport::Mcp)
-            && review_model::waits_for_agent(review, thread, &agent.id)
-    } else {
-        false
-    }
-}
-
-/// If the review has an MCP agent and the thread should be queued, mark it.
+/// Queue the thread for the review's MCP agent when its latest message waits for it.
 fn queue_for_agent(review: &Review, thread: &mut ReviewThread) {
-    if should_queue_for_agent(review, thread) {
+    if let Some(agent) = &review.agent
+        && agent.transport == Some(AgentTransport::Mcp)
+        && review_model::waits_for_agent(review, thread, &agent.id)
+    {
         thread.agent_state = Some(AgentState::Queued);
     }
 }
-
-// ---------------------------------------------------------------------------
-// Partial types for message operations
-// ---------------------------------------------------------------------------
-
-/// Fields for initializing a started message.
-#[derive(Default)]
-pub struct PartialMessage {
-    pub body: Option<String>,
-    pub status: Option<review_model::MessageStatus>,
-    pub activity: Option<Vec<review_model::AgentActivity>>,
-    pub permission: Option<review_model::PermissionRequest>,
-    pub choice: Option<String>,
-}
-
-/// Fields to patch on an existing message.
-#[derive(Default)]
-pub struct MessagePatch {
-    pub body: Option<String>,
-    pub status: Option<review_model::MessageStatus>,
-    pub activity: Option<Vec<review_model::AgentActivity>>,
-    pub permission: Option<review_model::PermissionRequest>,
-    pub choice: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use review_model::{LocationKind, ParticipantKind, ReviewScope};
-    use std::sync::Arc;
+    use review_model::LocationKind;
     use std::thread;
 
     fn test_author() -> Participant {
@@ -1020,51 +718,6 @@ mod tests {
     }
 
     #[test]
-    fn test_create_and_get() {
-        let tmp = tempfile::tempdir().unwrap();
-        let store = setup_store(&tmp);
-        let review = store
-            .create(CreateReviewParams {
-                workspace_root: "file:///tmp/test".into(),
-                title: "Test Review".into(),
-                scope: ReviewScope::Repository,
-                author: test_author(),
-            })
-            .unwrap();
-        assert_eq!(review.title, "Test Review");
-        assert_eq!(review.threads.len(), 0);
-        assert_eq!(review.next_thread_number, 1);
-
-        let got = store.get(&review.id).unwrap();
-        assert_eq!(got.id, review.id);
-        assert_eq!(got.title, "Test Review");
-    }
-
-    #[test]
-    fn test_list() {
-        let tmp = tempfile::tempdir().unwrap();
-        let store = setup_store(&tmp);
-        store
-            .create(CreateReviewParams {
-                workspace_root: "file:///tmp/test".into(),
-                title: "First".into(),
-                scope: ReviewScope::Repository,
-                author: test_author(),
-            })
-            .unwrap();
-        store
-            .create(CreateReviewParams {
-                workspace_root: "file:///tmp/test".into(),
-                title: "Second".into(),
-                scope: ReviewScope::Repository,
-                author: test_author(),
-            })
-            .unwrap();
-        let reviews = store.list("file:///tmp/test");
-        assert_eq!(reviews.len(), 2);
-    }
-
-    #[test]
     fn test_delete() {
         let tmp = tempfile::tempdir().unwrap();
         let store = setup_store(&tmp);
@@ -1078,79 +731,6 @@ mod tests {
             .unwrap();
         store.delete(&review.id).unwrap();
         assert!(store.get(&review.id).is_none());
-    }
-
-    #[test]
-    fn test_rename() {
-        let tmp = tempfile::tempdir().unwrap();
-        let store = setup_store(&tmp);
-        let review = store
-            .create(CreateReviewParams {
-                workspace_root: "file:///tmp/test".into(),
-                title: "Original".into(),
-                scope: ReviewScope::Repository,
-                author: test_author(),
-            })
-            .unwrap();
-        let renamed = store.rename(&review.id, "Renamed".into()).unwrap();
-        assert_eq!(renamed.title, "Renamed");
-    }
-
-    #[test]
-    fn test_archive_unarchive() {
-        let tmp = tempfile::tempdir().unwrap();
-        let store = setup_store(&tmp);
-        let review = store
-            .create(CreateReviewParams {
-                workspace_root: "file:///tmp/test".into(),
-                title: "Archivable".into(),
-                scope: ReviewScope::Repository,
-                author: test_author(),
-            })
-            .unwrap();
-        let archived = store.archive(&review.id, true).unwrap();
-        assert!(archived.archived_at.is_some());
-        let unarchived = store.archive(&review.id, false).unwrap();
-        assert!(unarchived.archived_at.is_none());
-    }
-
-    #[test]
-    fn test_create_thread_and_message() {
-        let tmp = tempfile::tempdir().unwrap();
-        let store = setup_store(&tmp);
-        let review = store
-            .create(CreateReviewParams {
-                workspace_root: "file:///tmp/test".into(),
-                title: "Threads".into(),
-                scope: ReviewScope::Repository,
-                author: test_author(),
-            })
-            .unwrap();
-        let (updated, thread) = store
-            .create_thread(
-                &review.id,
-                test_location(),
-                "First comment".into(),
-                test_author(),
-                Default::default(),
-            )
-            .unwrap();
-        assert_eq!(thread.number, 1);
-        assert_eq!(thread.messages.len(), 1);
-        assert_eq!(thread.messages[0].body, "First comment");
-        assert_eq!(updated.threads.len(), 1);
-
-        let thread2 = store
-            .add_message(
-                &review.id,
-                &thread.id,
-                "Reply".into(),
-                test_author(),
-                None,
-            )
-            .unwrap();
-        assert_eq!(thread2.messages.len(), 2);
-        assert_eq!(thread2.messages[1].body, "Reply");
     }
 
     #[test]
@@ -1201,60 +781,6 @@ mod tests {
     }
 
     #[test]
-    fn test_thread_status() {
-        let tmp = tempfile::tempdir().unwrap();
-        let store = setup_store(&tmp);
-        let review = store
-            .create(CreateReviewParams {
-                workspace_root: "file:///tmp/test".into(),
-                title: "Status".into(),
-                scope: ReviewScope::Repository,
-                author: test_author(),
-            })
-            .unwrap();
-        let (_, thread) = store
-            .create_thread(
-                &review.id,
-                test_location(),
-                "Comment".into(),
-                test_author(),
-                Default::default(),
-            )
-            .unwrap();
-        let resolved = store
-            .set_thread_status(&review.id, &thread.id, ThreadStatus::Resolved, test_author())
-            .unwrap();
-        assert_eq!(resolved.status, ThreadStatus::Resolved);
-    }
-
-    #[test]
-    fn test_submit_verdict() {
-        let tmp = tempfile::tempdir().unwrap();
-        let store = setup_store(&tmp);
-        let review = store
-            .create(CreateReviewParams {
-                workspace_root: "file:///tmp/test".into(),
-                title: "Submit".into(),
-                scope: ReviewScope::Repository,
-                author: test_author(),
-            })
-            .unwrap();
-        let submitted = store
-            .submit(
-                &review.id,
-                ReviewDecision::Approve,
-                "Looks good".into(),
-                test_author(),
-            )
-            .unwrap();
-        assert_eq!(
-            submitted.verdict.as_ref().unwrap().decision,
-            ReviewDecision::Approve
-        );
-        assert_eq!(submitted.verdict.as_ref().unwrap().count, 1);
-    }
-
-    #[test]
     fn test_set_viewed() {
         let tmp = tempfile::tempdir().unwrap();
         let store = setup_store(&tmp);
@@ -1300,52 +826,6 @@ mod tests {
             ReviewChange::Changed { review: r } => assert_eq!(r.id, review.id),
             ReviewChange::Deleted { .. } => panic!("expected Changed"),
         }
-    }
-
-    #[test]
-    fn test_workspace_dir_hash() {
-        use sha2::Digest;
-        let tmp = tempfile::tempdir().unwrap();
-        let store = setup_store(&tmp);
-        // Use a URI that won't change under real_path resolution
-        // (the path doesn't exist, so its parent resolves but basename is kept).
-        // Instead of hardcoding, verify the hash matches sha256 of the resolved URI.
-        let input = "file:///nonexistent_test_path_12345/project";
-        let dir = store.workspace_dir(input);
-        let resolved = crate::real_uri(input);
-        let hash = format!("{:x}", sha2::Sha256::digest(resolved.as_bytes()));
-        let expected_suffix = &hash[..16];
-        assert!(
-            dir.ends_with(expected_suffix),
-            "hash mismatch: dir={dir:?}, expected suffix={expected_suffix}"
-        );
-    }
-
-    #[test]
-    fn test_json_round_trip_with_ts() {
-        let tmp = tempfile::tempdir().unwrap();
-        let store = setup_store(&tmp);
-        let review = store
-            .create(CreateReviewParams {
-                workspace_root: "file:///tmp/test".into(),
-                title: "Round Trip".into(),
-                scope: ReviewScope::Repository,
-                author: test_author(),
-            })
-            .unwrap();
-
-        // Read back the raw JSON and verify it matches our model
-        let got = store.get(&review.id).unwrap();
-        assert_eq!(got.id, review.id);
-
-        // Verify the JSON is valid and has camelCase keys
-        let file = store.locate(&review.id).unwrap();
-        let raw: serde_json::Value =
-            serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
-        assert!(raw.get("workspaceRoot").is_some());
-        assert!(raw.get("createdAt").is_some());
-        assert!(raw.get("updatedAt").is_some());
-        assert!(raw.get("nextThreadNumber").is_some());
     }
 
     /// Stress test: many threads mutating the same review concurrently.

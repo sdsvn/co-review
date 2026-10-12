@@ -8,10 +8,6 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-// ---------------------------------------------------------------------------
-// Position and Range (LSP-style, zero-based)
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Position {
     pub line: u32,
@@ -23,10 +19,6 @@ pub struct Range {
     pub start: Position,
     pub end: Position,
 }
-
-// ---------------------------------------------------------------------------
-// Anchor status and TrackedRange (from anchor-tracking.ts — type only)
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -59,10 +51,6 @@ pub struct TrackedRange {
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
-
-// ---------------------------------------------------------------------------
-// Anchors: Code, Syntax, Doc, Patch
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyntaxAnchor {
@@ -103,18 +91,6 @@ pub enum DocAnchorType {
 }
 
 impl DocAnchorType {
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "document" => Some(Self::Document),
-            "text" => Some(Self::Text),
-            "mermaid-block" => Some(Self::MermaidBlock),
-            "mermaid-node" => Some(Self::MermaidNode),
-            "mermaid-edge" => Some(Self::MermaidEdge),
-            "tree-node" => Some(Self::TreeNode),
-            _ => None,
-        }
-    }
-
     fn is_other(&self) -> bool {
         *self == Self::Other
     }
@@ -155,8 +131,7 @@ impl<'de> Deserialize<'de> for DocAnchor {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let mut fields = serde_json::Map::deserialize(deserializer)?;
         Ok(Self {
-            anchor_type: take_anchor_type(&mut fields, DocAnchorType::from_name)
-                .unwrap_or(DocAnchorType::Other),
+            anchor_type: take_field(&mut fields, "type").unwrap_or(DocAnchorType::Other),
             exact: take_field(&mut fields, "exact"),
             prefix: take_field(&mut fields, "prefix"),
             suffix: take_field(&mut fields, "suffix"),
@@ -182,20 +157,7 @@ fn take_field<T: serde::de::DeserializeOwned>(
     Some(value)
 }
 
-fn take_anchor_type<T>(
-    fields: &mut serde_json::Map<String, serde_json::Value>,
-    from_name: fn(&str) -> Option<T>,
-) -> Option<T> {
-    let anchor_type = from_name(fields.get("type")?.as_str()?)?;
-    fields.shift_remove("type");
-    Some(anchor_type)
-}
-
-/// Lengths and prefixes in UTF-16 code units, as JavaScript's `length` and `slice` count them.
-fn utf16_length(text: &str) -> usize {
-    text.encode_utf16().count()
-}
-
+/// The first `units` UTF-16 code units of `text`, as JavaScript's `slice` counts them.
 fn utf16_prefix(text: &str, units: usize) -> String {
     let code_units: Vec<u16> = text.encode_utf16().take(units).collect();
     String::from_utf16_lossy(&code_units)
@@ -207,7 +169,7 @@ impl DocAnchor {
             DocAnchorType::Document => "document".to_string(),
             DocAnchorType::Text => {
                 let exact = self.exact.as_deref().unwrap_or("");
-                let ellipsis = if utf16_length(exact) > 60 { "\u{2026}" } else { "" };
+                let ellipsis = if exact.encode_utf16().count() > 60 { "\u{2026}" } else { "" };
                 format!("\u{201c}{}{ellipsis}\u{201d}", utf16_prefix(exact, 60))
             }
             DocAnchorType::MermaidBlock => {
@@ -254,16 +216,6 @@ pub enum PatchAnchorType {
 }
 
 impl PatchAnchorType {
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "patch" => Some(Self::Patch),
-            "code-file" => Some(Self::CodeFile),
-            "code-line" => Some(Self::CodeLine),
-            "code-range" => Some(Self::CodeRange),
-            _ => None,
-        }
-    }
-
     fn is_other(&self) -> bool {
         *self == Self::Other
     }
@@ -302,8 +254,7 @@ impl<'de> Deserialize<'de> for PatchAnchor {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let mut fields = serde_json::Map::deserialize(deserializer)?;
         Ok(Self {
-            anchor_type: take_anchor_type(&mut fields, PatchAnchorType::from_name)
-                .unwrap_or(PatchAnchorType::Other),
+            anchor_type: take_field(&mut fields, "type").unwrap_or(PatchAnchorType::Other),
             path: take_field(&mut fields, "path"),
             line: take_field(&mut fields, "line"),
             start_line: take_field(&mut fields, "startLine"),
@@ -314,43 +265,6 @@ impl<'de> Deserialize<'de> for PatchAnchor {
         })
     }
 }
-
-impl PatchAnchor {
-    pub fn describe(&self) -> String {
-        match self.anchor_type {
-            PatchAnchorType::Patch => "patch".to_string(),
-            PatchAnchorType::CodeFile => {
-                self.path.as_deref().unwrap_or("file").to_string()
-            }
-            PatchAnchorType::CodeLine => {
-                let path = self.path.as_deref().unwrap_or("");
-                let line = self.line.unwrap_or(0);
-                let side_suffix = if self.side == Some(PatchSide::Old) {
-                    " (old)"
-                } else {
-                    ""
-                };
-                format!("{path}:{line}{side_suffix}")
-            }
-            PatchAnchorType::CodeRange => {
-                let path = self.path.as_deref().unwrap_or("");
-                let start = self.start_line.unwrap_or(0);
-                let end = self.end_line.unwrap_or(0);
-                let side_suffix = if self.side == Some(PatchSide::Old) {
-                    " (old)"
-                } else {
-                    ""
-                };
-                format!("{path}:{start}-{end}{side_suffix}")
-            }
-            PatchAnchorType::Other => "undefined".to_string(),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Location
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -387,10 +301,6 @@ pub struct CodeLocation {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-// ---------------------------------------------------------------------------
-// Participants
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ParticipantKind {
@@ -405,10 +315,6 @@ pub struct Participant {
     pub kind: ParticipantKind,
     pub name: String,
 }
-
-// ---------------------------------------------------------------------------
-// Agent activity, permissions, messages
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -472,10 +378,6 @@ pub struct ReviewMessage {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-// ---------------------------------------------------------------------------
-// Agent config and settings
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentTransport {
@@ -502,51 +404,6 @@ pub struct AgentConfig {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-impl AgentConfig {
-    pub fn is_acp(&self) -> bool {
-        matches!(self.transport, None | Some(AgentTransport::Acp)) && self.command.is_some()
-    }
-
-    pub fn command_line(&self) -> String {
-        let mut parts = Vec::new();
-        if let Some(cmd) = &self.command {
-            parts.push(cmd.clone());
-        }
-        if let Some(args) = &self.args {
-            parts.extend(args.iter().cloned());
-        }
-        parts.join(" ").trim().to_string()
-    }
-
-    pub fn same_process(&self, other: &AgentConfig) -> bool {
-        self.id == other.id
-            && self.transport == other.transport
-            && self.command_line() == other.command_line()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgentSettingOption {
-    pub value: String,
-    pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgentSetting {
-    pub id: String,
-    pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub category: Option<String>,
-    pub current: String,
-    pub options: Vec<AgentSettingOption>,
-}
-
-impl AgentSetting {
-    pub const MODE: &'static str = "__mode";
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPresence {
@@ -554,10 +411,6 @@ pub struct AgentPresence {
     pub listening: bool,
     pub last_seen: u64,
 }
-
-// ---------------------------------------------------------------------------
-// Agent state
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -567,10 +420,6 @@ pub enum AgentState {
     Working,
     WaitingForHuman,
 }
-
-// ---------------------------------------------------------------------------
-// Threads
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -661,10 +510,6 @@ pub struct ReviewThread {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-// ---------------------------------------------------------------------------
-// Review scope
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum ReviewScope {
@@ -677,27 +522,6 @@ pub enum ReviewScope {
     #[serde(rename = "commit")]
     Commit { sha: String },
 }
-
-impl ReviewScope {
-    pub fn label(&self) -> String {
-        self.label_with(|u| u.to_string())
-    }
-
-    pub fn label_with(&self, relative: impl Fn(&str) -> String) -> String {
-        match self {
-            ReviewScope::Repository => "Entire repository".to_string(),
-            ReviewScope::Paths { uris } => {
-                uris.iter().map(|u| relative(u)).collect::<Vec<_>>().join(", ")
-            }
-            ReviewScope::Branch { base, head } => format!("{base}...{head}"),
-            ReviewScope::Commit { sha } => format!("Commit {}", &sha[..sha.len().min(10)]),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Activity log
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -719,10 +543,6 @@ pub struct ReviewActivity {
     pub thread_id: Option<String>,
     pub at: u64,
 }
-
-// ---------------------------------------------------------------------------
-// Review bundle, verdict, closed
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -800,10 +620,6 @@ pub struct ReviewClosed {
     pub at: u64,
 }
 
-// ---------------------------------------------------------------------------
-// Review (top-level)
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Review {
@@ -835,10 +651,6 @@ pub struct Review {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-// ---------------------------------------------------------------------------
-// Review coverage (not stored, computed at runtime)
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReviewCoverageArea {
     pub path: String,
@@ -855,78 +667,41 @@ pub struct ReviewCoverage {
     pub areas: Vec<ReviewCoverageArea>,
 }
 
-// ---------------------------------------------------------------------------
-// Pure helpers
-// ---------------------------------------------------------------------------
-
-/// FNV-1a content version hash, matching the TypeScript implementation exactly.
-/// Iterates UTF-16 code units (JavaScript semantics), produces `"<hex8>-<len_base36>"`.
+/// FNV-1a over UTF-16 code units, then the length in base 36: `"<hex8>-<len_base36>"`, as the
+/// TypeScript computes it.
 pub fn content_version(text: &str) -> String {
     let mut hash: u32 = 0x811c9dc5;
-    let mut utf16_len: usize = 0;
+    let mut len = 0usize;
     for unit in text.encode_utf16() {
-        hash ^= unit as u32;
-        hash = hash.wrapping_mul(0x01000193);
-        utf16_len += 1;
+        hash = (hash ^ u32::from(unit)).wrapping_mul(0x01000193);
+        len += 1;
     }
-    let hex = format!("{hash:08x}");
-    let len_b36 = radix_36(utf16_len);
-    format!("{hex}-{len_b36}")
-}
-
-fn radix_36(mut n: usize) -> String {
-    if n == 0 {
-        return "0".to_string();
+    let mut base36 = Vec::new();
+    loop {
+        base36.push(char::from_digit((len % 36) as u32, 36).unwrap_or('0'));
+        len /= 36;
+        if len == 0 {
+            break;
+        }
     }
-    const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
-    let mut buf = Vec::new();
-    while n > 0 {
-        buf.push(DIGITS[n % 36]);
-        n /= 36;
-    }
-    buf.reverse();
-    String::from_utf8(buf).expect("radix_36 produces ASCII")
+    format!("{hash:08x}-{}", base36.iter().rev().collect::<String>())
 }
 
 /// Whether a URI points to a review's overview page (or the legacy findings page).
+/// `/pages/<id>/overview.md`, or the legacy `/findings/<id>/findings.md`.
 pub fn is_overview_page(uri: &str) -> bool {
-    // Match: /pages/<segment>/overview.md or /findings/<segment>/findings.md
-    // where <segment> contains no '/'.
-    if let Some(before_overview) = uri.strip_suffix("/overview.md")
-        && let Some(pos) = before_overview.rfind("/pages/")
-    {
-        let segment = &before_overview[pos + "/pages/".len()..];
-        if !segment.contains('/') {
-            return true;
-        }
-    }
-    if let Some(before_findings) = uri.strip_suffix("/findings.md")
-        && let Some(pos) = before_findings.rfind("/findings/")
-    {
-        let segment = &before_findings[pos + "/findings/".len()..];
-        if !segment.contains('/') {
-            return true;
-        }
-    }
-    false
-}
-
-/// Whether a thread's target was removed or is ambiguous: shown in the panel only, "out of scope".
-pub fn is_out_of_scope(thread: &ReviewThread) -> bool {
-    if thread.status == ThreadStatus::Resolved {
-        return false;
-    }
-    if let Some(tracked) = &thread.location.tracked {
-        return tracked.status == AnchorStatus::Removed || tracked.status == AnchorStatus::Ambiguous;
-    }
-    false
+    let in_dir = |dir: &str, file: &str| {
+        uri.strip_suffix(file)
+            .and_then(|rest| rest.rsplit_once(dir))
+            .is_some_and(|(_, id)| !id.contains('/'))
+    };
+    in_dir("/pages/", "/overview.md") || in_dir("/findings/", "/findings.md")
 }
 
 /// Whether the reviewer's latest message in a thread is waiting for the given MCP agent.
 pub fn waits_for_agent(review: &Review, thread: &ReviewThread, agent_id: &str) -> bool {
-    let last = match thread.messages.last() {
-        Some(m) => m,
-        None => return false,
+    let Some(last) = thread.messages.last() else {
+        return false;
     };
     if thread.status == ThreadStatus::Resolved || last.author.kind != ParticipantKind::Human {
         return false;
@@ -939,19 +714,10 @@ pub fn waits_for_agent(review: &Review, thread: &ReviewThread, agent_id: &str) -
         || thread.messages.iter().any(|m| m.author.id == agent_id)
 }
 
-/// The short id for a thread number: `t1`, `t2`, etc.
-pub fn thread_short_id(number: u32) -> String {
-    format!("t{number}")
-}
-
 /// Parse a thread short id like `t5` into its number.
 pub fn parse_thread_short_id(s: &str) -> Option<u32> {
     s.strip_prefix('t').and_then(|rest| rest.parse().ok())
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -991,31 +757,12 @@ mod tests {
     }
 
     #[test]
-    fn test_thread_short_id() {
-        assert_eq!(thread_short_id(1), "t1");
-        assert_eq!(thread_short_id(42), "t42");
+    fn test_parse_thread_short_id() {
         assert_eq!(parse_thread_short_id("t5"), Some(5));
         assert_eq!(parse_thread_short_id("t0"), Some(0));
         assert_eq!(parse_thread_short_id("abc"), None);
         assert_eq!(parse_thread_short_id("t"), None);
         assert_eq!(parse_thread_short_id("t-1"), None);
-    }
-
-    #[test]
-    fn test_review_scope_label() {
-        assert_eq!(ReviewScope::Repository.label(), "Entire repository");
-        assert_eq!(
-            ReviewScope::Paths { uris: vec!["file:///a".into(), "file:///b".into()] }.label(),
-            "file:///a, file:///b"
-        );
-        assert_eq!(
-            ReviewScope::Branch { base: "main".into(), head: "feature".into() }.label(),
-            "main...feature"
-        );
-        assert_eq!(
-            ReviewScope::Commit { sha: "abcdef1234567890".into() }.label(),
-            "Commit abcdef1234"
-        );
     }
 
     #[test]
@@ -1035,20 +782,6 @@ mod tests {
         assert_eq!(long.describe(), format!("\u{201c}{}\u{fffd}\u{2026}\u{201d}", "x".repeat(59)));
         let step = DocAnchor { anchor_type: DocAnchorType::TreeNode, exact: None, node_id: Some("a".repeat(55)), ..doc };
         assert_eq!(step.describe(), format!("step \u{201c}{}\u{201d}", "a".repeat(50)));
-    }
-
-    #[test]
-    fn test_patch_anchor_describe() {
-        let pa = PatchAnchor {
-            anchor_type: PatchAnchorType::CodeLine,
-            path: Some("src/main.rs".into()),
-            line: Some(42),
-            start_line: None, end_line: None,
-            side: Some(PatchSide::Old),
-            source: None,
-            extra: serde_json::Map::new(),
-        };
-        assert_eq!(pa.describe(), "src/main.rs:42 (old)");
     }
 
     #[test]
@@ -1076,7 +809,6 @@ mod tests {
 
         let text_on_patch: PatchAnchor = serde_json::from_str(patch_anchors[1]).unwrap();
         assert_eq!(text_on_patch.anchor_type, PatchAnchorType::Other);
-        assert_eq!(text_on_patch.describe(), "undefined");
         let typed: PatchAnchor = serde_json::from_str(patch_anchors[0]).unwrap();
         assert_eq!(typed.anchor_type, PatchAnchorType::CodeRange);
         assert_eq!(typed.side, Some(PatchSide::Old));

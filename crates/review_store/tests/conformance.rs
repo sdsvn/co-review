@@ -59,10 +59,10 @@ mod tests {
                 &review.id,
                 &thread.id,
                 test_author(),
-                PartialMessage {
+                MessagePatch {
                     body: Some("Thinking".into()),
                     status: Some(MessageStatus::Streaming),
-                    ..PartialMessage::default()
+                    ..MessagePatch::default()
                 },
             )
             .unwrap();

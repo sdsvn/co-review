@@ -1,13 +1,11 @@
-/// Diff-match-patch operations on UTF-16 code unit slices.
-///
-/// A faithful port of the parts of @sanity/diff-match-patch used by anchor-tracking:
-/// `makeDiff` (with checkLines mode), `cleanupSemantic`, `match` (bitap fuzzy), and `xIndex`.
-///
-/// All operations work on &[u16] to match JavaScript's UTF-16 string semantics exactly.
+//! The parts of @sanity/diff-match-patch anchor tracking uses (`makeDiff` with checkLines,
+//! `cleanupSemantic`, `match` and `xIndex`), on UTF-16 code units as JavaScript strings are.
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-/// A diff operation: Equal, Insert, or Delete, with a slice of UTF-16 code units.
+use crate::index_of;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DiffOp {
     Equal(Vec<u16>),
@@ -37,7 +35,12 @@ impl DiffOp {
 
 /// Compute the diff between two UTF-16 texts. When `check_lines` is true, does a line-level
 /// diff first (as git does), then refines character-level within changed runs.
-pub fn make_diff(text1: &[u16], text2: &[u16], check_lines: bool, timeout: Duration) -> Vec<DiffOp> {
+pub fn make_diff(
+    text1: &[u16],
+    text2: &[u16],
+    check_lines: bool,
+    timeout: Duration,
+) -> Vec<DiffOp> {
     if text1 == text2 {
         if text1.is_empty() {
             return vec![];
@@ -51,13 +54,11 @@ pub fn make_diff(text1: &[u16], text2: &[u16], check_lines: bool, timeout: Durat
         return vec![DiffOp::Delete(text1.to_vec())];
     }
 
-    // Trim common prefix
     let common_prefix_len = common_prefix(text1, text2);
     let prefix = text1[..common_prefix_len].to_vec();
     let text1 = &text1[common_prefix_len..];
     let text2 = &text2[common_prefix_len..];
 
-    // Trim common suffix
     let common_suffix_len = common_suffix(text1, text2);
     let suffix = text1[text1.len() - common_suffix_len..].to_vec();
     let text1 = &text1[..text1.len() - common_suffix_len];
@@ -71,7 +72,6 @@ pub fn make_diff(text1: &[u16], text2: &[u16], check_lines: bool, timeout: Durat
         diff_compute(text1, text2, deadline)
     };
 
-    // Re-attach prefix and suffix
     if !prefix.is_empty() {
         diffs.insert(0, DiffOp::Equal(prefix));
     }
@@ -88,20 +88,16 @@ fn diff_lines_then_chars(text1: &[u16], text2: &[u16], deadline: Instant) -> Vec
     let (encoded1, encoded2, line_array) = lines_to_chars(text1, text2);
     let mut diffs = diff_compute(&encoded1, &encoded2, deadline);
 
-    // Convert back from line chars to actual text
     for diff in &mut diffs {
-        let chars = diff.text();
-        let mut text = Vec::new();
-        for &c in chars {
-            let idx = c as usize;
-            if idx < line_array.len() {
-                text.extend_from_slice(&line_array[idx]);
-            }
-        }
+        let text = diff
+            .text()
+            .iter()
+            .flat_map(|&c| &line_array[c as usize])
+            .copied()
+            .collect();
         *diff = diff.with_text(text);
     }
 
-    // Character-level refinement within non-equal runs
     merge_diffs(&mut diffs);
     let mut result = Vec::new();
     let mut i = 0;
@@ -111,7 +107,6 @@ fn diff_lines_then_chars(text1: &[u16], text2: &[u16], deadline: Instant) -> Vec
             i += 1;
             continue;
         }
-        // Collect the non-equal run
         let mut del_text = Vec::new();
         let mut ins_text = Vec::new();
         while i < diffs.len() && !diffs[i].is_equal() {
@@ -122,7 +117,6 @@ fn diff_lines_then_chars(text1: &[u16], text2: &[u16], deadline: Instant) -> Vec
             }
             i += 1;
         }
-        // Refine this hunk at character level
         if !del_text.is_empty() && !ins_text.is_empty() {
             let sub = diff_compute(&del_text, &ins_text, deadline);
             result.extend(sub);
@@ -137,25 +131,28 @@ fn diff_lines_then_chars(text1: &[u16], text2: &[u16], deadline: Instant) -> Vec
 
 /// Convert each line to a single character for line-level diffing.
 fn lines_to_chars(text1: &[u16], text2: &[u16]) -> (Vec<u16>, Vec<u16>, Vec<Vec<u16>>) {
-    let mut line_array: Vec<Vec<u16>> = vec![vec![]]; // Index 0 unused
+    // Index 0 unused, as in diff-match-patch.
+    let mut line_array: Vec<Vec<u16>> = vec![vec![]];
     let mut line_hash: HashMap<Vec<u16>, u16> = HashMap::new();
 
-    let encode = |text: &[u16], line_array: &mut Vec<Vec<u16>>, line_hash: &mut HashMap<Vec<u16>, u16>| -> Vec<u16> {
+    let encode = |text: &[u16],
+                  line_array: &mut Vec<Vec<u16>>,
+                  line_hash: &mut HashMap<Vec<u16>, u16>|
+     -> Vec<u16> {
         let mut chars = Vec::new();
         let mut start = 0;
         while start < text.len() {
-            let end = text[start..].iter().position(|&c| c == b'\n' as u16)
+            let end = text[start..]
+                .iter()
+                .position(|&c| c == b'\n' as u16)
                 .map(|p| start + p + 1)
                 .unwrap_or(text.len());
-            let line = text[start..end].to_vec();
-            if let Some(&idx) = line_hash.get(&line) {
-                chars.push(idx);
-            } else {
-                let idx = line_array.len() as u16;
-                line_array.push(line.clone());
-                line_hash.insert(line, idx);
-                chars.push(idx);
-            }
+            let line = &text[start..end];
+            let idx = *line_hash.entry(line.to_vec()).or_insert_with(|| {
+                line_array.push(line.to_vec());
+                (line_array.len() - 1) as u16
+            });
+            chars.push(idx);
             start = end;
         }
         chars
@@ -166,7 +163,6 @@ fn lines_to_chars(text1: &[u16], text2: &[u16]) -> (Vec<u16>, Vec<u16>, Vec<Vec<
     (chars1, chars2, line_array)
 }
 
-/// The core diff algorithm (Myers' diff).
 fn diff_compute(text1: &[u16], text2: &[u16], deadline: Instant) -> Vec<DiffOp> {
     if text1.is_empty() {
         return vec![DiffOp::Insert(text2.to_vec())];
@@ -175,60 +171,43 @@ fn diff_compute(text1: &[u16], text2: &[u16], deadline: Instant) -> Vec<DiffOp> 
         return vec![DiffOp::Delete(text1.to_vec())];
     }
 
-    // Check for substring
-    if let Some(pos) = find_substr(text1, text2) {
-        // text2 is a substring of text1... no, other way:
-        // actually DMP checks if one is substring of other
-        // Let me handle the case properly
-        // If text2 contains text1
+    if let Some(pos) = index_of(text1, text2, 0) {
         return vec![
             DiffOp::Delete(text1[..pos].to_vec()),
             DiffOp::Equal(text2.to_vec()),
             DiffOp::Delete(text1[pos + text2.len()..].to_vec()),
-        ].into_iter().filter(|d| !d.text().is_empty()).collect();
+        ]
+        .into_iter()
+        .filter(|d| !d.text().is_empty())
+        .collect();
     }
 
-    if let Some(pos) = find_substr(text2, text1) {
+    if let Some(pos) = index_of(text2, text1, 0) {
         return vec![
             DiffOp::Insert(text2[..pos].to_vec()),
             DiffOp::Equal(text1.to_vec()),
             DiffOp::Insert(text2[pos + text1.len()..].to_vec()),
-        ].into_iter().filter(|d| !d.text().is_empty()).collect();
+        ]
+        .into_iter()
+        .filter(|d| !d.text().is_empty())
+        .collect();
     }
 
-    // Check for single character: if text1 is a single unit
-    if text1.len() == 1 {
-        return vec![DiffOp::Delete(text1.to_vec()), DiffOp::Insert(text2.to_vec())];
-    }
-    if text2.len() == 1 {
-        return vec![DiffOp::Delete(text1.to_vec()), DiffOp::Insert(text2.to_vec())];
+    if text1.len() == 1 || text2.len() == 1 {
+        return vec![
+            DiffOp::Delete(text1.to_vec()),
+            DiffOp::Insert(text2.to_vec()),
+        ];
     }
 
-    // Try half-match (long texts only)
-    let hm = half_match(text1, text2);
-    if let Some((prefix1, suffix1, prefix2, suffix2, common)) = hm {
-        let diffs_a = diff_compute(&prefix1, &prefix2, deadline);
-        let diffs_b = diff_compute(&suffix1, &suffix2, deadline);
-        let mut result = diffs_a;
+    if let Some((prefix1, suffix1, prefix2, suffix2, common)) = half_match(text1, text2) {
+        let mut result = diff_compute(&prefix1, &prefix2, deadline);
         result.push(DiffOp::Equal(common));
-        result.extend(diffs_b);
+        result.extend(diff_compute(&suffix1, &suffix2, deadline));
         return result;
     }
 
     diff_bisect(text1, text2, deadline)
-}
-
-/// Find `needle` as a substring of `haystack`. Returns offset in haystack.
-fn find_substr(haystack: &[u16], needle: &[u16]) -> Option<usize> {
-    if needle.is_empty() || needle.len() > haystack.len() {
-        return None;
-    }
-    for i in 0..=haystack.len() - needle.len() {
-        if haystack[i..i + needle.len()] == *needle {
-            return Some(i);
-        }
-    }
-    None
 }
 
 /// Myers' bisect diff algorithm.
@@ -279,7 +258,8 @@ fn diff_bisect(text1: &[u16], text2: &[u16], deadline: Instant) -> Vec<DiffOp> {
             }
             if front {
                 let k2_offset = v_offset as isize + delta - k;
-                if k2_offset >= 0 && (k2_offset as usize) < v2.len() && v2[k2_offset as usize] != -1 {
+                if k2_offset >= 0 && (k2_offset as usize) < v2.len() && v2[k2_offset as usize] != -1
+                {
                     let x2 = text1_len - v2[k2_offset as usize];
                     if x1 >= x2 {
                         return diff_bisect_split(text1, text2, x1 as usize, y1 as usize, deadline);
@@ -300,7 +280,8 @@ fn diff_bisect(text1: &[u16], text2: &[u16], deadline: Instant) -> Vec<DiffOp> {
                 x1 = v2[k_offset - 1] + 1;
             }
             let mut y1 = x1 - k;
-            while x1 < text1_len && y1 < text2_len
+            while x1 < text1_len
+                && y1 < text2_len
                 && text1[(text1_len - x1 - 1) as usize] == text2[(text2_len - y1 - 1) as usize]
             {
                 x1 += 1;
@@ -317,7 +298,8 @@ fn diff_bisect(text1: &[u16], text2: &[u16], deadline: Instant) -> Vec<DiffOp> {
             }
             if !front {
                 let k2_offset = v_offset as isize + delta - k;
-                if k2_offset >= 0 && (k2_offset as usize) < v1.len() && v1[k2_offset as usize] != -1 {
+                if k2_offset >= 0 && (k2_offset as usize) < v1.len() && v1[k2_offset as usize] != -1
+                {
                     let x2 = v1[k2_offset as usize];
                     let y2 = v_offset as isize + x2 - k2_offset;
                     let x1_real = text1_len - x1;
@@ -330,10 +312,19 @@ fn diff_bisect(text1: &[u16], text2: &[u16], deadline: Instant) -> Vec<DiffOp> {
         }
     }
     // Timeout or no solution: return delete+insert
-    vec![DiffOp::Delete(text1.to_vec()), DiffOp::Insert(text2.to_vec())]
+    vec![
+        DiffOp::Delete(text1.to_vec()),
+        DiffOp::Insert(text2.to_vec()),
+    ]
 }
 
-fn diff_bisect_split(text1: &[u16], text2: &[u16], x: usize, y: usize, deadline: Instant) -> Vec<DiffOp> {
+fn diff_bisect_split(
+    text1: &[u16],
+    text2: &[u16],
+    x: usize,
+    y: usize,
+    deadline: Instant,
+) -> Vec<DiffOp> {
     let mut diffs = diff_compute(&text1[..x], &text2[..y], deadline);
     diffs.extend(diff_compute(&text1[x..], &text2[y..], deadline));
     diffs
@@ -344,8 +335,16 @@ type HalfMatch = (Vec<u16>, Vec<u16>, Vec<u16>, Vec<u16>, Vec<u16>);
 
 /// Find a shared substring that is at least half the length of the longer text.
 fn half_match(text1: &[u16], text2: &[u16]) -> Option<HalfMatch> {
-    let longtext = if text1.len() > text2.len() { text1 } else { text2 };
-    let shorttext = if text1.len() > text2.len() { text2 } else { text1 };
+    let longtext = if text1.len() > text2.len() {
+        text1
+    } else {
+        text2
+    };
+    let shorttext = if text1.len() > text2.len() {
+        text2
+    } else {
+        text1
+    };
     if longtext.len() < 4 || shorttext.len() * 2 < longtext.len() {
         return None;
     }
@@ -356,7 +355,11 @@ fn half_match(text1: &[u16], text2: &[u16]) -> Option<HalfMatch> {
         (None, None) => return None,
         (Some(h), None) | (None, Some(h)) => h,
         (Some(h1), Some(h2)) => {
-            if h1.4.len() > h2.4.len() { h1 } else { h2 }
+            if h1.4.len() > h2.4.len() {
+                h1
+            } else {
+                h2
+            }
         }
     };
 
@@ -370,7 +373,7 @@ fn half_match(text1: &[u16], text2: &[u16]) -> Option<HalfMatch> {
 fn half_match_inner(longtext: &[u16], shorttext: &[u16], i: usize) -> Option<HalfMatch> {
     let seed = &longtext[i..i + longtext.len() / 4];
     let mut best = (vec![], vec![], vec![], vec![], vec![]);
-    let mut j_opt = find_substr(shorttext, seed);
+    let mut j_opt = index_of(shorttext, seed, 0);
     while let Some(j) = j_opt {
         let prefix_len = common_prefix(&longtext[i..], &shorttext[j..]);
         let suffix_len = common_suffix(&longtext[..i], &shorttext[..j]);
@@ -383,11 +386,7 @@ fn half_match_inner(longtext: &[u16], shorttext: &[u16], i: usize) -> Option<Hal
                 longtext[i - suffix_len..i + prefix_len].to_vec(),
             );
         }
-        j_opt = if j + 1 < shorttext.len() {
-            find_substr(&shorttext[j + 1..], seed).map(|p| p + j + 1)
-        } else {
-            None
-        };
+        j_opt = index_of(shorttext, seed, j + 1);
     }
     if best.4.len() * 2 >= longtext.len() {
         Some(best)
@@ -397,30 +396,23 @@ fn half_match_inner(longtext: &[u16], shorttext: &[u16], i: usize) -> Option<Hal
 }
 
 fn common_prefix(text1: &[u16], text2: &[u16]) -> usize {
-    let n = text1.len().min(text2.len());
-    for i in 0..n {
-        if text1[i] != text2[i] {
-            return i;
-        }
-    }
-    n
+    text1.iter().zip(text2).take_while(|(a, b)| a == b).count()
 }
 
 fn common_suffix(text1: &[u16], text2: &[u16]) -> usize {
-    let n = text1.len().min(text2.len());
-    for i in 1..=n {
-        if text1[text1.len() - i] != text2[text2.len() - i] {
-            return i - 1;
-        }
-    }
-    n
+    text1
+        .iter()
+        .rev()
+        .zip(text2.iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count()
 }
 
 /// DMP cleanupMerge: collects consecutive deletes and inserts into canonical form
 /// (all deletes before all inserts in each run), factoring out common prefix/suffix
 /// between the delete and insert text.
 fn merge_diffs(diffs: &mut Vec<DiffOp>) {
-    diffs.push(DiffOp::Equal(vec![])); // sentinel
+    diffs.push(DiffOp::Equal(vec![]));
     let mut pointer = 0;
     let mut count_delete = 0usize;
     let mut count_insert = 0usize;
@@ -442,7 +434,6 @@ fn merge_diffs(diffs: &mut Vec<DiffOp>) {
             DiffOp::Equal(_) => {
                 if count_delete + count_insert > 1 {
                     if count_delete != 0 && count_insert != 0 {
-                        // Factor out common prefix
                         let cp = common_prefix(&text_insert, &text_delete);
                         if cp > 0 {
                             let base = pointer - count_delete - count_insert;
@@ -457,23 +448,17 @@ fn merge_diffs(diffs: &mut Vec<DiffOp>) {
                             text_insert = text_insert[cp..].to_vec();
                             text_delete = text_delete[cp..].to_vec();
                         }
-                        // Factor out common suffix
                         let cs = common_suffix(&text_insert, &text_delete);
                         if cs > 0 {
-                            let suffix = text_insert[text_insert.len() - cs..].to_vec();
-                            let mut eq = suffix;
+                            let mut eq = text_insert[text_insert.len() - cs..].to_vec();
                             eq.extend_from_slice(diffs[pointer].text());
                             diffs[pointer] = DiffOp::Equal(eq);
                             text_insert = text_insert[..text_insert.len() - cs].to_vec();
                             text_delete = text_delete[..text_delete.len() - cs].to_vec();
                         }
                     }
-                    // Remove the old entries
-                    let base = pointer - count_delete - count_insert;
-                    let remove_count = count_delete + count_insert;
-                    diffs.drain(base..base + remove_count);
-                    pointer = base;
-                    // Insert the canonical form: deletes first, then inserts
+                    pointer -= count_delete + count_insert;
+                    diffs.drain(pointer..pointer + count_delete + count_insert);
                     if !text_delete.is_empty() {
                         diffs.insert(pointer, DiffOp::Delete(text_delete.clone()));
                         pointer += 1;
@@ -484,7 +469,6 @@ fn merge_diffs(diffs: &mut Vec<DiffOp>) {
                     }
                     pointer += 1;
                 } else if pointer != 0 && diffs[pointer - 1].is_equal() {
-                    // Merge consecutive equalities
                     let mut eq = diffs[pointer - 1].text().to_vec();
                     eq.extend_from_slice(diffs[pointer].text());
                     diffs[pointer - 1] = DiffOp::Equal(eq);
@@ -499,12 +483,11 @@ fn merge_diffs(diffs: &mut Vec<DiffOp>) {
             }
         }
     }
-    // Remove sentinel if still empty
     if diffs.last().is_some_and(|d| d.text().is_empty()) {
         diffs.pop();
     }
 
-    // Second pass: handle sliding patterns where an edit is bracketed by equalities
+    // Slide single edits surrounded by equalities sideways to eliminate an equality.
     let mut has_changes = false;
     pointer = 1;
     while pointer + 1 < diffs.len() {
@@ -516,7 +499,6 @@ fn merge_diffs(diffs: &mut Vec<DiffOp>) {
             if edit_text.len() >= prev_text.len()
                 && edit_text[edit_text.len() - prev_text.len()..] == prev_text[..]
             {
-                // edit ends with prev_text: slide left
                 let mut new_edit = prev_text.clone();
                 new_edit.extend_from_slice(&edit_text[..edit_text.len() - prev_text.len()]);
                 diffs[pointer] = diffs[pointer].with_text(new_edit);
@@ -528,7 +510,6 @@ fn merge_diffs(diffs: &mut Vec<DiffOp>) {
             } else if edit_text.len() >= next_text.len()
                 && edit_text[..next_text.len()] == next_text[..]
             {
-                // edit starts with next_text: slide right
                 let mut new_prev = prev_text;
                 new_prev.extend_from_slice(&next_text);
                 diffs[pointer - 1] = DiffOp::Equal(new_prev);
@@ -542,21 +523,16 @@ fn merge_diffs(diffs: &mut Vec<DiffOp>) {
         pointer += 1;
     }
     if has_changes {
-        let cloned = diffs.clone();
-        diffs.clear();
-        diffs.extend(cloned);
         merge_diffs(diffs);
     }
 }
 
-/// Cleanup semantic: make the diffs read like edits by sliding diff boundaries to word/line breaks.
-/// Port of diff-match-patch's cleanupSemantic.
+/// diff-match-patch's `cleanupSemantic`: make the diffs read like edits.
 pub fn cleanup_semantic(diffs: &mut Vec<DiffOp>) {
     if diffs.is_empty() {
         return;
     }
 
-    let mut changes = true;
     let mut equalities: Vec<usize> = Vec::new();
     let mut last_equality: Option<Vec<u16>> = None;
     let mut pointer: usize = 0;
@@ -583,45 +559,33 @@ pub fn cleanup_semantic(diffs: &mut Vec<DiffOp>) {
                 && eq.len() <= length_insertions1.max(length_deletions1)
                 && eq.len() <= length_insertions2.max(length_deletions2)
             {
-                    // Splice the equality into the surrounding edits
-                    let insert_at = equalities[equalities.len() - 1];
-                    diffs.insert(insert_at, DiffOp::Delete(eq.clone()));
-                    // The insert/equal after it becomes an insert
-                    diffs[insert_at + 1] = DiffOp::Insert(diffs[insert_at + 1].text().to_vec());
-                    // Remove this equality from the stack
-                    equalities.pop();
-                    if !equalities.is_empty() {
-                        equalities.pop();
-                    }
-                    pointer = if equalities.is_empty() { 0 } else { equalities[equalities.len() - 1] };
-                    length_insertions1 = 0;
-                    length_deletions1 = 0;
-                    length_insertions2 = 0;
-                    length_deletions2 = 0;
-                    last_equality = None;
-                    changes = true;
-
-                    // Continue from this point (pointer might be 0 which means start over)
-                    if pointer == 0 {
-                        // Will be incremented below
-                    }
-                    // Skip the increment at the end since we want to re-examine this position
-                    continue;
-                }
+                // Split the equality into a delete and an insert.
+                let insert_at = equalities[equalities.len() - 1];
+                diffs.insert(insert_at, DiffOp::Delete(eq.clone()));
+                diffs[insert_at + 1] = DiffOp::Insert(diffs[insert_at + 1].text().to_vec());
+                equalities.pop();
+                equalities.pop();
+                pointer = equalities.last().copied().unwrap_or(0);
+                length_insertions1 = 0;
+                length_deletions1 = 0;
+                length_insertions2 = 0;
+                length_deletions2 = 0;
+                last_equality = None;
+                continue;
+            }
         }
         pointer += 1;
     }
 
-    if changes {
-        merge_diffs(diffs);
-    }
-
+    merge_diffs(diffs);
     cleanup_semantic_lossless(diffs);
 
     // Find overlaps between deletions and insertions.
     let mut pointer = 1;
     while pointer < diffs.len() {
-        if pointer > 0 && matches!(diffs[pointer - 1], DiffOp::Delete(_)) && matches!(diffs[pointer], DiffOp::Insert(_)) {
+        if matches!(diffs[pointer - 1], DiffOp::Delete(_))
+            && matches!(diffs[pointer], DiffOp::Insert(_))
+        {
             let deletion = diffs[pointer - 1].text().to_vec();
             let insertion = diffs[pointer].text().to_vec();
             let overlap_len1 = overlap(&deletion, &insertion);
@@ -631,7 +595,8 @@ pub fn cleanup_semantic(diffs: &mut Vec<DiffOp>) {
                     || overlap_len1 as f64 >= insertion.len() as f64 / 2.0
                 {
                     diffs.insert(pointer, DiffOp::Equal(insertion[..overlap_len1].to_vec()));
-                    diffs[pointer - 1] = DiffOp::Delete(deletion[..deletion.len() - overlap_len1].to_vec());
+                    diffs[pointer - 1] =
+                        DiffOp::Delete(deletion[..deletion.len() - overlap_len1].to_vec());
                     diffs[pointer + 1] = DiffOp::Insert(insertion[overlap_len1..].to_vec());
                     pointer += 1;
                 }
@@ -639,7 +604,8 @@ pub fn cleanup_semantic(diffs: &mut Vec<DiffOp>) {
                 || overlap_len2 as f64 >= insertion.len() as f64 / 2.0
             {
                 diffs.insert(pointer, DiffOp::Equal(deletion[..overlap_len2].to_vec()));
-                diffs[pointer - 1] = DiffOp::Insert(insertion[..insertion.len() - overlap_len2].to_vec());
+                diffs[pointer - 1] =
+                    DiffOp::Insert(insertion[..insertion.len() - overlap_len2].to_vec());
                 diffs[pointer + 1] = DiffOp::Delete(deletion[overlap_len2..].to_vec());
                 pointer += 1;
             }
@@ -648,7 +614,6 @@ pub fn cleanup_semantic(diffs: &mut Vec<DiffOp>) {
         pointer += 1;
     }
 
-    // Remove empty entries
     diffs.retain(|d| !d.text().is_empty());
 }
 
@@ -656,7 +621,6 @@ fn cleanup_semantic_lossless(diffs: &mut Vec<DiffOp>) {
     let mut pointer = 1;
     while pointer + 1 < diffs.len() {
         if diffs[pointer - 1].is_equal() && diffs[pointer + 1].is_equal() {
-            // Re-derive equality1, edit, equality2 from the diffs directly
             let eq1_orig = diffs[pointer - 1].text().to_vec();
             let edit_orig = diffs[pointer].text().to_vec();
             let eq2_orig = diffs[pointer + 1].text().to_vec();
@@ -728,8 +692,8 @@ fn cleanup_semantic_score(one: &[u16], two: &[u16]) -> usize {
     }
     let char1 = one[one.len() - 1];
     let char2 = two[0];
-    let non_alpha1 = !is_alpha_numeric(char1);
-    let non_alpha2 = !is_alpha_numeric(char2);
+    let non_alpha1 = !is_alphanumeric(char1);
+    let non_alpha2 = !is_alphanumeric(char2);
     let whitespace1 = non_alpha1 && is_whitespace(char1);
     let whitespace2 = non_alpha2 && is_whitespace(char2);
     let linebreak1 = whitespace1 && is_linebreak(char1);
@@ -752,68 +716,46 @@ fn cleanup_semantic_score(one: &[u16], two: &[u16]) -> usize {
     }
 }
 
-fn is_alpha_numeric(c: u16) -> bool {
-    if (0xD800..=0xDFFF).contains(&c) {
-        return false;
-    }
-    match char::from_u32(c as u32) {
-        Some(ch) => ch.is_alphanumeric(),
-        None => false,
-    }
+/// `/[a-zA-Z0-9]/`: diff-match-patch's alphanumerics are ASCII only.
+fn is_alphanumeric(unit: u16) -> bool {
+    u8::try_from(unit).is_ok_and(|c| c.is_ascii_alphanumeric())
 }
 
-fn is_whitespace(c: u16) -> bool {
-    c == b' ' as u16 || c == b'\t' as u16 || c == b'\n' as u16 || c == b'\r' as u16
+/// JavaScript's `/\s/`: Unicode White_Space without U+0085, plus U+FEFF.
+fn is_whitespace(unit: u16) -> bool {
+    char::from_u32(unit.into())
+        .is_some_and(|c| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
 }
 
-fn is_linebreak(c: u16) -> bool {
-    c == b'\n' as u16 || c == b'\r' as u16
+fn is_linebreak(unit: u16) -> bool {
+    unit == CR || unit == LF
 }
 
+const CR: u16 = b'\r' as u16;
+const LF: u16 = b'\n' as u16;
+
+/// `/\n\r?\n$/`
 fn is_blank_line_end(text: &[u16]) -> bool {
-    // Ends with two newlines (possibly with \r)
-    let len = text.len();
-    if len >= 2 && text[len - 1] == b'\n' as u16 && text[len - 2] == b'\n' as u16 {
-        return true;
-    }
-    if len >= 3 && text[len - 1] == b'\n' as u16 && text[len - 2] == b'\r' as u16 && text[len - 3] == b'\n' as u16 {
-        return true;
-    }
-    false
+    matches!(text, [.., LF, LF] | [.., LF, CR, LF])
 }
 
+/// `/^\r?\n\r?\n/`
 fn is_blank_line_start(text: &[u16]) -> bool {
-    if text.len() >= 2 && text[0] == b'\n' as u16 && text[1] == b'\n' as u16 {
-        return true;
-    }
-    if text.len() >= 2 && text[0] == b'\n' as u16 && text[1] == b'\r' as u16 {
-        return true;
-    }
-    if text.len() >= 2 && text[0] == b'\r' as u16 && text[1] == b'\n' as u16 {
-        return true;
-    }
-    false
+    matches!(
+        text,
+        [LF, LF, ..] | [LF, CR, LF, ..] | [CR, LF, LF, ..] | [CR, LF, CR, LF, ..]
+    )
 }
 
-/// Compute the length of the longest common overlap of the suffix of `text1` and prefix of `text2`.
+/// The length of the longest suffix of `text1` that is a prefix of `text2`.
 fn overlap(text1: &[u16], text2: &[u16]) -> usize {
-    let len1 = text1.len();
-    let len2 = text2.len();
-    if len1 == 0 || len2 == 0 {
-        return 0;
-    }
-    let max = len1.min(len2);
-    let mut best = 0;
-    for length in 1..=max {
-        if text1[len1 - length..] == text2[..length] {
-            best = length;
-        }
-    }
-    best
+    (1..=text1.len().min(text2.len()))
+        .rev()
+        .find(|&length| text1[text1.len() - length..] == text2[..length])
+        .unwrap_or(0)
 }
 
-/// Map a position in text1 through the diffs to a position in text2.
-/// Port of diff-match-patch's xIndex.
+/// diff-match-patch's `xIndex`: where `loc` in text1 lands in text2.
 pub fn x_index(diffs: &[DiffOp], loc: usize) -> usize {
     let mut chars1: usize = 0;
     let mut chars2: usize = 0;
@@ -844,122 +786,80 @@ pub fn x_index(diffs: &[DiffOp], loc: usize) -> usize {
     last_chars2 + (loc - last_chars1)
 }
 
-/// Fuzzy matching: wraps the DMP `match` function. First tries exact substring, then bitap.
-/// Returns the offset of the best match, or None if no match within the threshold.
-pub fn match_bitap(text: &[u16], pattern: &[u16], loc: usize, threshold: f64, distance: usize) -> Option<usize> {
-    if pattern.is_empty() || text.is_empty() {
-        return None;
-    }
-
-    let loc = loc.min(text.len());
-
-    // Check for exact match at loc
-    if loc + pattern.len() <= text.len() && text[loc..loc + pattern.len()] == *pattern {
-        return Some(loc);
-    }
-
-    // Check for exact matches via substring search to set initial threshold
-    let mut score_threshold = threshold;
-    let mut best_loc: Option<isize> = None;
-
-    if find_substr(text, pattern).is_some() {
-        // indexOf(pattern, loc) in JS
-        if let Some(idx) = find_substr_from(text, pattern, loc) {
-            let s = bitap_score(pattern.len(), distance, 0, idx, loc);
-            if s < score_threshold {
-                score_threshold = s;
-            }
-            best_loc = Some(idx as isize);
-        }
-
-        // lastIndexOf from loc + pattern.length
-        let last_search = (loc + pattern.len()).min(text.len());
-        if let Some(idx) = rfind_substr(text, pattern, last_search) {
-            let s = bitap_score(pattern.len(), distance, 0, idx, loc);
-            if s < score_threshold {
-                score_threshold = s;
-            }
-            best_loc = Some(idx as isize);
-        }
-    }
-
-    bitap_core(text, pattern, loc, score_threshold, distance, best_loc)
-}
-
-fn find_substr_from(haystack: &[u16], needle: &[u16], from: usize) -> Option<usize> {
-    if needle.is_empty() {
-        return Some(from.min(haystack.len()));
-    }
-    if from + needle.len() > haystack.len() {
-        return None;
-    }
-    for i in from..=haystack.len() - needle.len() {
-        if haystack[i..i + needle.len()] == *needle {
-            return Some(i);
-        }
-    }
-    None
-}
-
-fn rfind_substr(haystack: &[u16], needle: &[u16], from: usize) -> Option<usize> {
-    if needle.is_empty() {
-        return Some(from.min(haystack.len()));
-    }
-    if needle.len() > haystack.len() {
-        return None;
-    }
-    let start = from.min(haystack.len() - needle.len());
-    for i in (0..=start).rev() {
-        if haystack[i..i + needle.len()] == *needle {
-            return Some(i);
-        }
-    }
-    None
-}
-
-fn bitap_score(pattern_len: usize, distance: usize, errors: usize, x: usize, loc: usize) -> f64 {
-    let accuracy = errors as f64 / pattern_len as f64;
-    let proximity = (x as isize - loc as isize).unsigned_abs() as f64;
-    if distance == 0 {
-        if proximity != 0.0 { 1.0 } else { accuracy }
-    } else {
-        accuracy + proximity / distance as f64
-    }
-}
-
-fn bitap_core(
+/// diff-match-patch's `match`: the best place for `pattern` (at most 32 units, as in JavaScript)
+/// near `loc`, within `threshold`.
+pub fn match_bitap(
     text: &[u16],
     pattern: &[u16],
     loc: usize,
-    mut score_threshold: f64,
+    threshold: f64,
     distance: usize,
-    initial_best: Option<isize>,
 ) -> Option<usize> {
-    let pattern_len = pattern.len().min(32);
-
-    // Initialize the alphabet
-    let mut s: HashMap<u16, u32> = HashMap::new();
-    for &c in pattern.iter().take(pattern_len) {
-        s.entry(c).or_insert(0);
+    let loc = loc.min(text.len());
+    if text == pattern {
+        return Some(0);
     }
-    for (i, &c) in pattern.iter().take(pattern_len).enumerate() {
-        let mask = s.entry(c).or_insert(0);
-        *mask |= 1 << (pattern_len - 1 - i);
+    if text.is_empty() {
+        return None;
+    }
+    if text[loc..(loc + pattern.len()).min(text.len())] == *pattern {
+        return Some(loc);
+    }
+    bitap(text, pattern, loc, threshold, distance)
+}
+
+/// JavaScript's `haystack.lastIndexOf(needle, from)` for a non-empty `needle`.
+fn rfind(haystack: &[u16], needle: &[u16], from: usize) -> Option<usize> {
+    let end = from.min(haystack.len().checked_sub(needle.len())?) + needle.len();
+    haystack[..end]
+        .windows(needle.len())
+        .rposition(|w| w == needle)
+}
+
+/// diff-match-patch's `bitap`. Offsets are signed, as JavaScript's numbers are: the scan's start
+/// moves to `2 * loc - best`, which is negative when a match is more than twice as far as `loc`.
+fn bitap(
+    text: &[u16],
+    pattern: &[u16],
+    loc: usize,
+    threshold: f64,
+    distance: usize,
+) -> Option<usize> {
+    let loc = loc as i64;
+    let score = |errors: usize, x: i64| {
+        let accuracy = errors as f64 / pattern.len() as f64;
+        let proximity = (loc - x).abs() as f64;
+        if distance == 0 {
+            if proximity != 0.0 { 1.0 } else { accuracy }
+        } else {
+            accuracy + proximity / distance as f64
+        }
+    };
+
+    let mut alphabet: HashMap<u16, u32> = HashMap::new();
+    for (i, &c) in pattern.iter().enumerate() {
+        *alphabet.entry(c).or_insert(0) |= 1 << (pattern.len() - 1 - i);
     }
 
-    let matchmask = 1u32 << (pattern_len - 1);
-    let mut best_loc: isize = initial_best.unwrap_or(-1);
+    // A nearby exact match (either way) tightens the threshold.
+    let mut score_threshold = threshold;
+    if let Some(at) = index_of(text, pattern, loc as usize) {
+        score_threshold = score_threshold.min(score(0, at as i64));
+        if let Some(at) = rfind(text, pattern, loc as usize + pattern.len()) {
+            score_threshold = score_threshold.min(score(0, at as i64));
+        }
+    }
 
-    let mut bin_max = pattern_len + text.len();
+    let matchmask = 1u32 << (pattern.len() - 1);
+    let mut best_loc: i64 = -1;
+    let mut bin_max = (pattern.len() + text.len()) as i64;
     let mut last_rd: Vec<u32> = Vec::new();
-
-    for d in 0..pattern_len {
-        // Binary search for the window
-        let mut bin_min: usize = 0;
+    for d in 0..pattern.len() {
+        // How far from `loc` this many errors may stray.
+        let mut bin_min = 0;
         let mut bin_mid = bin_max;
         while bin_min < bin_mid {
-            let s = bitap_score(pattern_len, distance, d, loc + bin_mid, loc);
-            if s <= score_threshold {
+            if score(d, loc + bin_mid) <= score_threshold {
                 bin_min = bin_mid;
             } else {
                 bin_max = bin_mid;
@@ -967,66 +867,46 @@ fn bitap_core(
             bin_mid = (bin_max - bin_min) / 2 + bin_min;
         }
         bin_max = bin_mid;
+        let mut start = (loc - bin_mid + 1).max(1);
+        let finish = (loc + bin_mid).min(text.len() as i64) + pattern.len() as i64;
 
-        let start = 1usize.max(loc.saturating_sub(bin_mid).max(1));
-        let finish = (loc + bin_mid).min(text.len()) + pattern_len;
-
-        let mut rd = vec![0u32; finish + 2];
-        rd[finish + 1] = (1u32 << d) - 1;
-
+        let mut rd = vec![0u32; finish as usize + 2];
+        rd[finish as usize + 1] = (1u32 << d) - 1;
+        let last = |j: usize| last_rd.get(j).copied().unwrap_or(0);
         let mut j = finish;
         while j >= start {
-            let char_match = if j > 0 && j <= text.len() {
-                s.get(&text[j - 1]).copied().unwrap_or(0)
-            } else {
-                0
-            };
-
-            if d == 0 {
-                rd[j] = ((rd[j + 1] << 1) | 1) & char_match;
-            } else {
-                let prev_j1 = if j + 1 < last_rd.len() { last_rd[j + 1] } else { 0 };
-                let prev_j = if j < last_rd.len() { last_rd[j] } else { 0 };
-                rd[j] = ((rd[j + 1] << 1) | 1) & char_match
-                    | (((prev_j1 | prev_j) << 1) | 1)
-                    | prev_j1;
+            let ju = j as usize;
+            let char_match = text
+                .get(ju - 1)
+                .and_then(|c| alphabet.get(c))
+                .copied()
+                .unwrap_or(0);
+            rd[ju] = ((rd[ju + 1] << 1) | 1) & char_match;
+            if d > 0 {
+                rd[ju] |= (((last(ju + 1) | last(ju)) << 1) | 1) | last(ju + 1);
             }
-
-            if rd[j] & matchmask != 0 {
-                let score = bitap_score(pattern_len, distance, d, j - 1, loc);
-                if score <= score_threshold {
-                    score_threshold = score;
-                    best_loc = (j - 1) as isize;
-                    if best_loc as usize > loc {
-                        let new_start = 1usize.max(2 * loc - best_loc as usize);
-                        if new_start > j {
-                            break;
-                        }
-                        // start can only increase, not decrease, but the for loop handles it
+            if rd[ju] & matchmask != 0 {
+                let match_score = score(d, j - 1);
+                if match_score <= score_threshold {
+                    score_threshold = match_score;
+                    best_loc = j - 1;
+                    if best_loc > loc {
+                        // Past `loc`: don't stray further from it than this match.
+                        start = (2 * loc - best_loc).max(1);
                     } else {
                         break;
                     }
                 }
             }
-
-            if j == 0 {
-                break;
-            }
             j -= 1;
         }
-
-        if bitap_score(pattern_len, distance, d + 1, loc, loc) > score_threshold {
+        // No hope for a better match with more errors.
+        if score(d + 1, loc) > score_threshold {
             break;
         }
-
         last_rd = rd;
     }
-
-    if best_loc >= 0 {
-        Some(best_loc as usize)
-    } else {
-        None
-    }
+    usize::try_from(best_loc).ok()
 }
 
 #[cfg(test)]
@@ -1038,100 +918,90 @@ mod tests {
     }
 
     #[test]
-    fn diff_equal_texts() {
-        let text = to_u16("hello");
-        let diffs = make_diff(&text, &text, false, Duration::from_secs(1));
-        assert_eq!(diffs.len(), 1);
-        assert!(diffs[0].is_equal());
-    }
-
-    #[test]
-    fn diff_insert() {
-        let a = to_u16("abc");
-        let b = to_u16("abcdef");
-        let diffs = make_diff(&a, &b, false, Duration::from_secs(1));
-        let mut result_a = Vec::new();
-        let mut result_b = Vec::new();
-        for d in &diffs {
-            match d {
-                DiffOp::Equal(t) | DiffOp::Delete(t) => result_a.extend_from_slice(t),
-                _ => {}
-            }
-            match d {
-                DiffOp::Equal(t) | DiffOp::Insert(t) => result_b.extend_from_slice(t),
-                _ => {}
-            }
-        }
-        assert_eq!(result_a, a);
-        assert_eq!(result_b, b);
-    }
-
-    #[test]
     fn x_index_basic() {
-        // Equal("ab"), Delete("c"), Insert("xyz"), Equal("de")
         let diffs = vec![
             DiffOp::Equal(to_u16("ab")),
             DiffOp::Delete(to_u16("c")),
             DiffOp::Insert(to_u16("xyz")),
             DiffOp::Equal(to_u16("de")),
         ];
-        // Position 0 in text1 → 0 in text2
         assert_eq!(x_index(&diffs, 0), 0);
-        // Position 1 → 1
-        assert_eq!(x_index(&diffs, 1), 1);
-        // Position 2 → 2 (still in the first equal)
         assert_eq!(x_index(&diffs, 2), 2);
-        // Position 3 ("d" after "c" deleted) → 5 ("d" after "xyz")
+        // "d", after the deleted "c", follows the inserted "xyz".
         assert_eq!(x_index(&diffs, 3), 5);
     }
 
     #[test]
-    fn match_exact() {
-        let text = to_u16("abcdefghijklmnop");
-        let pattern = to_u16("fgh");
-        let result = match_bitap(&text, &pattern, 5, 0.5, 1000);
-        assert_eq!(result, Some(5));
-    }
-
-    #[test]
-    fn match_fuzzy() {
-        let text = to_u16("abcdefghijklmnop");
-        let pattern = to_u16("fgx");
-        let result = match_bitap(&text, &pattern, 5, 0.5, 1000);
-        assert!(result.is_some());
-    }
-}
-
-#[cfg(test)]
-mod cleanup_tests {
-    use super::*;
-
-    fn to_u16(s: &str) -> Vec<u16> {
-        s.encode_utf16().collect()
-    }
-
-    #[test]
     fn cleanup_absorbs_short_equality() {
-        // Raw diff: Insert(" gone. */\n    "), Equal("const inflight = new "), Delete("Set"), Insert("Map"), Equal("();"), Insert("\n    /** Reque")
-        // After cleanup: Equal("const inflight = new ") should stay, but Equal("();") should be absorbed
         let needle = to_u16("const inflight = new Set();");
         let region = to_u16(" gone. */\n    const inflight = new Map();\n    /** Reque");
-        let mut diffs = make_diff(&needle, &region, false, std::time::Duration::from_secs(1));
+        let mut diffs = make_diff(&needle, &region, false, Duration::from_secs(1));
         cleanup_semantic(&mut diffs);
+        assert!(
+            !diffs
+                .iter()
+                .any(|d| d.is_equal() && d.text() == to_u16("();")),
+            "Equal '();' should have been absorbed"
+        );
+    }
 
-        // Check that "();" is not a separate Equal
-        let eq_texts: Vec<String> = diffs.iter()
-            .filter(|d| d.is_equal())
-            .map(|d| String::from_utf16_lossy(d.text()))
-            .collect();
-        eprintln!("Diffs: {:?}", diffs.iter().map(|d| {
-            let op = match d { DiffOp::Equal(_) => "=", DiffOp::Insert(_) => "+", DiffOp::Delete(_) => "-" };
-            format!("{}\"{}\"", op, String::from_utf16_lossy(d.text()))
-        }).collect::<Vec<_>>());
-        
-        // The expected cleaned diffs should be:
-        // Insert(" gone. */\n    "), Equal("const inflight = new "), Delete("Set();"), Insert("Map();\n    /** Reque")
-        // (i.e., "();" absorbed into the delete and insert)
-        assert!(!eq_texts.iter().any(|t| t == "();"), "Equal '();' should have been absorbed");
+    /// Replays fixtures/dmp.json, recorded from @sanity/diff-match-patch by tests/gen/gen.mjs.
+    #[test]
+    fn matches_javascript_diff_match_patch() {
+        let cases: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("../tests/fixtures/dmp.json")).expect("dmp.json");
+        let mut failures = Vec::new();
+        for case in &cases {
+            let (name, input, expected) = (&case["name"], &case["input"], &case["expected"]);
+            let text = |key: &str| to_u16(input[key].as_str().expect("text input"));
+            match input["type"].as_str() {
+                Some("match") => {
+                    let at = std::panic::catch_unwind(|| {
+                        match_bitap(
+                            &text("text"),
+                            &text("pattern"),
+                            input["loc"].as_u64().expect("loc") as usize,
+                            input["threshold"].as_f64().expect("threshold"),
+                            input["distance"].as_u64().expect("distance") as usize,
+                        )
+                    });
+                    let want = expected["at"].as_u64().map(|at| at as usize);
+                    if at.as_ref().ok() != Some(&want) {
+                        failures.push(format!("{name}: expected {want:?}, got {at:?}"));
+                    }
+                }
+                Some("cleanup") => {
+                    let mut diffs =
+                        make_diff(&text("a"), &text("b"), false, Duration::from_secs(1));
+                    cleanup_semantic(&mut diffs);
+                    let got: Vec<(i64, String)> = diffs
+                        .iter()
+                        .map(|d| {
+                            let op = match d {
+                                DiffOp::Delete(_) => -1,
+                                DiffOp::Equal(_) => 0,
+                                DiffOp::Insert(_) => 1,
+                            };
+                            (op, String::from_utf16_lossy(d.text()))
+                        })
+                        .collect();
+                    let want: Vec<(i64, String)> =
+                        serde_json::from_value(expected["diffs"].clone()).expect("diffs");
+                    if got != want {
+                        failures.push(format!("{name}: expected {want:?}, got {got:?}"));
+                    }
+                }
+                // Replayed by review_anchor's tests.
+                Some("track") => {}
+                other => failures.push(format!("{name}: unknown case type {other:?}")),
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "{} of {} cases failed:\n{}",
+            failures.len(),
+            cases.len(),
+            failures.join("\n")
+        );
     }
 }

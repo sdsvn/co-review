@@ -8,25 +8,23 @@ use anyhow::{Result, bail};
 use crate::debug_log::log;
 use crate::installation;
 
-/// Agent packages shipped with Co-Review: harness → directory under `integrations/`.
-pub const PACKAGES: [(&str, &str); 2] = [("pi", "pi"), ("omp", "omp")];
+/// Agent packages shipped with Co-Review, each in `integrations/<harness>`.
+const PACKAGES: [&str; 2] = ["pi", "omp"];
 
 /// Where this Co-Review's package for `harness` is.
-pub fn bundled_package(harness: &str) -> Option<PathBuf> {
-    let (_, directory) = PACKAGES.iter().find(|(name, _)| *name == harness)?;
+fn bundled_package(harness: &str) -> Option<PathBuf> {
     Some(
         installation::distribution_root()?
             .join("integrations")
-            .join(directory),
+            .join(harness),
     )
 }
 
 /// Runs the installer; returns its exit code.
 pub fn run(harness: Option<&str>) -> Result<i32> {
     let harness = harness.unwrap_or_default();
-    if !PACKAGES.iter().any(|(name, _)| *name == harness) {
-        let names: Vec<&str> = PACKAGES.iter().map(|(name, _)| *name).collect();
-        bail!("usage: co-review setup <{}>", names.join("|"));
+    if !PACKAGES.contains(&harness) {
+        bail!("usage: co-review setup <{}>", PACKAGES.join("|"));
     }
     let Some(directory) =
         bundled_package(harness).filter(|directory| directory.join("package.json").is_file())

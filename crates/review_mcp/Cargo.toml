@@ -13,7 +13,6 @@ anyhow.workspace = true
 chrono.workspace = true
 log.workspace = true
 parking_lot.workspace = true
-regex.workspace = true
 review_bundle.workspace = true
 review_code.workspace = true
 review_design.workspace = true
@@ -29,13 +28,12 @@ smol.workspace = true
 uuid.workspace = true
 
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
-http = "1"
-rmcp = { version = "3.5.1", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
+rmcp = { version = "3.5.1", default-features = false, features = ["server", "transport-streamable-http-server"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "net", "macros"] }
 tokio-util = "0.7"
 
 [dev-dependencies]
-pretty_assertions.workspace = true
+regex.workspace = true
 similar.workspace = true
 rmcp = { version = "3.5.1", features = ["client", "transport-streamable-http-client-reqwest"] }
 tempfile.workspace = true

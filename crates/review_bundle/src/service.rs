@@ -14,23 +14,24 @@ use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{Context as _, Result, anyhow};
 use regex::Regex;
-use review_anchor::Edit;
+use review_anchor::{Edit, index_of};
 use review_model::{
     LocationKind, Participant, ParticipantKind, Proposal, ProposalStatus, Review, ReviewBundle,
     ReviewScope, Severity, ThreadOptions, ThreadStatus, content_version,
 };
 use review_store::{
-    CreateReviewParams, ReviewChange, ReviewStore, co_review_home, path_to_file_uri, real_path,
+    CreateReviewParams, ReviewChange, ReviewStore, co_review_home, file_uri_to_path,
+    path_to_file_uri, real_path,
 };
 use sha2::{Digest as _, Sha256};
 
+use crate::discovery;
 use crate::findings::{self, Finding};
 use crate::patch::{DOCUMENT_NAMES, parse_patch_meta};
 use crate::payloads::{
-    StateDocument, file_uri_to_path, location_from_anchor, patch_slug, resolve_path, to_state_file,
+    StateDocument, location_from_anchor, patch_slug, resolve_path, to_state_file,
 };
 use crate::tracking::{self, AppliedEdit};
-use review_store::snapshots::index_of;
 
 /// How long findings files must be quiet before they are synced again.
 const SYNC_DEBOUNCE: Duration = Duration::from_millis(300);
@@ -142,10 +143,6 @@ impl BundleService {
         Self { shared }
     }
 
-    pub fn store(&self) -> &Arc<ReviewStore> {
-        &self.shared.store
-    }
-
     /// Opens (or re-opens) the review of a review directory; inline content is written to a
     /// directory first.
     pub fn open(&self, params: OpenBundleParams) -> Result<OpenedBundle> {
@@ -233,7 +230,7 @@ impl BundleService {
 
     /// Writes inline content to `<home>/inline/<hash>/`: the same content, the same directory
     /// (and so the same review).
-    pub fn write_inline(&self, params: &OpenBundleParams) -> Result<PathBuf> {
+    fn write_inline(&self, params: &OpenBundleParams) -> Result<PathBuf> {
         let markdown = params.markdown.as_deref().unwrap_or("");
         let patch = params.patch.as_deref().unwrap_or("");
         let hash = format!(
@@ -244,13 +241,10 @@ impl BundleService {
         fs::create_dir_all(&dir)
             .with_context(|| format!("creating inline directory {}", dir.display()))?;
         if !markdown.is_empty() {
-            static HEADING: LazyLock<Option<Regex>> =
-                LazyLock::new(|| Regex::new(r"(?m)^#\s+").ok());
-            let has_heading = HEADING
-                .as_ref()
-                .is_some_and(|heading| heading.is_match(markdown));
+            static HEADING: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"(?m)^#\s+").expect("static regex"));
             let text = match &params.title {
-                Some(title) if !title.is_empty() && !has_heading => {
+                Some(title) if !title.is_empty() && !HEADING.is_match(markdown) => {
                     format!("# {title}\n\n{markdown}")
                 }
                 _ => markdown.to_string(),
@@ -353,7 +347,7 @@ impl Shared {
         if thread.location.kind == LocationKind::Patch
             && let Some(patch) = uri.and_then(file_uri_to_path)
         {
-            let branch = branch_of_patch(&patch);
+            let branch = branch_of_patch(Path::new(&patch));
             self.store.decide_proposal(
                 review_id,
                 thread_id,
@@ -366,7 +360,7 @@ impl Shared {
             )?;
             return Ok(());
         }
-        let file = uri.and_then(file_uri_to_path);
+        let file = uri.and_then(file_uri_to_path).map(PathBuf::from);
         let text = file
             .as_ref()
             .filter(|file| file.exists())
@@ -513,7 +507,7 @@ impl Shared {
                 start_line: proposal.start_line,
                 status: ProposalStatus::Pending,
             }),
-            intent: None,
+            ..ThreadOptions::default()
         };
         self.store
             .create_thread(review_id, location, body, author, options)?;
@@ -681,7 +675,7 @@ fn spawn_exporter(shared: &Arc<Shared>) {
                             } => {
                                 pending.remove(&review_id);
                                 if let Some(dir) = file_uri_to_path(&workspace_root) {
-                                    shared.unwatch(&dir);
+                                    shared.unwatch(Path::new(&dir));
                                 }
                             }
                         }
@@ -731,81 +725,77 @@ fn file_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// The document of a review directory: the first of `DOCUMENT_NAMES`, else the first
+/// The file names in a directory.
+fn names_in(dir: &Path) -> Vec<String> {
+    fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The document of a review directory: the first of `DOCUMENT_NAMES` that exists, else the first
 /// `*.pseudocode.md`.
 pub fn document_of(dir: &Path) -> Option<PathBuf> {
     if let Some(name) = DOCUMENT_NAMES.iter().find(|name| dir.join(name).exists()) {
         return Some(dir.join(name));
     }
-    let mut pseudocode: Vec<String> = fs::read_dir(dir)
-        .ok()?
-        .flatten()
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+    names_in(dir)
+        .into_iter()
         .filter(|name| name.ends_with(".pseudocode.md"))
-        .collect();
-    pseudocode.sort();
-    pseudocode.first().map(|name| dir.join(name))
+        .min()
+        .map(|name| dir.join(name))
 }
 
 /// The `*.patch` / `*.diff` pages of a review directory, by name.
 pub fn patches_of(dir: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let mut names: Vec<String> = entries
-        .flatten()
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .filter(|name| name.ends_with(".patch") || name.ends_with(".diff"))
-        .collect();
-    names.sort();
-    names.into_iter().map(|name| dir.join(name)).collect()
+    let names = names_in(dir);
+    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+    discovery::patches_of(&names)
+        .into_iter()
+        .map(|name| dir.join(name))
+        .collect()
 }
 
 /// A document's title: its first `# heading` (without a `Feature:` prefix), else its folder's name.
-pub fn title_of(file: &Path) -> Result<String> {
-    static HEADING: LazyLock<Option<Regex>> =
-        LazyLock::new(|| Regex::new(r"(?m)^#\s+(.+?)\s*$").ok());
-    static FEATURE: LazyLock<Option<Regex>> =
-        LazyLock::new(|| Regex::new(r"(?i)^Feature:\s*").ok());
+fn title_of(file: &Path) -> Result<String> {
+    static HEADING: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?m)^#\s+(.+?)\s*$").expect("static regex"));
+    static FEATURE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)^Feature:\s*").expect("static regex"));
     let text = fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
-    let heading = HEADING
-        .as_ref()
-        .and_then(|heading| heading.captures(&text))
-        .and_then(|captures| captures.get(1))
-        .map(|heading| heading.as_str());
-    Ok(match (heading, FEATURE.as_ref()) {
-        (Some(heading), Some(feature)) => feature.replace(heading, "").into_owned(),
-        (Some(heading), None) => heading.to_string(),
-        (None, _) => file.parent().map(file_name).unwrap_or_default(),
+    Ok(match HEADING.captures(&text) {
+        Some(captures) => FEATURE.replace(&captures[1], "").into_owned(),
+        None => file.parent().map(file_name).unwrap_or_default(),
     })
 }
 
 /// The findings of a patch: `<slug>.comments.json` (an array) or `.comments.jsonl`.
 fn read_findings(dir: &Path, slug: &str) -> Vec<Finding> {
-    for extension in [".comments.json", ".comments.jsonl"] {
-        let file = dir.join(format!("{slug}{extension}"));
-        if !file.exists() {
-            continue;
-        }
-        let parsed = fs::read_to_string(&file)
-            .map_err(anyhow::Error::from)
-            .and_then(|text| {
-                if extension.ends_with('l') {
-                    findings::read_findings_jsonl(&text).map_err(Into::into)
-                } else {
-                    findings::read_findings_json(&text).map_err(Into::into)
-                }
-            });
-        return match parsed {
-            Ok(findings) => findings,
-            Err(error) => {
-                log::error!(
-                    "[co-review] cannot read findings {}: {error:#}",
-                    file.display()
-                );
-                Vec::new()
-            }
-        };
-    }
-    Vec::new()
+    let Some(file) = [".comments.json", ".comments.jsonl"]
+        .iter()
+        .map(|extension| dir.join(format!("{slug}{extension}")))
+        .find(|file| file.exists())
+    else {
+        return Vec::new();
+    };
+    let parsed = fs::read_to_string(&file)
+        .map_err(anyhow::Error::from)
+        .and_then(|text| {
+            Ok(if file.extension().is_some_and(|ext| ext == "jsonl") {
+                findings::read_findings_jsonl(&text)?
+            } else {
+                findings::read_findings_json(&text)?
+            })
+        });
+    parsed.unwrap_or_else(|error| {
+        log::error!(
+            "[co-review] cannot read findings {}: {error:#}",
+            file.display()
+        );
+        Vec::new()
+    })
 }

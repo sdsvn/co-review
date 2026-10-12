@@ -251,16 +251,11 @@ fn described(description: &str) -> Value {
 
 fn schema(properties: Value, required: &[&str]) -> Value {
     let mut schema = json!({ "type": "object", "properties": properties });
-    if let Some(object) = schema.as_object_mut() {
-        if !required.is_empty() {
-            object.insert("required".to_string(), json!(required));
-        }
-        object.insert("additionalProperties".to_string(), json!(false));
-        object.insert(
-            "$schema".to_string(),
-            json!("http://json-schema.org/draft-07/schema#"),
-        );
+    if !required.is_empty() {
+        schema["required"] = json!(required);
     }
+    schema["additionalProperties"] = json!(false);
+    schema["$schema"] = json!("http://json-schema.org/draft-07/schema#");
     schema
 }
 

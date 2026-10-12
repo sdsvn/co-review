@@ -4,6 +4,6 @@ pub mod findings;
 pub mod patch;
 pub mod payloads;
 pub mod service;
-pub mod tracking;
+mod tracking;
 
 pub use service::{BundleService, BundleServiceOptions, OpenBundleParams, OpenedBundle};

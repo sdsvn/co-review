@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use regex::Regex;
-use review_anchor::AnchorStatus;
+use review_anchor::{AnchorStatus, index_of, slice};
 use review_model::{CodeLocation, DocAnchorType, LocationKind, content_version, is_overview_page};
 
 use crate::file_uri::file_uri_to_path;
@@ -30,7 +30,7 @@ pub fn save_snapshot(dir: &Path, version: &str, text: &str) -> std::io::Result<(
 /// The tracked target of a new comment, from the file as it is now: a line or range comment's
 /// lines, or a document's quoted text found in its Markdown source (only when that place is
 /// clear). Anything else, or a file that doesn't read as the comment says, is left as it is.
-pub fn track_new(workspace_dir: &Path, location: CodeLocation) -> CodeLocation {
+pub(crate) fn track_new(workspace_dir: &Path, location: CodeLocation) -> CodeLocation {
     let Some(uri) = location.uri.as_deref() else {
         return location;
     };
@@ -132,27 +132,6 @@ fn source_range(source: &[u16], exact: &str, prefix: &str, suffix: &str) -> Opti
     }
 }
 
-/// JavaScript's `indexOf` over UTF-16 code units.
-pub fn index_of(haystack: &[u16], needle: &[u16], from: usize) -> Option<usize> {
-    if from > haystack.len() {
-        return needle.is_empty().then_some(haystack.len());
-    }
-    if needle.is_empty() {
-        return Some(from);
-    }
-    haystack[from..]
-        .windows(needle.len())
-        .position(|window| window == needle)
-        .map(|position| position + from)
-}
-
-/// JavaScript's `slice` over UTF-16 code units.
-pub fn slice(units: &[u16], from: usize, to: usize) -> String {
-    let to = to.min(units.len());
-    let from = from.min(to);
-    String::from_utf16_lossy(&units[from..to])
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,14 +150,5 @@ mod tests {
         // Two equally good places: not clear, so not tracked.
         assert_eq!(source_range(&source, "The size", "", ""), None);
         assert_eq!(source_range(&source, "absent", "", ""), None);
-    }
-
-    #[test]
-    fn index_of_matches_javascript() {
-        let text = units("aé😀b");
-        assert_eq!(index_of(&text, &units("b"), 0), Some(4));
-        assert_eq!(index_of(&text, &units(""), 2), Some(2));
-        assert_eq!(index_of(&text, &units(""), 9), Some(5));
-        assert_eq!(slice(&text, 1, 4), "é😀");
     }
 }

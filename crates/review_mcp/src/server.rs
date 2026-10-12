@@ -9,6 +9,7 @@ use std::thread::JoinHandle;
 
 use anyhow::{Context as _, Result, anyhow};
 use axum::extract::Request;
+use axum::http;
 use axum::middleware::Next;
 use axum::response::{IntoResponse as _, Response};
 use rmcp::model::{
@@ -26,11 +27,7 @@ use serde_json::{Map, Value, json};
 use tokio_util::sync::CancellationToken;
 
 use crate::prompts::SERVER_INSTRUCTIONS;
-use crate::reviewer::{
-    AddFindingsArguments, AskArguments, AwaitArguments, ChannelSink, CoReviewer,
-    GetReviewArguments, OpenReviewArguments, PostArguments, ReplyArguments, RepoMapArguments,
-    Session, ToolOutput,
-};
+use crate::reviewer::{AskArguments, AwaitArguments, ChannelSink, CoReviewer, Session, ToolOutput};
 use crate::services::Services;
 
 /// Where and how the server runs.
@@ -244,7 +241,7 @@ fn root_parameter(query: &str) -> Option<String> {
 }
 
 fn decode_component(text: &str) -> String {
-    crate::paths::percent_decode(&text.replace('+', " "))
+    review_store::percent_decode(&text.replace('+', " "))
 }
 
 /// One MCP session's handler; rmcp makes one per session.
@@ -381,50 +378,35 @@ pub async fn call(
     cancel: CancellationToken,
 ) -> ToolOutput {
     let reviewer = Arc::clone(session.reviewer());
-    match name {
-        "open_review" => match parse::<OpenReviewArguments>(name, arguments) {
-            Ok(arguments) => reviewer.open_review(session, arguments).await,
-            Err(error) => error,
-        },
-        "await_reviewer" => match parse::<AwaitArguments>(name, arguments).and_then(|arguments| {
-            check_timeout(name, arguments.timeout_sec)?;
-            Ok(arguments)
-        }) {
-            Ok(arguments) => reviewer.await_reviewer(session, arguments, cancel).await,
-            Err(error) => error,
-        },
-        "reply" => match parse::<ReplyArguments>(name, arguments) {
-            Ok(arguments) => reviewer.reply(session, arguments),
-            Err(error) => error,
-        },
-        "add_findings" => match parse::<AddFindingsArguments>(name, arguments) {
-            Ok(arguments) => reviewer.add_findings(session, arguments),
-            Err(error) => error,
-        },
-        "ask_reviewer" => match parse::<AskArguments>(name, arguments).and_then(|arguments| {
-            check_timeout(name, arguments.timeout_sec)?;
-            if arguments.options.is_empty() || arguments.options.len() > 6 {
-                return Err(invalid(name, "options: between 1 and 6 options"));
+    let run = async {
+        Ok(match name {
+            "open_review" => reviewer.open_review(session, parse(name, arguments)?).await,
+            "await_reviewer" => {
+                let arguments: AwaitArguments = parse(name, arguments)?;
+                check_timeout(name, arguments.timeout_sec)?;
+                reviewer.await_reviewer(session, arguments, cancel).await
             }
-            Ok(arguments)
-        }) {
-            Ok(arguments) => reviewer.ask_reviewer(session, arguments, cancel).await,
-            Err(error) => error,
-        },
-        "post_review_to_github" => match parse::<PostArguments>(name, arguments) {
-            Ok(arguments) => reviewer.post_review_to_github(session, arguments).await,
-            Err(error) => error,
-        },
-        "repo_map" => match parse::<RepoMapArguments>(name, arguments) {
-            Ok(arguments) => reviewer.repo_map(session, arguments).await,
-            Err(error) => error,
-        },
-        "get_review" => match parse::<GetReviewArguments>(name, arguments) {
-            Ok(arguments) => reviewer.get_review(session, arguments).await,
-            Err(error) => error,
-        },
-        _ => ToolOutput::fail(format!("MCP error -32602: Tool {name} not found")),
-    }
+            "reply" => reviewer.reply(session, parse(name, arguments)?),
+            "add_findings" => reviewer.add_findings(session, parse(name, arguments)?),
+            "ask_reviewer" => {
+                let arguments: AskArguments = parse(name, arguments)?;
+                check_timeout(name, arguments.timeout_sec)?;
+                if arguments.options.is_empty() || arguments.options.len() > 6 {
+                    return Err(invalid(name, "options: between 1 and 6 options"));
+                }
+                reviewer.ask_reviewer(session, arguments, cancel).await
+            }
+            "post_review_to_github" => {
+                reviewer
+                    .post_review_to_github(session, parse(name, arguments)?)
+                    .await
+            }
+            "repo_map" => reviewer.repo_map(session, parse(name, arguments)?).await,
+            "get_review" => reviewer.get_review(session, parse(name, arguments)?).await,
+            _ => ToolOutput::fail(format!("MCP error -32602: Tool {name} not found")),
+        })
+    };
+    run.await.unwrap_or_else(|error: ToolOutput| error)
 }
 
 fn parse<Arguments: DeserializeOwned>(
@@ -461,6 +443,7 @@ mod tests {
             Some("/tmp/my repo")
         );
         assert_eq!(root_parameter("x=1"), None);
+        assert_eq!(root_parameter("root=100%").as_deref(), Some("100%"));
     }
 
     #[test]

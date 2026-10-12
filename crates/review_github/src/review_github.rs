@@ -14,10 +14,6 @@ use review_model::{
 };
 use serde::{Deserialize, Serialize};
 
-// ---------------------------------------------------------------------------
-// GitHub review event
-// ---------------------------------------------------------------------------
-
 /// The GitHub review event string corresponding to a Co-Review decision.
 fn review_event(decision: ReviewDecision) -> &'static str {
     match decision {
@@ -36,16 +32,17 @@ fn decision_label(decision: ReviewDecision) -> &'static str {
     }
 }
 
-/// Matches `owner/repo` where each part is `[\w.\-]+`.
+/// Matches `owner/repo` where each part is `[\w.-]+` (JavaScript's ASCII `\w`).
 fn is_owner_repo(s: &str) -> bool {
-    let mut parts = s.splitn(2, '/');
-    let valid_part = |p: &str| !p.is_empty() && p.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '-');
-    matches!((parts.next(), parts.next()), (Some(owner), Some(name)) if valid_part(owner) && valid_part(name))
+    let valid = |part: &str| {
+        !part.is_empty()
+            && part
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+    };
+    s.split_once('/')
+        .is_some_and(|(owner, name)| valid(owner) && valid(name))
 }
-
-// ---------------------------------------------------------------------------
-// Line comment (internal, includes thread_id for edits lookup)
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize)]
 struct LineComment {
@@ -61,12 +58,8 @@ struct LineComment {
     body: String,
 }
 
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
-
 /// The pull request a review targets (from its review directory's `PR.md`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct GitHubTarget {
     pub repo: String,
     pub number: u32,
@@ -76,20 +69,19 @@ pub struct GitHubTarget {
 }
 
 /// A line comment in the preview (exposed to callers).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewComment {
     pub thread_id: String,
     pub path: String,
     pub line: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub start_line: Option<u32>,
     pub side: String,
     pub body: String,
 }
 
 /// Exactly what posting a review to GitHub would send.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct GitHubPreview {
     pub event: String,
     pub body: String,
@@ -97,14 +89,14 @@ pub struct GitHubPreview {
 }
 
 /// The reviewer's edits to a preview.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct GitHubEdits {
     pub body: String,
     pub comments: HashMap<String, String>,
 }
 
 /// What posting a review to GitHub did.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct GitHubPost {
     pub url: String,
     pub comments: usize,
@@ -112,10 +104,6 @@ pub struct GitHubPost {
     pub event: String,
     pub notes: Vec<String>,
 }
-
-// ---------------------------------------------------------------------------
-// GhRunner trait
-// ---------------------------------------------------------------------------
 
 /// Result of running the `gh` CLI.
 #[derive(Debug, Clone)]
@@ -135,52 +123,44 @@ pub struct DefaultGhRunner;
 
 impl GhRunner for DefaultGhRunner {
     fn run(&self, args: &[&str], input: &str) -> GhOutput {
-        let result = Command::new("gh")
+        let failed = |stderr: String| GhOutput {
+            ok: false,
+            stdout: String::new(),
+            stderr,
+        };
+        let spawned = Command::new("gh")
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn();
-
-        match result {
-            Ok(mut child) => {
-                if let Some(mut stdin) = child.stdin.take() {
-                    let _ = stdin.write_all(input.as_bytes());
-                }
-                match child.wait_with_output() {
-                    Ok(output) => GhOutput {
-                        ok: output.status.success(),
-                        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-                        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-                    },
-                    Err(error) => GhOutput {
-                        ok: false,
-                        stdout: String::new(),
-                        stderr: error.to_string(),
-                    },
-                }
-            }
-            Err(error) => GhOutput {
-                ok: false,
-                stdout: String::new(),
-                stderr: format!("ENOENT: {error}"),
+        let mut child = match spawned {
+            Ok(child) => child,
+            Err(error) => return failed(format!("ENOENT: {error}")),
+        };
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(input.as_bytes()).ok();
+        }
+        match child.wait_with_output() {
+            Ok(output) => GhOutput {
+                ok: output.status.success(),
+                stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
             },
+            Err(error) => failed(error.to_string()),
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Pure functions: thread_body, compose, preview, preview_markdown
-// ---------------------------------------------------------------------------
 
 /// Build the body of a thread's GitHub comment: the reviewer's point only, not the conversation.
 /// Uses the rewording override when one was given, else the reviewer's own human messages;
 /// a finding they accepted without writing anything uses the finding's text. Adds a GitHub
 /// suggestion block for accepted (or pending) proposals on the new side.
 fn thread_body(thread: &ReviewThread, reworded: Option<&str>) -> String {
-    let text = if let Some(r) = reworded {
-        let trimmed = r.trim();
-        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+    let text = if let Some(reworded) = reworded {
+        Some(reworded.trim())
+            .filter(|text| !text.is_empty())
+            .map(str::to_string)
     } else {
         let humans: Vec<String> = thread
             .messages
@@ -271,52 +251,31 @@ pub fn compose(
             .to_string();
         let body = thread_body(thread, reworded.get(&thread.id).map(|s| s.as_str()));
 
-        if thread.location.kind == LocationKind::Patch
-            && let Some(a) = anchor
-        {
-                match a.anchor_type {
-                    PatchAnchorType::CodeLine if a.path.is_some() && a.line.is_some() => {
-                        comments.push(LineComment {
-                            thread_id: thread.id.clone(),
-                            path: a.path.clone().unwrap_or_default(),
-                            line: a.line.unwrap_or(0),
-                            side: side.clone(),
-                            start_line: None,
-                            start_side: None,
-                            body,
-                        });
-                        continue;
-                    }
-                    PatchAnchorType::CodeRange
-                        if a.path.is_some() && a.start_line.is_some() && a.end_line.is_some() =>
-                    {
-                        let start = a.start_line.unwrap_or(0);
-                        let end = a.end_line.unwrap_or(0);
-                        if start == end {
-                            comments.push(LineComment {
-                                thread_id: thread.id.clone(),
-                                path: a.path.clone().unwrap_or_default(),
-                                line: end,
-                                side: side.clone(),
-                                start_line: None,
-                                start_side: None,
-                                body,
-                            });
-                        } else {
-                            comments.push(LineComment {
-                                thread_id: thread.id.clone(),
-                                path: a.path.clone().unwrap_or_default(),
-                                line: end,
-                                side: side.clone(),
-                                start_line: Some(start),
-                                start_side: Some(side.clone()),
-                                body,
-                            });
-                        }
-                        continue;
-                    }
-                    _ => {}
-                }
+        // A diff-line comment: `(line, start_line)` of a line or a range of lines.
+        let placed = anchor
+            .filter(|_| thread.location.kind == LocationKind::Patch)
+            .and_then(|a| {
+                let lines = match a.anchor_type {
+                    PatchAnchorType::CodeLine => a.line.map(|line| (line, None)),
+                    PatchAnchorType::CodeRange => a
+                        .start_line
+                        .zip(a.end_line)
+                        .map(|(start, end)| (end, (start != end).then_some(start))),
+                    _ => None,
+                };
+                Some((a.path.clone()?, lines?))
+            });
+        if let Some((path, (line, start_line))) = placed {
+            comments.push(LineComment {
+                thread_id: thread.id.clone(),
+                path,
+                line,
+                start_side: start_line.map(|_| side.clone()),
+                side,
+                start_line,
+                body,
+            });
+            continue;
         }
 
         // Not a diff-line comment: goes into the body.
@@ -333,18 +292,15 @@ pub fn compose(
         elsewhere.push(format!("- **{location_label}:** {indented_body}"));
     }
 
-    let summary_trimmed = summary.trim();
-    let body = if !summary_trimmed.is_empty() && !elsewhere.is_empty() {
-        format!("{summary_trimmed}\n\n{}", elsewhere.join("\n"))
-    } else if !elsewhere.is_empty() {
-        elsewhere.join("\n")
-    } else if !summary_trimmed.is_empty() {
-        summary_trimmed.to_string()
-    } else if decision == ReviewDecision::Approve {
-        "Looks good.".to_string()
-    } else {
-        String::new()
-    };
+    let listed = elsewhere.join("\n");
+    let mut body = [summary.trim(), listed.as_str()]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    if body.is_empty() && decision == ReviewDecision::Approve {
+        body = "Looks good.".to_string();
+    }
 
     ComposeResult {
         comments,
@@ -418,10 +374,6 @@ pub fn preview_markdown(preview: &GitHubPreview) -> String {
     parts.join("\n\n")
 }
 
-// ---------------------------------------------------------------------------
-// publish: the side-effectful part
-// ---------------------------------------------------------------------------
-
 /// Post the review to GitHub. Handles retries for own-PR and diff-line errors.
 pub fn publish(
     runner: &dyn GhRunner,
@@ -435,57 +387,26 @@ pub fn publish(
     let composed = compose(review, decision, summary, reworded);
     let endpoint = format!("repos/{}/pulls/{}/reviews", target.repo, target.number);
     let mut event = review_event(decision).to_string();
-    let mut body = if let Some(e) = edits {
-        e.body.trim().to_string()
-    } else {
-        composed.body.clone()
-    };
-    let mut comments: Vec<LineComment> = if let Some(e) = edits {
-        composed
-            .comments
-            .into_iter()
-            .map(|c| {
-                let edited_body = e
-                    .comments
-                    .get(&c.thread_id)
-                    .map(|s| s.trim().to_string())
-                    .unwrap_or(c.body);
-                LineComment {
-                    body: edited_body,
-                    ..c
-                }
-            })
-            .collect()
-    } else {
-        composed.comments
-    };
-    // Filter out empty-body comments (reviewer emptied them in the preview).
-    comments.retain(|c| !c.body.is_empty());
+    let mut body = edits.map_or_else(|| composed.body.clone(), |e| e.body.trim().to_string());
+    let mut comments: Vec<LineComment> = composed
+        .comments
+        .into_iter()
+        .map(|c| match edits.and_then(|e| e.comments.get(&c.thread_id)) {
+            Some(edited) => LineComment {
+                body: edited.trim().to_string(),
+                ..c
+            },
+            None => c,
+        })
+        // The reviewer emptied it in the preview.
+        .filter(|c| !c.body.is_empty())
+        .collect();
 
     let posted = comments.len();
     let mut notes: Vec<String> = Vec::new();
 
     for _attempt in 0..3 {
-        // Build the JSON payload, stripping thread_id.
-        let payload = serde_json::json!({
-            "event": event,
-            "body": body,
-            "comments": comments.iter().map(|c| {
-                let mut m = serde_json::Map::new();
-                m.insert("path".into(), serde_json::Value::String(c.path.clone()));
-                m.insert("line".into(), serde_json::Value::Number(c.line.into()));
-                m.insert("side".into(), serde_json::Value::String(c.side.clone()));
-                if let Some(sl) = c.start_line {
-                    m.insert("start_line".into(), serde_json::Value::Number(sl.into()));
-                }
-                if let Some(ss) = &c.start_side {
-                    m.insert("start_side".into(), serde_json::Value::String(ss.clone()));
-                }
-                m.insert("body".into(), serde_json::Value::String(c.body.clone()));
-                serde_json::Value::Object(m)
-            }).collect::<Vec<_>>()
-        });
-
+        let payload = serde_json::json!({ "event": event, "body": body, "comments": comments });
         let input = serde_json::to_string(&payload).context("serializing review payload")?;
         let result = runner.run(
             &["api", "--method", "POST", &endpoint, "--input", "-"],
@@ -570,16 +491,21 @@ pub fn publish(
             continue;
         }
 
-        let truncated = &message.trim()[..message.trim().len().min(400)];
+        // The first 400 UTF-16 code units, as JavaScript's `.slice(0, 400)`.
+        let mut units = 0;
+        let truncated: String = message
+            .trim()
+            .chars()
+            .take_while(|c| {
+                units += c.len_utf16();
+                units <= 400
+            })
+            .collect();
         bail!("GitHub refused the review: {truncated}");
     }
 
     bail!("GitHub refused the review.")
 }
-
-// ---------------------------------------------------------------------------
-// Resolve a GitHubTarget from a review's bundle directory (needs filesystem)
-// ---------------------------------------------------------------------------
 
 /// Read the PR metadata from a review directory's `PR.md` or `<patch>.md`.
 /// Returns `None` if the directory does not contain a valid PR reference.
@@ -587,50 +513,30 @@ pub fn resolve_target(
     dir: &std::path::Path,
     review: &Review,
 ) -> Option<GitHubTarget> {
-    let mut candidates = vec!["PR.md".to_string()];
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.ends_with(".patch") || name.ends_with(".diff") {
-                let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(&name);
-                candidates.push(format!("{stem}.md"));
-            }
-        }
-    }
-    for name in &candidates {
-        let path = dir.join(name);
-        let Some(text) = std::fs::read_to_string(&path).ok() else {
+    let patches = review_bundle::service::patches_of(dir);
+    let candidates = std::iter::once(dir.join("PR.md")).chain(patches.iter().map(|patch| patch.with_extension("md")));
+    for path in candidates {
+        let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
         let meta = review_bundle::patch::parse_patch_meta(&text);
         if let (Some(number), Some(repo)) = (meta.number, meta.repo.as_deref())
             && is_owner_repo(repo)
         {
+            let posted = review.bundle.as_ref().and_then(|b| b.github.as_ref());
             return Some(GitHubTarget {
                 url: meta
                     .url
                     .unwrap_or_else(|| format!("https://github.com/{repo}/pull/{number}")),
                 repo: repo.to_string(),
                 number,
-                posted_round: review
-                    .bundle
-                    .as_ref()
-                    .and_then(|b| b.github.as_ref())
-                    .map(|g| g.round),
-                posted_url: review
-                    .bundle
-                    .as_ref()
-                    .and_then(|b| b.github.as_ref())
-                    .map(|g| g.url.clone()),
+                posted_round: posted.map(|g| g.round),
+                posted_url: posted.map(|g| g.url.clone()),
             });
         }
     }
     None
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -707,13 +613,9 @@ mod tests {
         let review = load_review("reworded");
         let decision = review.verdict.as_ref().map(|v| v.decision).unwrap_or(ReviewDecision::Comment);
         let summary = review.verdict.as_ref().map(|v| v.summary.as_str()).unwrap_or("");
-        let mut reworded = HashMap::new();
-        // The fixture's reworded map is stored alongside.
         let reworded_path = fixtures_dir().join("reworded.reworded.json");
-        if let Ok(text) = std::fs::read_to_string(&reworded_path) {
-            let map: HashMap<String, String> = serde_json::from_str(&text).unwrap();
-            reworded = map;
-        }
+        let reworded: HashMap<String, String> =
+            serde_json::from_str(&std::fs::read_to_string(reworded_path).unwrap()).unwrap();
         let actual = preview(&review, decision, summary, &reworded);
         let expected = load_expected_preview("reworded");
         assert_eq!(actual, expected);
@@ -739,10 +641,34 @@ mod tests {
         assert_preview_matches("approve_default");
     }
 
-    #[test]
-    fn test_own_pr_fallback() {
-        // This tests the publish retry logic, not just compose.
-        let review = load_review("own_pr");
+    /// A `gh` that fails the first post with `error` (when given) and accepts the next one.
+    struct FakeGh {
+        error: Option<&'static str>,
+        payloads: std::sync::Mutex<Vec<serde_json::Value>>,
+    }
+
+    impl GhRunner for FakeGh {
+        fn run(&self, _args: &[&str], input: &str) -> GhOutput {
+            let mut payloads = self.payloads.lock().unwrap();
+            payloads.push(serde_json::from_str(input).unwrap());
+            match self.error.filter(|_| payloads.len() == 1) {
+                Some(error) => GhOutput {
+                    ok: false,
+                    stdout: String::new(),
+                    stderr: error.to_string(),
+                },
+                None => GhOutput {
+                    ok: true,
+                    stdout: r#"{"html_url":"https://github.com/owner/repo/pull/42#pullrequestreview-1"}"#.to_string(),
+                    stderr: String::new(),
+                },
+            }
+        }
+    }
+
+    /// Publishes a fixture's review through a fake `gh`; the payloads sent must be the ones the TypeScript sent.
+    fn publish_fixture(name: &str, error: Option<&'static str>, edits: Option<&GitHubEdits>) -> GitHubPost {
+        let review = load_review(name);
         let target = GitHubTarget {
             repo: "owner/repo".to_string(),
             number: 42,
@@ -750,181 +676,42 @@ mod tests {
             posted_round: None,
             posted_url: None,
         };
-        let decision = review.verdict.as_ref().map(|v| v.decision).unwrap_or(ReviewDecision::Approve);
-        let summary = review.verdict.as_ref().map(|v| v.summary.as_str()).unwrap_or("");
-        let reworded = HashMap::new();
-
-        // Load the expected payloads the gen script recorded.
-        let payloads_path = fixtures_dir().join("own_pr.payloads.json");
-        let payloads_text = std::fs::read_to_string(&payloads_path).unwrap();
-        let payloads: Vec<serde_json::Value> = serde_json::from_str(&payloads_text).unwrap();
-
-        struct OwnPrRunner {
-            payloads: std::sync::Mutex<Vec<serde_json::Value>>,
-            call_count: std::sync::Mutex<usize>,
-        }
-
-        impl GhRunner for OwnPrRunner {
-            fn run(&self, _args: &[&str], input: &str) -> GhOutput {
-                let payload: serde_json::Value = serde_json::from_str(input).unwrap();
-                let mut payloads = self.payloads.lock().unwrap();
-                payloads.push(payload);
-
-                let mut count = self.call_count.lock().unwrap();
-                *count += 1;
-                if *count == 1 {
-                    // First call: fail with own-PR error
-                    GhOutput {
-                        ok: false,
-                        stdout: String::new(),
-                        stderr: "You can't approve your own pull request".to_string(),
-                    }
-                } else {
-                    // Second call: succeed
-                    GhOutput {
-                        ok: true,
-                        stdout: r#"{"html_url":"https://github.com/owner/repo/pull/42#pullrequestreview-123"}"#.to_string(),
-                        stderr: String::new(),
-                    }
-                }
-            }
-        }
-
-        let runner = OwnPrRunner {
+        let verdict = review.verdict.as_ref().unwrap();
+        let runner = FakeGh {
+            error,
             payloads: std::sync::Mutex::new(Vec::new()),
-            call_count: std::sync::Mutex::new(0),
         };
+        let result = publish(&runner, &review, &target, verdict.decision, &verdict.summary, &HashMap::new(), edits).unwrap();
+        let path = fixtures_dir().join(format!("{name}.payloads.json"));
+        let expected: Vec<serde_json::Value> = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(runner.payloads.into_inner().unwrap(), expected, "payloads mismatch for fixture {name}");
+        result
+    }
 
-        let result = publish(&runner, &review, &target, decision, summary, &reworded, None).unwrap();
+    #[test]
+    fn test_own_pr_fallback() {
+        let result = publish_fixture("own_pr", Some("You can't approve your own pull request"), None);
         assert_eq!(result.event, "COMMENT");
-        assert!(!result.notes.is_empty());
         assert!(result.notes[0].contains("your own pull request"));
-
-        // Verify the payloads sent match what the TS would send.
-        let sent = runner.payloads.into_inner().unwrap();
-        assert_eq!(sent.len(), payloads.len(), "payload count mismatch");
-        for (i, (actual, expected)) in sent.iter().zip(payloads.iter()).enumerate() {
-            assert_eq!(actual, expected, "payload {i} mismatch");
-        }
     }
 
     #[test]
     fn test_diff_line_fallback() {
-        let review = load_review("diff_fallback");
-        let target = GitHubTarget {
-            repo: "owner/repo".to_string(),
-            number: 42,
-            url: "https://github.com/owner/repo/pull/42".to_string(),
-            posted_round: None,
-            posted_url: None,
-        };
-        let decision = review.verdict.as_ref().map(|v| v.decision).unwrap_or(ReviewDecision::Comment);
-        let summary = review.verdict.as_ref().map(|v| v.summary.as_str()).unwrap_or("");
-        let reworded = HashMap::new();
-
-        let payloads_path = fixtures_dir().join("diff_fallback.payloads.json");
-        let payloads_text = std::fs::read_to_string(&payloads_path).unwrap();
-        let payloads: Vec<serde_json::Value> = serde_json::from_str(&payloads_text).unwrap();
-
-        struct DiffFallbackRunner {
-            payloads: std::sync::Mutex<Vec<serde_json::Value>>,
-            call_count: std::sync::Mutex<usize>,
-        }
-
-        impl GhRunner for DiffFallbackRunner {
-            fn run(&self, _args: &[&str], input: &str) -> GhOutput {
-                let payload: serde_json::Value = serde_json::from_str(input).unwrap();
-                let mut payloads = self.payloads.lock().unwrap();
-                payloads.push(payload);
-
-                let mut count = self.call_count.lock().unwrap();
-                *count += 1;
-                if *count == 1 {
-                    GhOutput {
-                        ok: false,
-                        stdout: String::new(),
-                        stderr: "HTTP 422: Unprocessable Entity - line must be part of the diff".to_string(),
-                    }
-                } else {
-                    GhOutput {
-                        ok: true,
-                        stdout: r#"{"html_url":"https://github.com/owner/repo/pull/42#pullrequestreview-456"}"#.to_string(),
-                        stderr: String::new(),
-                    }
-                }
-            }
-        }
-
-        let runner = DiffFallbackRunner {
-            payloads: std::sync::Mutex::new(Vec::new()),
-            call_count: std::sync::Mutex::new(0),
-        };
-
-        let result = publish(&runner, &review, &target, decision, summary, &reworded, None).unwrap();
+        let error = "HTTP 422: Unprocessable Entity - line must be part of the diff";
+        let result = publish_fixture("diff_fallback", Some(error), None);
         assert_eq!(result.comments, 0);
         assert!(result.in_body > 0);
         assert!(result.notes[0].contains("no longer in the pull request's diff"));
-
-        let sent = runner.payloads.into_inner().unwrap();
-        assert_eq!(sent.len(), payloads.len(), "payload count mismatch");
-        for (i, (actual, expected)) in sent.iter().zip(payloads.iter()).enumerate() {
-            assert_eq!(actual, expected, "payload {i} mismatch");
-        }
     }
 
     #[test]
     fn test_edits() {
-        // Edits: reviewer changes summary, rewrites one comment, empties another.
-        let review = load_review("edits");
-        let target = GitHubTarget {
-            repo: "owner/repo".to_string(),
-            number: 42,
-            url: "https://github.com/owner/repo/pull/42".to_string(),
-            posted_round: None,
-            posted_url: None,
-        };
-        let decision = review.verdict.as_ref().map(|v| v.decision).unwrap_or(ReviewDecision::Comment);
-        let summary = review.verdict.as_ref().map(|v| v.summary.as_str()).unwrap_or("");
-        let reworded = HashMap::new();
-
-        // Load the edits and expected payloads.
-        let edits_path = fixtures_dir().join("edits.edits.json");
-        let edits_text = std::fs::read_to_string(&edits_path).unwrap();
-        let edits: GitHubEdits = serde_json::from_str(&edits_text).unwrap();
-
-        let payloads_path = fixtures_dir().join("edits.payloads.json");
-        let payloads_text = std::fs::read_to_string(&payloads_path).unwrap();
-        let payloads: Vec<serde_json::Value> = serde_json::from_str(&payloads_text).unwrap();
-
-        struct EditsRunner {
-            payloads: std::sync::Mutex<Vec<serde_json::Value>>,
-        }
-
-        impl GhRunner for EditsRunner {
-            fn run(&self, _args: &[&str], input: &str) -> GhOutput {
-                let payload: serde_json::Value = serde_json::from_str(input).unwrap();
-                self.payloads.lock().unwrap().push(payload);
-                GhOutput {
-                    ok: true,
-                    stdout: r#"{"html_url":"https://github.com/owner/repo/pull/42#pullrequestreview-789"}"#.to_string(),
-                    stderr: String::new(),
-                }
-            }
-        }
-
-        let runner = EditsRunner {
-            payloads: std::sync::Mutex::new(Vec::new()),
-        };
-
-        let result = publish(&runner, &review, &target, decision, summary, &reworded, Some(&edits)).unwrap();
-        // The emptied comment should be left out: 3 threads composed, 2 posted.
+        // The reviewer changes the summary, rewrites one comment and empties another.
+        let path = fixtures_dir().join("edits.edits.json");
+        let edits: GitHubEdits = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let result = publish_fixture("edits", None, Some(&edits));
+        // The emptied comment is left out: 3 threads composed, 2 posted.
         assert_eq!(result.comments, 2);
         assert_eq!(result.event, "REQUEST_CHANGES");
-
-        let sent = runner.payloads.into_inner().unwrap();
-        assert_eq!(sent.len(), payloads.len(), "payload count mismatch");
-        for (i, (actual, expected)) in sent.iter().zip(payloads.iter()).enumerate() {
-            assert_eq!(actual, expected, "payload {i} mismatch");
-        }
     }
 }

@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
  * Generate test fixtures for the Rust review_anchor crate by running the TypeScript
- * anchor-tracking module. Produces cases.json with inputs and expected outputs.
+ * anchor-tracking module. Produces cases.json with inputs and expected outputs, and dmp.json with
+ * cases for the diff-match-patch port itself (`match`, and `makeDiff` + `cleanupSemantic`).
  *
  * Usage: node crates/review_anchor/tests/gen/gen.mjs [repo] [commits]
+ *        node crates/review_anchor/tests/gen/gen.mjs --dmp-only   (dmp.json only; cases.json mines
+ *        the repository's history, so regenerating it changes the corpus)
  */
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
@@ -17,6 +20,87 @@ const require = createRequire(import.meta.url);
 const lib = process.env.CO_REVIEW_LIB ?? resolve(__dirname, '../../../../extensions/review/lib');
 const tracking = require(`${lib}/common/anchor-tracking.js`);
 const { rangeIn, editsBetween, similarity, track, search, TRACKING, offsetAt, positionAt } = tracking;
+// The same diff-match-patch anchor-tracking.js loads.
+const dmp = createRequire(`${lib}/common/anchor-tracking.js`)('@sanity/diff-match-patch');
+
+// ─── diff-match-patch cases (dmp.json) ───
+{
+    const dmpCases = [];
+    const addDmp = (name, input, expected) => dmpCases.push({ name, input, expected });
+    const options = { threshold: TRACKING.fuzzyThreshold, distance: TRACKING.fuzzyDistance };
+
+    // `match` and its bitap search. Matches past `loc` lower the scan's start (2 * loc - bestLoc,
+    // negative when the match is more than twice as far as `loc`).
+    const matches = [
+        ['found_far_after_loc_zero', 'xxxxxxxxabcdx', 'abce', 0, options],
+        ['found_after_small_loc', 'zzaxxxxxxxxxxxabcdq', 'abce', 1, options],
+        ['passes_loc_then_narrows', 'abcxxxxxxxxxxxxxxxxxxabcxxx', 'abd', 12, { threshold: 0.5, distance: 1000 }],
+        ['two_near_matches', 'qabxq qabyq qabzq', 'qabwq', 6, { threshold: 0.5, distance: 100 }],
+        ['exact_only_before_loc', 'abcdef xxxxxxxxxxxxxxxx', 'abcdef', 10, { threshold: 0.5, distance: 1000 }],
+        ['exact_before_loc_tight', 'abcdef xxxxxxxxxxxxxxxx', 'abcdeg', 10, { threshold: 0.3, distance: 10 }],
+        ['no_match', 'the quick brown fox', 'zzzz', 5, options],
+        ['fuzzy_middle', 'I am the very model of a modern major general.', ' that berry ', 5, { threshold: 0.7, distance: 1000 }],
+        ['fuzzy_threshold', 'abcdefghijk', 'efxyhi', 1, { threshold: 0.5, distance: 1000 }],
+        ['fuzzy_distance_short', 'abcdefghijklmnopqrstuvwxyz', 'abcdefg', 24, { threshold: 0.5, distance: 10 }],
+        ['fuzzy_distance_long', 'abcdefghijklmnopqrstuvwxyz', 'abcdefg', 24, { threshold: 0.5, distance: 1000 }],
+        ['pattern_at_end', 'abcdefghijklmnopqrstuvwxyz', 'wxyzq', 0, options],
+        ['repeats', 'abcabcabcabcabcabd', 'abd', 3, { threshold: 0.5, distance: 1000 }],
+    ];
+    for (const [name, text, pattern, loc, opts] of matches) {
+        const at = dmp.match(text, pattern, loc, opts);
+        addDmp(`match_${name}`, { type: 'match', text, pattern, loc, ...opts }, { at: at === -1 ? null : at });
+    }
+
+    // `cleanupSemantic` slides edits to the best boundary, scored with JavaScript's `/\s/`,
+    // `/[^a-zA-Z0-9]/` and the blank-line regexes.
+    const cleanups = [
+        ['ascii_space', 'The cat.', 'The cow and the cat.'],
+        ['nbsp', 'The\u00a0cat.', 'The\u00a0cow\u00a0and\u00a0the\u00a0cat.'],
+        ['form_feed', 'The\fcat.', 'The\fcow\fand\fthe\fcat.'],
+        ['vertical_tab', 'The\vcat.', 'The\vcow\vand\vthe\vcat.'],
+        ['em_space', 'The\u2003cat.', 'The\u2003cow\u2003and\u2003the\u2003cat.'],
+        ['bom', 'The\ufeffcat.', 'The\ufeffcow\ufeffand\ufeffthe\ufeffcat.'],
+        ['next_line', 'The\u0085cat.', 'The\u0085cow\u0085and\u0085the\u0085cat.'],
+        ['accented', 'Thé café.', 'Thé cow ané thé café.'],
+        ['accented_inner', 'xéyéz', 'xéyéqéyéz'],
+        ['cjk', '日本語の文', '日本語と日本語の文'],
+        ['arabic_digits', 'a٣b٣c', 'a٣b٣x٣b٣c'],
+        ['punct_then_space', 'One. Two. Three.', 'One. Two. Four. Two. Three.'],
+        ['blank_crlf_crlf', 'a\r\n\r\nb', 'a\r\n\r\nc\r\n\r\nb'],
+        ['blank_lf_crlf', 'a\n\r\nb', 'a\n\r\nc\n\r\nb'],
+        ['blank_crlf_lf', 'a\r\n\nb', 'a\r\n\nc\r\n\nb'],
+        ['lf_cr_not_blank', 'a\n\rb', 'a\n\rc\n\rb'],
+        ['crlf_not_blank', 'x\r\ny', 'x\r\nz\r\ny'],
+        ['lf_lf', 'a\n\nb', 'a\n\nc\n\nb'],
+        ['nbsp_vs_dash', 'a-b\u00a0c', 'a-b\u00a0b-b\u00a0c'],
+        ['dash_vs_nbsp', 'a\u00a0b-c', 'a\u00a0b-b\u00a0b-c'],
+        ['period_nbsp', 'Hi.\u00a0Yo.\u00a0There.', 'Hi.\u00a0Yo.\u00a0Yo.\u00a0There.'],
+        ['form_feed_vs_dash', 'a-b\fc', 'a-b\fb-b\fc'],
+        ['nbsp_vs_comma', 'x,y\u00a0z', 'x,y\u00a0y,y\u00a0z'],
+    ];
+    for (const [name, a, b] of cleanups) {
+        const diffs = dmp.cleanupSemantic(dmp.makeDiff(a, b, { checkLines: false, timeout: 1 }));
+        addDmp(`cleanup_${name}`, { type: 'cleanup', a, b }, { diffs: diffs.map(([op, text]) => [op, text]) });
+    }
+
+    // Snapping to whole words uses `/[\p{L}\p{N}_]/u` per UTF-16 unit: a combining mark (U+0301,
+    // or U+0947, which Unicode's Alphabetic includes) is not a word character, a Number_letter is.
+    const words = [
+        ['devanagari_vowel_sign', 'zz abcdefghij zz', 'abcdefghij', 'zz abcdXfghij\u0947k zz'],
+        ['combining_acute', 'zz abcdefghij zz', 'abcdefghij', 'zz abcdXfghij\u0301k zz'],
+        ['roman_numeral', 'zz abcdefghij zz', 'abcdefghij', 'zz abcdXfghij\u216bk zz'],
+    ];
+    for (const [name, before, quote, after] of words) {
+        const from = before.indexOf(quote);
+        const anchor = rangeIn(before, 'v1', from, from + quote.length);
+        addDmp(`snap_${name}`, { type: 'track', anchor, before, after, version: 'v2' }, track(anchor, before, after, 'v2'));
+    }
+
+    const dmpPath = resolve(__dirname, '../fixtures/dmp.json');
+    writeFileSync(dmpPath, JSON.stringify(dmpCases, null, 2) + '\n');
+    console.log(`Written ${dmpCases.length} diff-match-patch cases to ${dmpPath}`);
+    if (process.argv.includes('--dmp-only')) process.exit(0);
+}
 
 const cases = [];
 let caseId = 0;

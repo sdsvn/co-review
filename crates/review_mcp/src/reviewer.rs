@@ -14,7 +14,8 @@ use review_model::{
     ReviewBundle, ReviewClosed, ReviewDecision, ReviewScope, ReviewThread, Severity, ThreadIntent,
     ThreadOptions, ThreadStatus, VerdictToAgent, waits_for_agent,
 };
-use review_store::{CreateReviewParams, MessagePatch, PartialMessage, ReviewChange};
+use review_pages::{RepositorySections, SectionBuilder as _};
+use review_store::{CreateReviewParams, MessagePatch, ReviewChange};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use tokio_util::sync::CancellationToken;
@@ -26,9 +27,7 @@ use crate::payloads::{
     thread_ref, window_root_of,
 };
 use crate::prompts::ANSWER_STYLE_SHORT;
-use crate::services::{
-    Services, coverage, document_of, patches_of, render_map, repository_overview,
-};
+use crate::services::{Services, document_of};
 
 /// What a tool returns: text (JSON for most tools), and whether it failed.
 #[derive(Debug, Clone, PartialEq)]
@@ -434,11 +433,8 @@ impl CoReviewer {
             let workspace = window_root_of(&existing);
             if let Some(bundle) = &existing.bundle {
                 let document = document_of(&bundle.dir);
-                extra = self.directory_extra(
-                    document.as_deref(),
-                    patches_of(&bundle.dir).len(),
-                    &bundle.dir,
-                );
+                let patches = review_bundle::service::patches_of(Path::new(&bundle.dir));
+                extra = self.directory_extra(document.as_deref(), patches.len(), &bundle.dir);
             }
             (existing, workspace)
         } else if arguments.dir.is_some() || arguments.markdown.is_some() || patch.is_some() {
@@ -1010,8 +1006,8 @@ impl CoReviewer {
                     labels: finding.labels.clone(),
                     proposal: None,
                 };
-                fail_on!(self.create_thread(
-                    &review,
+                fail_on!(store.create_thread(
+                    &review.id,
                     location,
                     finding.body.clone(),
                     agent.clone(),
@@ -1032,19 +1028,6 @@ impl CoReviewer {
             "ids": ids,
             "hint": "Findings with an anchor are proposed: only the ones the reviewer accepts come back when they submit.",
         }))
-    }
-
-    fn create_thread(
-        &self,
-        review: &Review,
-        location: CodeLocation,
-        body: String,
-        author: Participant,
-        options: ThreadOptions,
-    ) -> Result<(Review, ReviewThread), review_store::ReviewStoreError> {
-        self.services
-            .store
-            .create_thread(&review.id, location, body, author, options)
     }
 
     /// A semantic location (range, anchor text, Tree-sitter tokens, symbol) from a file and lines.
@@ -1133,8 +1116,8 @@ impl CoReviewer {
         let thread = match in_thread {
             Some(thread) => thread,
             None => {
-                fail_on!(self.create_thread(
-                    &review,
+                fail_on!(store.create_thread(
+                    &review.id,
                     location(LocationKind::Repository),
                     arguments.question.clone(),
                     agent.clone(),
@@ -1333,7 +1316,7 @@ impl CoReviewer {
             "Post this review to GitHub, {}#{}? As \"{}\", with {lines} line comment{}{}.{again}",
             target.repo,
             target.number,
-            decision_name(decision),
+            name_of(&decision),
             if lines == 1 { "" } else { "s" },
             if composed.elsewhere > 0 {
                 format!(" and {} in the review's body", composed.elsewhere)
@@ -1343,8 +1326,8 @@ impl CoReviewer {
         );
         let agent = session.agent();
         let store = &self.services.store;
-        let (_, thread) = fail_on!(self.create_thread(
-            &review,
+        let (_, thread) = fail_on!(store.create_thread(
+            &review.id,
             location(LocationKind::Repository),
             question.clone(),
             agent.clone(),
@@ -1505,9 +1488,16 @@ impl CoReviewer {
             let root = Path::new(&workspace);
             // Every call re-checks the files (the map is cached by content), so `refresh` needs nothing more.
             if arguments.overview == Some(true) {
-                return repository_overview(root, viewed.as_ref());
+                return RepositorySections.repository_overview(root, &viewed.unwrap_or_default());
             }
-            render_map(root, arguments.path.as_deref(), arguments.query.as_deref())
+            let index = review_index::RepoIndex::new();
+            let map = index.build(root)?;
+            let options = review_index::RenderOptions {
+                path: arguments.path,
+                query: arguments.query,
+                ..Default::default()
+            };
+            index.render(root, &map, &options)
         })
         .await;
         ToolOutput::text(fail_on!(fail_on!(output)))
@@ -1532,10 +1522,19 @@ impl CoReviewer {
         // Which parts of the repository the reviewer has looked at, so the agent can point at what's left.
         let coverage = if review.bundle.is_none() {
             let (workspace, viewed) = (uri_to_path(&review.workspace_root), review.viewed.clone());
-            tokio::task::spawn_blocking(move || coverage(Path::new(&workspace), viewed.as_ref()))
-                .await
-                .ok()
-                .and_then(Result::ok)
+            tokio::task::spawn_blocking(move || {
+                let index = review_index::RepoIndex::new();
+                let map = index.build(Path::new(&workspace))?;
+                let viewed = viewed
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(path, at)| (path, at as f64))
+                    .collect();
+                anyhow::Ok(index.coverage(&map, &viewed))
+            })
+            .await
+            .ok()
+            .and_then(Result::ok)
         } else {
             None
         };
@@ -1585,11 +1584,12 @@ impl CoReviewer {
         let mut submits = opened.verdict.as_ref().map_or(0, |verdict| verdict.count);
         let mut told_closed = None;
         let task = tokio::spawn(async move {
+            let mut current = reviewer.services.store.get(&review_id);
             loop {
                 let Some(session) = weak_session.upgrade() else {
                     return;
                 };
-                if let Some(review) = reviewer.services.store.get(&review_id) {
+                if let Some(review) = current.take() {
                     let agent = session.agent();
                     for thread in reviewer.waiting_threads(&review, &agent, &session) {
                         let Some(last) = thread.messages.last() else {
@@ -1628,16 +1628,20 @@ impl CoReviewer {
                             format!(
                                 "The reviewer submitted round {}: {}{summary}. Call await_reviewer (it returns immediately) for the open comments and accepted suggestions.",
                                 verdict.count,
-                                decision_name(verdict.decision),
+                                name_of(&verdict.decision),
                             ),
                             meta(&[("review_id", &review.id), ("event", "submitted")]),
                         );
                     }
                 }
                 drop(session);
-                loop {
+                // Each change as it was made (as the TypeScript's listener sees it), not the latest: a write that
+                // follows (e.g. the question's intent after its message) doesn't change what was pushed for it.
+                while current.is_none() {
                     match changes.recv().await {
-                        Ok(ReviewChange::Changed { review }) if review.id == review_id => break,
+                        Ok(ReviewChange::Changed { review }) if review.id == review_id => {
+                            current = Some(review)
+                        }
                         Ok(_) => {}
                         Err(_) => return,
                     }
@@ -1728,10 +1732,6 @@ fn is_markdown(page: &str) -> bool {
     lower.ends_with(".md") || lower.ends_with(".markdown")
 }
 
-fn decision_name(decision: ReviewDecision) -> String {
-    name_of(&decision)
-}
-
 /// The JSON name of an enum value (`request-changes`, `high`).
 fn name_of(value: &impl serde::Serialize) -> String {
     serde_json::to_value(value)
@@ -1812,11 +1812,11 @@ fn start_permission_message(
     body: String,
     permission: PermissionRequest,
 ) -> anyhow::Result<String> {
-    let init = PartialMessage {
+    let init = MessagePatch {
         body: Some(body),
         status: Some(MessageStatus::Done),
         permission: Some(permission),
-        ..PartialMessage::default()
+        ..MessagePatch::default()
     };
     Ok(reviewer
         .services

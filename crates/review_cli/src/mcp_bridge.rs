@@ -67,6 +67,8 @@ struct Bridge {
     cache_file: PathBuf,
     http: ureq::Agent,
     state: Mutex<State>,
+    /// Held while a check runs: whoever asks meanwhile waits for its outcome.
+    checking: Mutex<()>,
     output: Mutex<io::Stdout>,
     ending: AtomicBool,
     next_internal_id: AtomicU64,
@@ -85,7 +87,6 @@ struct State {
     review_id: Option<String>,
     /// Agent requests forwarded to Co-Review and not answered yet, by id.
     inflight: HashMap<String, Inflight>,
-    checking: bool,
 }
 
 impl State {
@@ -244,6 +245,22 @@ impl Session {
         }
     }
 
+    /// The session's id and protocol version, once known.
+    fn headers(&self, mut request: ureq::Request) -> ureq::Request {
+        if let Some(session_id) = self.session_id() {
+            request = request.set("mcp-session-id", &session_id);
+        }
+        if let Some(version) = self
+            .protocol_version
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+        {
+            request = request.set("mcp-protocol-version", &version);
+        }
+        request
+    }
+
     fn set_protocol_version(&self, result: &Value) {
         if let Some(version) = result.get("protocolVersion").and_then(Value::as_str) {
             *self
@@ -292,8 +309,8 @@ impl Bridge {
                 initialize: None,
                 review_id: None,
                 inflight: HashMap::new(),
-                checking: false,
             }),
+            checking: Mutex::new(()),
             output: Mutex::new(io::stdout()),
             ending: AtomicBool::new(false),
             next_internal_id: AtomicU64::new(0),
@@ -618,16 +635,11 @@ impl Bridge {
 
     /// Checks that the session still answers (a stream of it ended or failed); Co-Review is lost if it does not.
     fn check(self: &Arc<Self>, session: &Session) {
-        {
-            let mut state = self.state();
-            if state.checking || !state.is_current(session.connection) {
-                return;
-            }
-            state.checking = true;
+        let _checking = self.checking.lock().unwrap_or_else(PoisonError::into_inner);
+        if !self.is_current(session.connection) {
+            return;
         }
-        let result = self.request(session, "ping", json!({}), PING_TIMEOUT);
-        self.state().checking = false;
-        if let Err(error) = result {
+        if let Err(error) = self.request(session, "ping", json!({}), PING_TIMEOUT) {
             self.lost(session.connection, &format!("{error:#}"));
         }
     }
@@ -641,22 +653,11 @@ impl Bridge {
                 if !bridge.is_current(session.connection) {
                     return;
                 }
-                let mut request = bridge
+                let request = bridge
                     .http
                     .get(&session.endpoint)
                     .set("Accept", "text/event-stream");
-                if let Some(session_id) = session.session_id() {
-                    request = request.set("mcp-session-id", &session_id);
-                }
-                if let Some(version) = session
-                    .protocol_version
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .clone()
-                {
-                    request = request.set("mcp-protocol-version", &version);
-                }
-                match request.call() {
+                match session.headers(request).call() {
                     Ok(response) => {
                         if let Err(error) = bridge.read_messages(response, &mut |message| {
                             bridge.on_message(&session, message)
@@ -717,22 +718,12 @@ impl Bridge {
         message: &Value,
         timeout: Option<Duration>,
     ) -> Result<ureq::Response, String> {
-        let mut request = self
-            .http
-            .post(&session.endpoint)
-            .set("Content-Type", "application/json")
-            .set("Accept", "application/json, text/event-stream");
-        if let Some(session_id) = session.session_id() {
-            request = request.set("mcp-session-id", &session_id);
-        }
-        if let Some(version) = session
-            .protocol_version
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
-        {
-            request = request.set("mcp-protocol-version", &version);
-        }
+        let mut request = session.headers(
+            self.http
+                .post(&session.endpoint)
+                .set("Content-Type", "application/json")
+                .set("Accept", "application/json, text/event-stream"),
+        );
         if let Some(timeout) = timeout {
             request = request.timeout(timeout);
         }

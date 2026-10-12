@@ -37,28 +37,7 @@ pub(crate) fn file_uri_to_path(uri: &str) -> String {
             .map_or("", |index| &authority_and_path[index..]),
         None => after_scheme,
     };
-    percent_decode(path)
-}
-
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'%'
-            && let Some(hex) = bytes.get(index + 1..index + 3)
-            && let Some(byte) = std::str::from_utf8(hex)
-                .ok()
-                .and_then(|hex| u8::from_str_radix(hex, 16).ok())
-        {
-            decoded.push(byte);
-            index += 3;
-        } else {
-            decoded.push(bytes[index]);
-            index += 1;
-        }
-    }
-    String::from_utf8_lossy(&decoded).into_owned()
+    review_store::percent_decode(path)
 }
 
 fn normalized_segments(path: &str) -> Vec<&str> {

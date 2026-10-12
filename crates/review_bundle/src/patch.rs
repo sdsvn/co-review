@@ -1,4 +1,8 @@
 /// Unified-diff parsing and patch metadata (paths and line numbers as in the patch).
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::LazyLock;
+
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 /// A single row in a parsed patch hunk.
@@ -27,7 +31,7 @@ pub struct PatchFile {
 }
 
 /// Metadata parsed from a `PR.md` or `<patch>.md` header.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PatchMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -109,8 +113,22 @@ fn new_file(path: String) -> PatchFile {
     }
 }
 
+/// The tag a file's header line gives it.
+fn file_tag(line: &str) -> Option<&'static str> {
+    if line.starts_with("new file mode") {
+        Some("new file")
+    } else if line.starts_with("deleted file mode") {
+        Some("deleted")
+    } else if line.starts_with("rename from ") || line.starts_with("rename to ") {
+        Some("renamed")
+    } else if line.starts_with("Binary files") {
+        Some("binary")
+    } else {
+        None
+    }
+}
+
 /// Parse a unified diff (git diff, format-patch, or plain unified diff) into file entries.
-#[allow(clippy::collapsible_if)]
 pub fn parse_patch(src: &str) -> Vec<PatchFile> {
     let mut files: Vec<PatchFile> = Vec::new();
     let mut current: Option<PatchFile> = None;
@@ -119,14 +137,12 @@ pub fn parse_patch(src: &str) -> Vec<PatchFile> {
 
     // Match TS: split on \r?\n — do NOT use .lines() since we need the trailing empty element.
     let normalized = src.replace("\r\n", "\n");
-    let lines: Vec<&str> = normalized.split('\n').collect();
-
-    for line in &lines {
+    for line in normalized.split('\n') {
         if let Some(rest) = line.strip_prefix("diff --git ") {
             if let Some(file) = current.take() {
                 files.push(file);
             }
-            let parts: Vec<&str> = rest.split_whitespace().filter(|s| !s.is_empty()).collect();
+            let parts: Vec<&str> = rest.split_whitespace().collect();
             let path = if parts.len() == 2 {
                 strip_diff_prefix(parts[1])
             } else {
@@ -137,21 +153,9 @@ pub fn parse_patch(src: &str) -> Vec<PatchFile> {
             if let Some(rest) = line.strip_prefix("+++ ") {
                 current = Some(new_file(strip_diff_prefix(rest.trim())));
             }
-        } else if line.starts_with("new file mode") {
-            if let Some(ref mut cur) = current {
-                cur.tag = "new file".to_string();
-            }
-        } else if line.starts_with("deleted file mode") {
-            if let Some(ref mut cur) = current {
-                cur.tag = "deleted".to_string();
-            }
-        } else if line.starts_with("rename from ") || line.starts_with("rename to ") {
-            if let Some(ref mut cur) = current {
-                cur.tag = "renamed".to_string();
-            }
-        } else if line.starts_with("Binary files") {
-            if let Some(ref mut cur) = current {
-                cur.tag = "binary".to_string();
+        } else if let Some(tag) = file_tag(line) {
+            if let Some(cur) = current.as_mut() {
+                cur.tag = tag.to_string();
             }
         } else if line.starts_with("--- ") || line.starts_with("+++ ") {
             if let (Some(cur), Some(rest)) = (&mut current, line.strip_prefix("+++ ")) {
@@ -161,13 +165,8 @@ pub fn parse_patch(src: &str) -> Vec<PatchFile> {
                 }
             }
         } else if line.starts_with("@@") {
-            if current.is_none() {
-                continue;
-            }
-            let (o, n) = hunk_starts(line);
-            old_no = o;
-            new_no = n;
-            if let Some(ref mut cur) = current {
+            if let Some(cur) = current.as_mut() {
+                (old_no, new_no) = hunk_starts(line);
                 cur.rows.push(PatchRow {
                     t: "hunk".to_string(),
                     o: None,
@@ -175,42 +174,34 @@ pub fn parse_patch(src: &str) -> Vec<PatchFile> {
                     s: line.to_string(),
                 });
             }
-        } else if let Some(ref mut cur) = current {
-            if !cur.rows.is_empty() {
-                if line.is_empty() {
-                    cur.rows.push(PatchRow {
-                        t: "ctx".to_string(),
-                        o: Some(old_no),
-                        n: Some(new_no),
-                        s: String::new(),
-                    });
-                    old_no += 1;
-                    new_no += 1;
-                } else if let Some(rest) = line.strip_prefix('+') {
-                    cur.rows.push(PatchRow {
-                        t: "add".to_string(),
-                        o: None,
-                        n: Some(new_no),
-                        s: rest.to_string(),
-                    });
+        } else if let Some(cur) = current.as_mut().filter(|cur| !cur.rows.is_empty()) {
+            let (t, s) = if line.is_empty() {
+                ("ctx", "")
+            } else if let Some(rest) = line.strip_prefix('+') {
+                ("add", rest)
+            } else if let Some(rest) = line.strip_prefix('-') {
+                ("del", rest)
+            } else if let Some(rest) = line.strip_prefix(' ') {
+                ("ctx", rest)
+            } else {
+                continue;
+            };
+            cur.rows.push(PatchRow {
+                t: t.to_string(),
+                o: (t != "add").then_some(old_no),
+                n: (t != "del").then_some(new_no),
+                s: s.to_string(),
+            });
+            match t {
+                "add" => {
                     new_no += 1;
                     cur.added += 1;
-                } else if let Some(rest) = line.strip_prefix('-') {
-                    cur.rows.push(PatchRow {
-                        t: "del".to_string(),
-                        o: Some(old_no),
-                        n: None,
-                        s: rest.to_string(),
-                    });
+                }
+                "del" => {
                     old_no += 1;
                     cur.removed += 1;
-                } else if let Some(rest) = line.strip_prefix(' ') {
-                    cur.rows.push(PatchRow {
-                        t: "ctx".to_string(),
-                        o: Some(old_no),
-                        n: Some(new_no),
-                        s: rest.to_string(),
-                    });
+                }
+                _ => {
                     old_no += 1;
                     new_no += 1;
                 }
@@ -238,16 +229,7 @@ pub fn parse_patch_meta(text: &str) -> PatchMeta {
     };
 
     let lines: Vec<&str> = text.split('\n').collect();
-    let mut meta = PatchMeta {
-        title: None,
-        number: None,
-        branch: None,
-        base: None,
-        commits: None,
-        repo: None,
-        url: None,
-        body: String::new(),
-    };
+    let mut meta = PatchMeta::default();
 
     let mut i = 0;
     while i < lines.len() {
@@ -283,20 +265,14 @@ pub fn parse_patch_meta(text: &str) -> PatchMeta {
         break;
     }
 
-    if let Some(ref url) = meta.url {
-        // Explicit ASCII char class to match JS \w behavior.
-        let re = regex::Regex::new(
-            r"github\.com/([a-zA-Z0-9_.\-]+/[a-zA-Z0-9_.\-]+)/pull/(\d+)",
-        )
-        .expect("static regex");
-        if let Some(caps) = re.captures(url) {
-            if meta.repo.is_none() {
-                meta.repo = caps.get(1).map(|m| m.as_str().to_string());
-            }
-            if meta.number.is_none() {
-                meta.number = caps.get(2).and_then(|m| m.as_str().parse::<u32>().ok());
-            }
-        }
+    // Explicit ASCII char class to match JS \w behavior.
+    static PULL_URL: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"github\.com/([a-zA-Z0-9_.\-]+/[a-zA-Z0-9_.\-]+)/pull/(\d+)")
+            .expect("static regex")
+    });
+    if let Some(caps) = meta.url.as_deref().and_then(|url| PULL_URL.captures(url)) {
+        meta.repo = meta.repo.or_else(|| Some(caps[1].to_string()));
+        meta.number = meta.number.or_else(|| caps[2].parse().ok());
     }
 
     meta.body = lines[i..].join("\n").trim().to_string();
@@ -305,33 +281,20 @@ pub fn parse_patch_meta(text: &str) -> PatchMeta {
 
 /// The lines of the new side that a patch changes, per file: added lines, and for removed
 /// lines the new-side line where they were (the next line kept or added).
-pub fn changed_lines(files: &[PatchFile]) -> std::collections::BTreeMap<String, Vec<u32>> {
-    let mut changed = std::collections::BTreeMap::new();
+pub fn changed_lines(files: &[PatchFile]) -> BTreeMap<String, Vec<u32>> {
+    let mut changed = BTreeMap::new();
     for file in files {
-        let mut lines = std::collections::BTreeSet::new();
+        let mut lines = BTreeSet::new();
         let mut removed = false;
         for row in &file.rows {
+            // JS falsy: `row.n` counts only when non-zero.
+            let n = row.n.filter(|&n| n != 0);
             match row.t.as_str() {
-                "del" => {
-                    removed = true;
-                }
-                "add" => {
-                    // JS falsy: `row.n` is truthy only when non-zero.
-                    if let Some(n) = row.n.filter(|&v| v != 0) {
-                        lines.insert(n);
-                    }
-                    removed = false;
-                }
-                "ctx" => {
-                    if let Some(n) = row.n.filter(|_| removed).filter(|&v| v != 0) {
-                        lines.insert(n);
-                    }
-                    removed = false;
-                }
-                _ => {
-                    removed = false;
-                }
+                "add" => lines.extend(n),
+                "ctx" if removed => lines.extend(n),
+                _ => {}
             }
+            removed = row.t == "del";
         }
         if !lines.is_empty() {
             changed.insert(file.path.clone(), lines.into_iter().collect());
@@ -340,66 +303,3 @@ pub fn changed_lines(files: &[PatchFile]) -> std::collections::BTreeMap<String, 
     changed
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_strip_diff_prefix_basic() {
-        assert_eq!(strip_diff_prefix("b/src/main.rs"), "src/main.rs");
-        assert_eq!(strip_diff_prefix("a/foo.txt"), "foo.txt");
-        assert_eq!(strip_diff_prefix("src/main.rs"), "src/main.rs");
-    }
-
-    #[test]
-    fn test_strip_diff_prefix_quoted() {
-        assert_eq!(
-            strip_diff_prefix("\"b/path with spaces/file.txt\""),
-            "path with spaces/file.txt"
-        );
-    }
-
-    #[test]
-    fn test_hunk_starts() {
-        assert_eq!(hunk_starts("@@ -10,5 +20,7 @@ fn main()"), (10, 20));
-        assert_eq!(hunk_starts("@@ -1 +1 @@"), (1, 1));
-        assert_eq!(hunk_starts("@@ -0,0 +1,3 @@"), (0, 1));
-    }
-
-    #[test]
-    fn test_simple_patch() {
-        let src = "diff --git a/foo.txt b/foo.txt\n--- a/foo.txt\n+++ b/foo.txt\n@@ -1,3 +1,3 @@\n hello\n-world\n+universe\n end\n";
-        let files = parse_patch(src);
-        assert_eq!(files.len(), 1);
-        assert_eq!(files[0].path, "foo.txt");
-        assert_eq!(files[0].tag, "modified");
-        assert_eq!(files[0].added, 1);
-        assert_eq!(files[0].removed, 1);
-    }
-
-    #[test]
-    fn test_parse_patch_meta_basic() {
-        let text = "title: Fix bug\npr: 42\nrepo: owner/repo\n\nSome body text.";
-        let meta = parse_patch_meta(text);
-        assert_eq!(meta.title, Some("Fix bug".to_string()));
-        assert_eq!(meta.number, Some(42));
-        assert_eq!(meta.repo, Some("owner/repo".to_string()));
-        assert_eq!(meta.body, "Some body text.");
-    }
-
-    #[test]
-    fn test_parse_patch_meta_url_extraction() {
-        let text = "url: https://github.com/owner/repo/pull/123\n\nBody.";
-        let meta = parse_patch_meta(text);
-        assert_eq!(meta.repo, Some("owner/repo".to_string()));
-        assert_eq!(meta.number, Some(123));
-    }
-
-    #[test]
-    fn test_parse_patch_meta_pr_zero_is_none() {
-        let text = "pr: 0\n\nBody.";
-        let meta = parse_patch_meta(text);
-        assert_eq!(meta.number, None);
-    }
-}

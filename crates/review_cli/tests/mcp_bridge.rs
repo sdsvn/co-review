@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -32,11 +32,12 @@ struct FakeCoReview {
 }
 
 struct Shared {
+    /// Taken by `stop`: no connection is accepted after it returns.
+    listener: Mutex<Option<TcpListener>>,
     sessions: Mutex<HashSet<String>>,
     stats: Mutex<Stats>,
     connections: Mutex<Vec<TcpStream>>,
     standalone_streams: Mutex<Vec<TcpStream>>,
-    stopped: AtomicBool,
     next_session: AtomicU64,
     tools: Value,
 }
@@ -62,23 +63,30 @@ impl FakeCoReview {
         let port = listener.local_addr().expect("address").port();
         listener.set_nonblocking(true).expect("nonblocking");
         let shared = Arc::new(Shared {
+            listener: Mutex::new(Some(listener)),
             sessions: Mutex::default(),
             stats: Mutex::default(),
             connections: Mutex::default(),
             standalone_streams: Mutex::default(),
-            stopped: AtomicBool::new(false),
             next_session: AtomicU64::new(0),
             tools: tool_list(),
         });
         let accepting = shared.clone();
         std::thread::spawn(move || {
-            while !accepting.stopped.load(Ordering::SeqCst) {
-                match listener.accept() {
-                    Ok((stream, _)) => {
-                        stream.set_nonblocking(false).expect("blocking");
+            loop {
+                // Accepted and registered under the listener's lock, so `stop` cuts every connection it let in.
+                let accepted = match &*accepting.listener.lock().expect("lock") {
+                    Some(listener) => listener.accept().map(|(stream, _)| {
                         if let Ok(clone) = stream.try_clone() {
                             accepting.connections.lock().expect("lock").push(clone);
                         }
+                        stream
+                    }),
+                    None => return,
+                };
+                match accepted {
+                    Ok(stream) => {
+                        stream.set_nonblocking(false).expect("blocking");
                         let shared = accepting.clone();
                         std::thread::spawn(move || shared.handle(stream));
                     }
@@ -103,7 +111,7 @@ impl FakeCoReview {
 
     /// Like the app quitting: no new connections, and every open one cut.
     fn stop(&self) {
-        self.shared.stopped.store(true, Ordering::SeqCst);
+        self.shared.listener.lock().expect("lock").take();
         for connection in self.shared.connections.lock().expect("lock").drain(..) {
             connection.shutdown(Shutdown::Both).ok();
         }

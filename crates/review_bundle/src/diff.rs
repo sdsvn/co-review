@@ -59,7 +59,7 @@ pub fn take_diff(
 /// `git diff <range>` in `repo` as plain text (no pager, colours or external diff tools), or
 /// `None` when git fails. For `HEAD` (the uncommitted work) new, untracked files are included
 /// too, without touching the index.
-pub fn git_diff(repo: &Path, range: &str) -> Option<String> {
+fn git_diff(repo: &Path, range: &str) -> Option<String> {
     if !is_valid_range(range) {
         return None;
     }

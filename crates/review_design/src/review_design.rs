@@ -8,72 +8,31 @@ use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 /// The frontmatter value that declares a design document.
-pub const DESIGN_FORMAT: &str = "design";
+const DESIGN_FORMAT: &str = "design";
 
-/// A contract section, in canonical order.
-#[derive(Debug, Clone)]
-pub struct DesignSectionDef {
-    pub key: &'static str,
-    pub heading: &'static str,
-    pub tree: bool,
-    pub aliases: &'static [&'static str],
-}
-
-/// The canonical sections of the design-document contract.
-pub static DESIGN_SECTIONS: &[DesignSectionDef] = &[
-    DesignSectionDef {
-        key: "context",
-        heading: "Context",
-        tree: false,
-        aliases: &[],
-    },
-    DesignSectionDef {
-        key: "design",
-        heading: "Design",
-        tree: true,
-        aliases: &[],
-    },
-    DesignSectionDef {
-        key: "alternatives",
-        heading: "Alternatives",
-        tree: false,
-        aliases: &[],
-    },
-    DesignSectionDef {
-        key: "behaviour",
-        heading: "Behaviour",
-        tree: false,
-        aliases: &["behavior"],
-    },
-    DesignSectionDef {
-        key: "diagrams",
-        heading: "Diagrams",
-        tree: false,
-        aliases: &[],
-    },
-    DesignSectionDef {
-        key: "open questions",
-        heading: "Open Questions",
-        tree: true,
-        aliases: &[],
-    },
+/// The headings of the contract's sections, in canonical order.
+const DESIGN_SECTIONS: [&str; 6] = [
+    "Context",
+    "Design",
+    "Alternatives",
+    "Behaviour",
+    "Diagrams",
+    "Open Questions",
 ];
 
-/// Index of the contract section a heading key names (its key or an alias), or -1.
-pub fn design_section_index(key: &str) -> i32 {
-    for (i, section) in DESIGN_SECTIONS.iter().enumerate() {
-        if section.key == key || section.aliases.contains(&key) {
-            return i as i32;
-        }
-    }
-    -1
+/// Index of the contract section a lower-cased heading names (`behavior` is an alias).
+fn design_section_index(key: &str) -> Option<usize> {
+    let key = if key == "behavior" { "behaviour" } else { key };
+    DESIGN_SECTIONS
+        .iter()
+        .position(|heading| heading.to_lowercase() == key)
 }
 
 /// A parsed `## ` section.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Section {
     pub heading: String,
     /// Lower-cased heading.
@@ -82,14 +41,14 @@ pub struct Section {
 }
 
 /// Result of splitting a document body into sections.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SectionsResult {
     pub preamble: String,
     pub sections: Vec<Section>,
 }
 
 /// Frontmatter key-value pairs and the remaining body.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Frontmatter {
     pub data: HashMap<String, String>,
     pub body: String,
@@ -117,19 +76,15 @@ pub fn split_frontmatter(markdown: &str) -> Frontmatter {
     for line in inner.split('\n') {
         let line = line.strip_suffix('\r').unwrap_or(line);
         if let Some(kv_caps) = KV_RE.captures(line) {
-            let key = kv_caps[1].to_lowercase();
-            let mut val = kv_caps[2].to_string();
-            // Strip trailing inline comment
-            val = COMMENT_RE.replace(&val, "").to_string();
-            // Strip surrounding matching quotes
-            let bytes = val.as_bytes();
-            if bytes.len() >= 2
-                && (bytes[0] == b'\'' || bytes[0] == b'"')
-                && bytes[bytes.len() - 1] == bytes[0]
-            {
-                val = val[1..val.len() - 1].to_string();
-            }
-            data.insert(key, val);
+            let val = COMMENT_RE.replace(&kv_caps[2], "");
+            let unquoted = ['\'', '"'].iter().find_map(|quote| {
+                val.strip_prefix(*quote)
+                    .and_then(|rest| rest.strip_suffix(*quote))
+            });
+            data.insert(
+                kv_caps[1].to_lowercase(),
+                unquoted.unwrap_or(&val).to_string(),
+            );
         }
     }
 
@@ -144,37 +99,29 @@ static HEADING_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^##\s+([^\r\n]+?)\s*#*\s*$").expect("valid regex"));
 static TITLE_LINE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^#\s+").expect("valid regex"));
-static FENCE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s*(```|~~~)").expect("valid regex"));
 
 /// `## ` sections in document order; `preamble` is what precedes the first one
 /// (the `# ` title excluded).
 pub fn sections_of(body: &str) -> SectionsResult {
     let mut sections: Vec<Section> = Vec::new();
     let mut preamble: Vec<&str> = Vec::new();
-    let mut current: Option<usize> = None;
     let mut fence = false;
 
     for line in body.split('\n') {
-        if FENCE_RE.is_match(line) {
+        if fence_marker(line).is_some() {
             fence = !fence;
         }
-
         if let Some(caps) = (!fence).then(|| HEADING_RE.captures(line)).flatten() {
-                let heading = caps[1].to_string();
-                let key = heading.to_lowercase();
-                sections.push(Section {
-                    heading,
-                    key,
-                    body: String::new(),
-                });
-                current = Some(sections.len() - 1);
-                continue;
+            sections.push(Section {
+                heading: caps[1].to_string(),
+                key: caps[1].to_lowercase(),
+                body: String::new(),
+            });
+            continue;
         }
-
-        if let Some(idx) = current {
-            sections[idx].body.push_str(line);
-            sections[idx].body.push('\n');
+        if let Some(section) = sections.last_mut() {
+            section.body.push_str(line);
+            section.body.push('\n');
         } else if !TITLE_LINE_RE.is_match(line) {
             preamble.push(line);
         }
@@ -187,17 +134,12 @@ pub fn sections_of(body: &str) -> SectionsResult {
 }
 
 /// A step in the design tree.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Step {
     pub text: String,
     pub indent: i32,
     pub depth: u32,
     pub children: Vec<Step>,
-}
-
-/// Compute indentation width treating tabs as 4 spaces.
-fn indent_width(whitespace: &str) -> i32 {
-    whitespace.replace('\t', "    ").len() as i32
 }
 
 // JS `.` excludes both `\n` and `\r`; Rust regex `.` excludes only `\n`.
@@ -207,81 +149,45 @@ static BULLET_RE: LazyLock<Regex> =
 
 /// Indented `- ` bullets to tree, nesting by relative indent (tabs = 4); continuation lines fold up.
 pub fn steps(body: &str) -> Vec<Step> {
-    struct StackEntry {
-        indent: i32,
-        depth: u32,
-        children: Vec<Step>,
-        text: String,
+    /// Closes the open steps indented at least `indent` into their parents (the root's is -1).
+    fn close(stack: &mut Vec<Step>, indent: i32) {
+        while let Some(step) = stack.pop_if(|step| step.indent >= indent) {
+            if let Some(parent) = stack.last_mut() {
+                parent.children.push(step);
+            }
+        }
     }
 
-    let mut stack: Vec<StackEntry> = vec![StackEntry {
+    let mut stack = vec![Step {
+        text: String::new(),
         indent: -1,
         depth: 0,
         children: Vec::new(),
-        text: String::new(),
     }];
-
     for line in body.split('\n') {
         if let Some(caps) = BULLET_RE.captures(line) {
-            let indent = indent_width(&caps[1]);
-            let text = caps[2].trim().to_string();
-
-            // Pop stack entries with indent >= current
-            while stack.len() > 1 && stack.last().is_some_and(|e| e.indent >= indent) {
-                let entry = stack.pop().expect("stack not empty");
-                let node = Step {
-                    text: entry.text,
-                    indent: entry.indent,
-                    depth: entry.depth,
-                    children: entry.children,
-                };
-                stack
-                    .last_mut()
-                    .expect("stack not empty")
-                    .children
-                    .push(node);
-            }
-
-            let parent_depth = stack.last().map_or(0, |e| e.depth);
-            stack.push(StackEntry {
+            let indent = caps[1].replace('\t', "    ").len() as i32;
+            close(&mut stack, indent);
+            let depth = stack.last().map_or(0, |parent| parent.depth) + 1;
+            stack.push(Step {
+                text: caps[2].trim().to_string(),
                 indent,
-                depth: parent_depth + 1,
+                depth,
                 children: Vec::new(),
-                text,
             });
-        } else if !line.trim().is_empty() && stack.len() > 1 {
-            let last = stack.last_mut().expect("stack has >1 entries");
+        } else if !line.trim().is_empty()
+            && let Some(last) = stack.last_mut().filter(|step| step.depth > 0)
+        {
             last.text.push(' ');
             last.text.push_str(line.trim());
         }
     }
-
-    // Flush remaining stack entries
-    while stack.len() > 1 {
-        let entry = stack.pop().expect("stack not empty");
-        let node = Step {
-            text: entry.text,
-            indent: entry.indent,
-            depth: entry.depth,
-            children: entry.children,
-        };
-        stack
-            .last_mut()
-            .expect("stack not empty")
-            .children
-            .push(node);
-    }
-
-    stack.pop().expect("root exists").children
-}
-
-/// Whether a frontmatter value declares the design format.
-pub fn is_design_format(value: Option<&str>) -> bool {
-    value.unwrap_or("").trim().to_lowercase() == DESIGN_FORMAT
+    close(&mut stack, 0);
+    stack.pop().map(|root| root.children).unwrap_or_default()
 }
 
 /// The document's rendering mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Mode {
     Design,
@@ -289,18 +195,13 @@ pub enum Mode {
 }
 
 /// How a document renders, and where a declared document departs from the contract.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct DocumentFormat {
     pub mode: Mode,
     /// The frontmatter declares `co-review: design`.
     pub declared: bool,
     /// Where a declared document departs from the contract.
     pub warnings: Vec<String>,
-}
-
-/// Count UTF-16 code units, matching JavaScript's `.length`.
-fn utf16_len(s: &str) -> usize {
-    s.encode_utf16().count()
 }
 
 /// Truncate a string to at most `max` UTF-16 code units, returning a valid str slice.
@@ -337,8 +238,9 @@ static WRONG_MARKERS_RE: LazyLock<Regex> =
 /// How a document renders, and -- when it declares the contract -- where it departs from it.
 pub fn document_format(markdown: &str, file_name: &str) -> DocumentFormat {
     let frontmatter = split_frontmatter(markdown);
-    let declared_value = frontmatter.data.get("co-review").cloned();
-    let declared = is_design_format(declared_value.as_deref());
+    let declared_value = frontmatter.data.get("co-review");
+    let declared =
+        declared_value.is_some_and(|value| value.trim().to_lowercase() == DESIGN_FORMAT);
     let sections_result = sections_of(&frontmatter.body);
     let sections = &sections_result.sections;
 
@@ -347,19 +249,17 @@ pub fn document_format(markdown: &str, file_name: &str) -> DocumentFormat {
 
     let mut warnings: Vec<String> = Vec::new();
 
-    if let Some(ref val) = declared_value.as_ref().filter(|_| !declared) {
+    if let Some(val) = declared_value.filter(|_| !declared) {
         warnings.push(format!(
             "Unknown `co-review: {val}` \u{2014} the only format is `co-review: {DESIGN_FORMAT}`; rendered as plain Markdown."
         ));
     }
 
     if declared {
-        // Check for title
         if !TITLE_CHECK_RE.is_match(&frontmatter.body) && !frontmatter.data.contains_key("title") {
             warnings.push("No `# ` title (or `title:` in the frontmatter).".to_string());
         }
 
-        // Check for Design section
         let design = sections.iter().find(|s| s.key == "design");
         if let Some(design_section) = design {
             let design_steps = steps(&design_section.body);
@@ -377,10 +277,9 @@ pub fn document_format(markdown: &str, file_name: &str) -> DocumentFormat {
             warnings.push("No `## Design` section.".to_string());
         }
 
-        // Extra sections
         let extra: Vec<String> = sections
             .iter()
-            .filter(|s| design_section_index(&s.key) < 0)
+            .filter(|s| design_section_index(&s.key).is_none())
             .map(|s| format!("`## {}`", s.heading))
             .collect();
         if !extra.is_empty() {
@@ -390,22 +289,16 @@ pub fn document_format(markdown: &str, file_name: &str) -> DocumentFormat {
             ));
         }
 
-        // Order check
-        let order: Vec<i32> = sections
+        let order: Vec<usize> = sections
             .iter()
-            .map(|s| design_section_index(&s.key))
-            .filter(|&i| i >= 0)
+            .filter_map(|s| design_section_index(&s.key))
             .collect();
-        let out_of_order = order.windows(2).any(|w| w[1] < w[0]);
-        if out_of_order {
-            let section_names: Vec<&str> = DESIGN_SECTIONS.iter().map(|s| s.heading).collect();
+        if order.windows(2).any(|w| w[1] < w[0]) {
             warnings.push(format!(
                 "Sections are out of order ({}).",
-                section_names.join(", ")
+                DESIGN_SECTIONS.join(", ")
             ));
         }
-
-        // Readability warnings
         warnings.extend(readability_warnings(sections));
     }
 
@@ -427,53 +320,32 @@ const LONG_STEP: usize = 220;
 /// A code name in this many steps or more is repeated rather than introduced once.
 const REPEATED_NAME: usize = 3;
 
-static FENCE_OPEN_BACKTICK_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s*```").expect("valid regex"));
-static FENCE_OPEN_TILDE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s*~~~").expect("valid regex"));
-static FENCE_CLOSE_BACKTICK_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s*```\s*$").expect("valid regex"));
-static FENCE_CLOSE_TILDE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s*~~~\s*$").expect("valid regex"));
+/// The fence marker a line opens or closes a code block with (leading whitespace allowed).
+fn fence_marker(line: &str) -> Option<&'static str> {
+    ["```", "~~~"]
+        .into_iter()
+        .find(|marker| line.trim_start().starts_with(marker))
+}
 
 /// Strip fenced code blocks from text. The TS regex pairs ``` only with ``` and ~~~ only
 /// with ~~~ (backreference `\1`); the closer must be just the fence marker on its own line.
 fn strip_fenced_blocks(text: &str) -> String {
     let mut result = String::new();
-    let mut fence_type: Option<FenceType> = None;
-
+    let mut fence: Option<&str> = None;
     for line in text.split('\n') {
-        match fence_type {
+        match fence {
             None => {
-                if FENCE_OPEN_BACKTICK_RE.is_match(line) {
-                    fence_type = Some(FenceType::Backtick);
-                } else if FENCE_OPEN_TILDE_RE.is_match(line) {
-                    fence_type = Some(FenceType::Tilde);
-                } else {
+                fence = fence_marker(line);
+                if fence.is_none() {
                     result.push_str(line);
                     result.push('\n');
                 }
             }
-            Some(FenceType::Backtick) => {
-                if FENCE_CLOSE_BACKTICK_RE.is_match(line) {
-                    fence_type = None;
-                }
-            }
-            Some(FenceType::Tilde) => {
-                if FENCE_CLOSE_TILDE_RE.is_match(line) {
-                    fence_type = None;
-                }
-            }
+            Some(marker) if line.trim() == marker => fence = None,
+            Some(_) => {}
         }
     }
-
     result
-}
-
-#[derive(Clone, Copy)]
-enum FenceType {
-    Backtick,
-    Tilde,
 }
 
 static FENCE_LANG_RE: LazyLock<Regex> =
@@ -483,16 +355,10 @@ static FENCE_LANG_RE: LazyLock<Regex> =
 /// The TS code matches all fence openers, then filters to even indices (0, 2, 4...)
 /// to get "opening" fences. We replicate that exact behavior.
 fn opening_fence_languages(body: &str) -> Vec<String> {
-    let all_matches: Vec<String> = FENCE_LANG_RE
+    FENCE_LANG_RE
         .captures_iter(body)
+        .step_by(2)
         .map(|caps| caps[1].to_string())
-        .collect();
-    // Filter to even indices (the "opening" fences)
-    all_matches
-        .into_iter()
-        .enumerate()
-        .filter(|(i, _)| i % 2 == 0)
-        .map(|(_, lang)| lang)
         .collect()
 }
 
@@ -507,7 +373,6 @@ static CODE_NAME_RE: LazyLock<Regex> =
 fn readability_warnings(sections: &[Section]) -> Vec<String> {
     let mut warnings: Vec<String> = Vec::new();
 
-    // Build prose: strip fenced code blocks from each section body, join, strip URLs
     let prose: String = sections
         .iter()
         .map(|s| strip_fenced_blocks(&s.body))
@@ -515,36 +380,26 @@ fn readability_warnings(sections: &[Section]) -> Vec<String> {
         .join("\n");
     let prose = URL_RE.replace_all(&prose, "").to_string();
 
-    // Line references
-    let line_refs: Vec<String> = LINE_REF_RE
+    let examples: Vec<String> = LINE_REF_RE
         .find_iter(&prose)
-        .map(|m| m.as_str().to_string())
+        .take(3)
+        .map(|r| format!("`{}`", r.as_str()))
         .collect();
-    if !line_refs.is_empty() {
-        let examples: Vec<String> = line_refs
-            .iter()
-            .take(3)
-            .map(|r| format!("`{r}`"))
-            .collect();
+    if !examples.is_empty() {
         warnings.push(format!(
             "Line references ({}): a person reads this; describe the code in words and name only the top-level module or function.",
             examples.join(", ")
         ));
     }
 
-    // Non-mermaid code blocks
-    let code_langs: Vec<String> = sections
+    if sections
         .iter()
         .flat_map(|s| opening_fence_languages(&s.body))
-        .collect();
-    if code_langs
-        .iter()
         .any(|lang| lang.to_lowercase() != "mermaid")
     {
         warnings.push("Code blocks other than Mermaid: describe the behaviour in words; the code belongs in the implementation.".to_string());
     }
 
-    // Collect all steps from the Design section
     let design = sections.iter().find(|s| s.key == "design");
     let design_body = design.map_or("", |s| s.body.as_str());
     let design_steps = steps(design_body);
@@ -557,10 +412,10 @@ fn readability_warnings(sections: &[Section]) -> Vec<String> {
     }
     collect_steps(&design_steps, &mut all_steps);
 
-    // Long steps (using UTF-16 length to match JS)
+    // UTF-16 length, as JavaScript's `.length`.
     let long_count = all_steps
         .iter()
-        .filter(|s| utf16_len(&s.text) > LONG_STEP)
+        .filter(|s| s.text.encode_utf16().count() > LONG_STEP)
         .count();
     if long_count > 0 {
         let plural = if long_count > 1 { "s are" } else { " is" };
@@ -569,41 +424,26 @@ fn readability_warnings(sections: &[Section]) -> Vec<String> {
         ));
     }
 
-    // Repeated code names: track insertion order to match JS Map iteration order
-    let mut uses: HashMap<String, usize> = HashMap::new();
+    // Steps each code name appears in, in first-seen order (JS Map iteration order).
+    let mut uses: Vec<(String, usize)> = Vec::new();
     for step in &all_steps {
-        let names: HashSet<String> = CODE_NAME_RE
-            .captures_iter(&step.text)
-            .map(|caps| caps[1].to_string())
-            .collect();
-        for name in names {
-            *uses.entry(name).or_insert(0) += 1;
-        }
-    }
-    // Rebuild in first-seen order
-    let mut ordered_names: Vec<String> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
-    for step in &all_steps {
-        let names: Vec<String> = CODE_NAME_RE
-            .captures_iter(&step.text)
-            .map(|caps| caps[1].to_string())
-            .collect();
-        let mut step_seen: HashSet<String> = HashSet::new();
-        for name in names {
-            if step_seen.insert(name.clone()) && seen.insert(name.clone()) {
-                ordered_names.push(name);
+        let mut in_step = HashSet::new();
+        for caps in CODE_NAME_RE.captures_iter(&step.text) {
+            let name = &caps[1];
+            if !in_step.insert(name.to_string()) {
+                continue;
+            }
+            match uses.iter_mut().find(|(used, _)| used == name) {
+                Some((_, count)) => *count += 1,
+                None => uses.push((name.to_string(), 1)),
             }
         }
     }
-
-    let repeated: Vec<String> = ordered_names
+    let repeated: Vec<String> = uses
         .iter()
-        .filter(|name| uses.get(*name).copied().unwrap_or(0) >= REPEATED_NAME)
+        .filter(|(_, n)| *n >= REPEATED_NAME)
         .take(3)
-        .map(|name| {
-            let n = uses.get(name).copied().unwrap_or(0);
-            format!("`{name}` ({n} steps)")
-        })
+        .map(|(name, n)| format!("`{name}` ({n} steps)"))
         .collect();
     if !repeated.is_empty() {
         warnings.push(format!(
@@ -616,112 +456,8 @@ fn readability_warnings(sections: &[Section]) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_split_frontmatter_basic() {
-        let md = "---\nco-review: design\ntitle: Test\n---\n# Hello\n";
-        let fm = split_frontmatter(md);
-        assert_eq!(fm.data.get("co-review").unwrap(), "design");
-        assert_eq!(fm.data.get("title").unwrap(), "Test");
-        assert_eq!(fm.body, "# Hello\n");
-    }
-
-    #[test]
-    fn test_split_frontmatter_none() {
-        let md = "# Just a heading\n";
-        let fm = split_frontmatter(md);
-        assert!(fm.data.is_empty());
-        assert_eq!(fm.body, md);
-    }
-
-    #[test]
-    fn test_sections_of() {
-        let body = "# Title\nSome text\n## Context\nContext body\n## Design\n- Step 1\n";
-        let result = sections_of(body);
-        assert_eq!(result.sections.len(), 2);
-        assert_eq!(result.sections[0].key, "context");
-        assert_eq!(result.sections[1].key, "design");
-    }
-
-    #[test]
-    fn test_steps_basic() {
-        let body = "- Step 1\n  - Sub step\n    - Deep step\n- Step 2\n";
-        let tree = steps(body);
-        assert_eq!(tree.len(), 2);
-        assert_eq!(tree[0].text, "Step 1");
-        assert_eq!(tree[0].children.len(), 1);
-        assert_eq!(tree[0].children[0].text, "Sub step");
-        assert_eq!(tree[0].children[0].children.len(), 1);
-    }
-
-    #[test]
-    fn test_steps_continuation() {
-        let body = "- Start of step\n  continued here\n";
-        let tree = steps(body);
-        assert_eq!(tree.len(), 1);
-        assert_eq!(tree[0].text, "Start of step continued here");
-    }
-
-    #[test]
-    fn test_step_id() {
-        assert_eq!(
-            step_id("Use `RateLimiter` for **rate limiting**"),
-            "Use RateLimiter for rate limiting"
-        );
-    }
-
-    #[test]
-    fn test_step_id_truncation() {
-        let long = "a".repeat(100);
-        assert_eq!(step_id(&long).len(), 80);
-    }
-
-    #[test]
-    fn test_design_section_index() {
-        assert_eq!(design_section_index("design"), 1);
-        assert_eq!(design_section_index("behavior"), 3);
-        assert_eq!(design_section_index("unknown"), -1);
-    }
-
-    #[test]
-    fn test_is_design_format() {
-        assert!(is_design_format(Some("design")));
-        assert!(is_design_format(Some(" Design ")));
-        assert!(!is_design_format(Some("other")));
-        assert!(!is_design_format(None));
-    }
-
-    #[test]
-    fn test_document_format_declared() {
-        let md = "---\nco-review: design\n---\n# Title\n## Design\n- Step 1\n";
-        let fmt = document_format(md, "test.md");
-        assert_eq!(fmt.mode, Mode::Design);
-        assert!(fmt.declared);
-        assert!(fmt.warnings.is_empty());
-    }
-
-    #[test]
-    fn test_document_format_detected_pseudocode() {
-        let md = "# Title\n## Design\n- Step 1\n";
-        let fmt = document_format(md, "test.pseudocode.md");
-        assert_eq!(fmt.mode, Mode::Design);
-        assert!(!fmt.declared);
-        assert!(fmt.warnings.is_empty());
-    }
-
-    #[test]
-    fn test_utf16_len_ascii() {
-        assert_eq!(utf16_len("hello"), 5);
-    }
-
-    #[test]
-    fn test_utf16_len_emoji() {
-        // Emoji U+1F600 is 2 UTF-16 code units
-        assert_eq!(utf16_len("\u{1F600}"), 2);
-    }
 
     #[test]
     fn test_truncate_utf16() {

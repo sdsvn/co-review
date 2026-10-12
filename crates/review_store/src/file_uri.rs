@@ -75,7 +75,8 @@ pub fn file_uri_to_path(uri: &str) -> Option<String> {
     }
 }
 
-fn percent_decode(input: &str) -> String {
+/// `%XX` escapes decoded (invalid ones kept as they are), as UTF-8.
+pub fn percent_decode(input: &str) -> String {
     let src = input.as_bytes();
     let mut decoded = Vec::with_capacity(src.len());
     let mut i = 0;

@@ -20,4 +20,4 @@ pub use coordination::{AgentPresenceTracker, HumanDecisions, Listening};
 pub use prompts::{ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT, SERVER_INSTRUCTIONS};
 pub use reviewer::{ChannelSink, CoReviewer, Session, ToolOutput};
 pub use server::{ServerHandle, ServerOptions, call, start};
-pub use services::{CodeSyntax, HeadlessWindows, NoSyntax, ReviewWindows, SHOWN_NOTE, Services};
+pub use services::{CodeSyntax, ReviewWindows, SHOWN_NOTE, Services};

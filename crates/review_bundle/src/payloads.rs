@@ -8,7 +8,7 @@ use review_model::{
     CodeAnchor, CodeLocation, DocAnchor, LocationKind, ParticipantKind, PatchAnchor, Proposal,
     Review, ReviewDecision, ReviewThread, Severity, ThreadIntent, ThreadStatus, is_overview_page,
 };
-use review_store::path_to_file_uri;
+use review_store::{file_uri_to_path, path_to_file_uri};
 use serde::Serialize;
 use serde_json::{Map, Value};
 
@@ -29,7 +29,7 @@ pub fn target_of(thread: &ReviewThread, dir: Option<&Path>) -> String {
         }
         let relative = dir
             .zip(location.uri.as_deref().and_then(file_uri_to_path))
-            .map(|(dir, file)| relative_path(dir, &file));
+            .map(|(dir, file)| relative_path(dir, Path::new(&file)));
         return match relative {
             Some(relative)
                 if !relative.is_empty()
@@ -44,7 +44,7 @@ pub fn target_of(thread: &ReviewThread, dir: Option<&Path>) -> String {
     if location.kind == LocationKind::Patch
         && let Some(file) = location.uri.as_deref().and_then(file_uri_to_path)
     {
-        let name = file
+        let name = Path::new(&file)
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
@@ -64,7 +64,7 @@ pub fn anchor_of(thread: &ReviewThread, root: Option<&Path>) -> Value {
     }
     let relative = root
         .zip(location.uri.as_deref().and_then(file_uri_to_path))
-        .map(|(root, file)| relative_path(root, &file))
+        .map(|(root, file)| relative_path(root, Path::new(&file)))
         .filter(|relative| !relative.is_empty());
     let mut anchor = Map::new();
     match (&location.range, relative) {
@@ -98,7 +98,7 @@ pub fn anchor_of(thread: &ReviewThread, root: Option<&Path>) -> Value {
 }
 
 /// The location of a `{ target, anchor }` pair inside a review directory.
-pub fn location_from_anchor(
+pub(crate) fn location_from_anchor(
     dir: &Path,
     doc_file: Option<&Path>,
     target: Option<&str>,
@@ -176,7 +176,7 @@ fn code_anchor(text: &str) -> CodeAnchor {
 }
 
 /// The patch file of a slug: `<slug>.patch` or `<slug>.diff`, whichever exists (else `.patch`).
-pub fn patch_file(dir: &Path, slug: &str) -> PathBuf {
+fn patch_file(dir: &Path, slug: &str) -> PathBuf {
     [".patch", ".diff"]
         .iter()
         .map(|extension| dir.join(format!("{slug}{extension}")))
@@ -193,7 +193,7 @@ pub fn patch_slug(name: &str) -> &str {
 
 /// The document of a review directory, as `export` writes it into `review.json`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StateDocument {
+pub(crate) struct StateDocument {
     pub slug: String,
     pub title: String,
     pub markdown: String,
@@ -201,7 +201,7 @@ pub struct StateDocument {
 
 /// The review's state file (`review.json`), for tools that read the review from disk.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct StateFile {
+pub(crate) struct StateFile {
     pub doc: StateFileDocument,
     pub threads: Vec<StateThread>,
     pub seq: u32,
@@ -209,7 +209,7 @@ pub struct StateFile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct StateFileDocument {
+pub(crate) struct StateFileDocument {
     pub slug: String,
     pub title: String,
     pub version: u32,
@@ -218,7 +218,7 @@ pub struct StateFileDocument {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StateThread {
+pub(crate) struct StateThread {
     pub id: String,
     pub target: String,
     pub anchor: Value,
@@ -236,16 +236,16 @@ pub struct StateThread {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct StateMessage {
+pub(crate) struct StateMessage {
     pub author: String,
     pub role: ParticipantKind,
     pub time: String,
     pub body: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StateReview {
+pub(crate) struct StateReview {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decision: Option<ReviewDecision>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -255,13 +255,13 @@ pub struct StateReview {
     pub count: u32,
 }
 
-pub fn to_state_file(review: &Review, document: Option<&StateDocument>) -> StateFile {
+pub(crate) fn to_state_file(review: &Review, document: Option<&StateDocument>) -> StateFile {
     let root = review
         .bundle
         .as_ref()
-        .map(|bundle| PathBuf::from(&bundle.dir))
+        .map(|bundle| bundle.dir.clone())
         .or_else(|| file_uri_to_path(&review.workspace_root));
-    let root = root.as_deref();
+    let root = root.as_deref().map(Path::new);
     let threads = review
         .threads
         .iter()
@@ -289,20 +289,6 @@ pub fn to_state_file(review: &Review, document: Option<&StateDocument>) -> State
                 .collect(),
         })
         .collect();
-    let state_review = match &review.verdict {
-        Some(verdict) => StateReview {
-            decision: Some(verdict.decision),
-            summary: Some(verdict.summary.clone()),
-            submitted_at: Some(clock(verdict.submitted_at)),
-            count: verdict.count,
-        },
-        None => StateReview {
-            decision: None,
-            summary: None,
-            submitted_at: None,
-            count: 0,
-        },
-    };
     StateFile {
         doc: StateFileDocument {
             slug: document.map(|doc| doc.slug.clone()).unwrap_or_default(),
@@ -318,7 +304,15 @@ pub fn to_state_file(review: &Review, document: Option<&StateDocument>) -> State
         },
         threads,
         seq: review.next_thread_number.saturating_sub(1),
-        review: state_review,
+        review: review
+            .verdict
+            .as_ref()
+            .map_or_else(StateReview::default, |verdict| StateReview {
+                decision: Some(verdict.decision),
+                summary: Some(verdict.summary.clone()),
+                submitted_at: Some(clock(verdict.submitted_at)),
+                count: verdict.count,
+            }),
     }
 }
 
@@ -370,34 +364,6 @@ fn clock(milliseconds: u64) -> String {
         .and_then(|milliseconds| chrono::Local.timestamp_millis_opt(milliseconds).single())
         .map(|time| time.format("%H:%M").to_string())
         .unwrap_or_else(|| "00:00".to_string())
-}
-
-/// The file system path of a `file:` URI (percent-decoded), as Theia's `FileUri.fsPath`.
-pub fn file_uri_to_path(uri: &str) -> Option<PathBuf> {
-    let encoded = uri.strip_prefix("file://")?;
-    let bytes = encoded.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        let escaped = (bytes[index] == b'%')
-            .then(|| bytes.get(index + 1..index + 3))
-            .flatten()
-            .and_then(|hex| std::str::from_utf8(hex).ok())
-            .and_then(|hex| u8::from_str_radix(hex, 16).ok());
-        match escaped {
-            Some(byte) => {
-                decoded.push(byte);
-                index += 3;
-            }
-            None => {
-                decoded.push(bytes[index]);
-                index += 1;
-            }
-        }
-    }
-    Some(PathBuf::from(
-        String::from_utf8_lossy(&decoded).into_owned(),
-    ))
 }
 
 /// `path.resolve`: absolute against the current directory, `.` and `..` resolved lexically.
@@ -464,15 +430,6 @@ mod tests {
             resolve_path(Path::new("/a/b/../c/./d/")),
             PathBuf::from("/a/c/d")
         );
-    }
-
-    #[test]
-    fn file_uris_decode_utf8() {
-        assert_eq!(
-            file_uri_to_path("file:///tmp/r%C3%A9sum%C3%A9%20x.md"),
-            Some(PathBuf::from("/tmp/résumé x.md"))
-        );
-        assert_eq!(file_uri_to_path("untitled:x"), None);
     }
 
     #[test]

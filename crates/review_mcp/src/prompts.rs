@@ -1,6 +1,13 @@
 //! Verbatim copies of the prompts and instructions from the TypeScript implementation.
 
-pub const ANSWER_STYLE: &str = "How to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.\n- Answer the question in the first sentence, in plain language.\n- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.\n- Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.\n- Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything.";
+/// A literal, so `SERVER_INSTRUCTIONS` can `concat!` it.
+macro_rules! answer_style {
+    () => {
+        "How to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.\n- Answer the question in the first sentence, in plain language.\n- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.\n- Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.\n- Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything."
+    };
+}
+
+pub const ANSWER_STYLE: &str = answer_style!();
 
 pub const ANSWER_STYLE_SHORT: &str = "Answer first, in plain language, in a few sentences; no line-number walkthroughs (at most one or two path:line links at the end). Read only what you need, so the answer comes fast.";
 
@@ -22,9 +29,5 @@ pub const SERVER_INSTRUCTIONS: &str = concat!(
     "In Claude Code with channels on, the reviewer's questions and submissions also arrive as <channel source=\"co-review\"> ",
     "messages (thread_id attribute): answer each with reply({ threadId: thread_id }) instead of looping await_reviewer, ",
     "and on a submission call await_reviewer (it returns immediately).\n\n",
-    "How to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.\n",
-    "- Answer the question in the first sentence, in plain language.\n",
-    "- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.\n",
-    "- Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.\n",
-    "- Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything.",
+    answer_style!(),
 );
