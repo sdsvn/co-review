@@ -1,0 +1,44 @@
+[package]
+name = "review_mcp"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/review_mcp.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+review_bundle.workspace = true
+review_code = { path = "../review_code" }
+review_design.workspace = true
+review_github = { path = "../review_github" }
+review_graph = { path = "../review_graph" }
+review_index = { path = "../review_index" }
+review_model.workspace = true
+review_pages = { path = "../review_pages" }
+review_store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+smol.workspace = true
+uuid.workspace = true
+
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+http = "1"
+rmcp = { version = "3.5.1", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "net", "macros"] }
+tokio-util = "0.7"
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+similar.workspace = true
+rmcp = { version = "3.5.1", features = ["client", "transport-streamable-http-client-reqwest"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true
