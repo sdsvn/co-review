@@ -57,7 +57,8 @@ If you download `Co-Review-mac-arm64.zip` yourself instead, open the app with ri
 
 1. Download `Co-Review-win-x64.exe` from the [latest release](https://github.com/sdsvn/co-review/releases/latest) and run it.
    It installs Co-Review for your user only (no admin rights) and puts the `co-review` command on your `PATH`.
-2. Set up your agent: see [Connect your agent](/co-review/docs/guides/connect-your-agent/).
+2. Set up your agent with **Review: Add Co-Review to an Agent Harness (MCP)...** inside the app, or see
+   [Connect your agent](/co-review/docs/guides/connect-your-agent/).
 
 ## From source (any OS)
 

@@ -57,7 +57,10 @@ fn liveness(home: &Path) -> Vec<String> {
         .and_then(|server| server.get("url"))
         .and_then(Value::as_str);
     let Some(url) = url else {
-        output.push("Backend: not running (no ~/.co-review/server.json)".to_string());
+        output.push(format!(
+            "Backend: not running (no {})",
+            home.join("server.json").display()
+        ));
         return output;
     };
     let pid = server
@@ -247,6 +250,18 @@ mod tests {
                 "cli     2026-01-01T00:00:03.000Z 2 INFO  mcp: lost Co-Review: gone",
                 "backend 2026-01-01T00:00:04.000Z 1 INFO  later",
             ]
+        );
+    }
+
+    #[test]
+    fn a_backend_not_running_names_the_server_record_of_this_home() {
+        let home = tempfile::tempdir().expect("temporary directory");
+        assert_eq!(
+            liveness(home.path()),
+            vec![format!(
+                "Backend: not running (no {})",
+                home.path().join("server.json").display()
+            )]
         );
     }
 

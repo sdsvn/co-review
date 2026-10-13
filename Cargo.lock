@@ -3398,6 +3398,7 @@ dependencies = [
  "review_agents",
  "review_anchor",
  "review_bundle",
+ "review_cli",
  "review_code",
  "review_github",
  "review_index",

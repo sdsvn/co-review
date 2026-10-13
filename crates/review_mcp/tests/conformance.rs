@@ -342,6 +342,10 @@ static TIME: LazyLock<Regex> =
 static CHANNEL_SYMBOL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(#\d+ on [^\n(]*?) \([^)\n]*\)").unwrap());
 
+/// The directory inline content is written to: named by a hash of the content and, for a diff, of the repository's
+/// path, which is a new scratch directory on every run.
+static INLINE_DIR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/inline/[0-9a-f]{12}").unwrap());
+
 /// Ids and times by order of appearance, scratch paths as `{tmp}`, and what review_syntax will add (symbols) left
 /// out.
 fn normalize(value: &Value, tmp: Option<&str>) -> Value {
@@ -365,6 +369,7 @@ fn normalize_with(value: &Value, tmp: Option<&str>, ids: &mut HashMap<String, St
                 })
                 .into_owned();
             text = TIME.replace_all(&text, "<time>").into_owned();
+            text = INLINE_DIR.replace_all(&text, "/inline/<hash>").into_owned();
             text = CHANNEL_SYMBOL.replace(&text, "$1").into_owned();
             Value::String(text)
         }

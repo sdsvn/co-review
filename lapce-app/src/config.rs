@@ -46,6 +46,11 @@ pub const LOGO: &str = include_str!("../../docs/assets/logo.svg");
 const DEFAULT_SETTINGS: &str = include_str!("../../defaults/settings.toml");
 const DEFAULT_LIGHT_THEME: &str = include_str!("../../defaults/light-theme.toml");
 const DEFAULT_DARK_THEME: &str = include_str!("../../defaults/dark-theme.toml");
+// co-review: Co-Review's own themes, the defaults (desktop-app spec).
+const CO_REVIEW_THEMES: [&str; 2] = [
+    include_str!("../../defaults/co-review-dark-theme.toml"),
+    include_str!("../../defaults/co-review-light-theme.toml"),
+];
 const DEFAULT_ICON_THEME: &str = include_str!("../../defaults/icon-theme.toml");
 
 static DEFAULT_CONFIG: Lazy<config::Config> = Lazy::new(LapceConfig::default_config);
@@ -260,11 +265,20 @@ impl LapceConfig {
     }
 
     fn resolve_theme(&mut self, workspace: &LapceWorkspace) {
+        // co-review: a theme's Dark and Light versions follow the OS appearance (review/theme.rs).
+        let color_theme = crate::review::theme::effective_color_theme(
+            &self.core,
+            &self.available_color_themes,
+        );
+        self.resolve_theme_named(workspace, &color_theme);
+    }
+
+    fn resolve_theme_named(&mut self, workspace: &LapceWorkspace, color_theme: &str) {
         let default_lapce_config = DEFAULT_LAPCE_CONFIG.clone();
 
         let color_theme_config = self
             .available_color_themes
-            .get(&self.core.color_theme.to_lowercase())
+            .get(&color_theme.to_lowercase())
             .map(|(_, config)| config)
             .unwrap_or(&DEFAULT_DARK_THEME_CONFIG);
 
@@ -321,6 +335,12 @@ impl LapceConfig {
         let (name, theme) =
             Self::load_color_theme_from_str(DEFAULT_DARK_THEME).unwrap();
         themes.insert(name.to_lowercase(), (name, theme));
+        // co-review: Co-Review Dark and Light.
+        for source in CO_REVIEW_THEMES {
+            if let Some((name, theme)) = Self::load_color_theme_from_str(source) {
+                themes.insert(name.to_lowercase(), (name, theme));
+            }
+        }
 
         themes
     }
@@ -333,7 +353,8 @@ impl LapceConfig {
     /// Note that this does not save the config.
     pub fn set_color_theme(&mut self, workspace: &LapceWorkspace, theme: &str) {
         self.core.color_theme = theme.to_string();
-        self.resolve_theme(workspace);
+        // co-review: a theme previewed in the palette shows as it is, whatever the OS appearance.
+        self.resolve_theme_named(workspace, theme);
     }
 
     /// Set the active icon theme.  

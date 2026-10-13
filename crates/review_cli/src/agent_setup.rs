@@ -75,6 +75,40 @@ impl AgentSetup {
         }
     }
 
+    /// The setup the desktop app offers (Install Agent Skills…, Add Co-Review to an Agent Harness…): the files that
+    /// ship with the app whose executable is `app` (its `resources/app`, else the checkout it was built in), and the
+    /// `co-review` command bundled with it, for harnesses while the command is not installed.
+    pub fn for_app(app: &Path) -> Self {
+        let mut setup = Self::new();
+        // A packaged app's `resources/app`, else the checkout `app` was built in (`target/<profile>/`).
+        let checkout = app
+            .ancestors()
+            .skip(1)
+            .take(5)
+            .find(|candidate| candidate.join("crates/review_cli/Cargo.toml").is_file())
+            .map(Path::to_path_buf);
+        let distribution = installation::resources_of(app)
+            .or(checkout)
+            .or(setup.distribution);
+        let name = if cfg!(windows) { "co-review.exe" } else { SERVER };
+        let beside = app.parent().map(|directory| directory.join(name));
+        setup.executable = distribution
+            .as_ref()
+            .map(|distribution| distribution.join("bin").join(name))
+            .filter(|command| command.is_file())
+            .or(beside.filter(|command| command.is_file()))
+            .unwrap_or_else(|| PathBuf::from(SERVER));
+        setup.distribution = distribution;
+        setup
+    }
+
+    /// Whether setting up `harness_id` needs the `co-review` command on PATH, and it isn't installed: the Claude Code
+    /// plugin's MCP server and the Pi / Oh My Pi extensions launch `co-review` from PATH.
+    pub fn needs_command(&self, harness_id: &str) -> bool {
+        self.installed_command().is_none()
+            && matches!(harness_id, "claude-code-plugin" | "pi" | "omp")
+    }
+
     fn bundled(&self, relative: &str) -> Option<PathBuf> {
         let path = self.distribution.as_ref()?.join(relative);
         path.exists().then_some(path)
@@ -99,6 +133,9 @@ impl AgentSetup {
 
     /// Installs the `co-review` commands (`bin/install-cli.sh`: /usr/local/bin when writable, else ~/.local/bin).
     pub fn install_command(&self) -> Result<String> {
+        if cfg!(windows) {
+            bail!("the Windows installer puts co-review on your PATH; reinstall Co-Review to restore it");
+        }
         let script = self
             .bundled("bin/install-cli.sh")
             .context("install-cli.sh is not bundled with this build.")?;
@@ -429,11 +466,12 @@ impl AgentSetup {
             } else {
                 ""
             };
+            let backup = backup_of(file, &existing)?;
             std::fs::write(
                 file,
                 format!("{existing}{separator}\n{}\n", harness.snippet),
             )?;
-            return Ok(format!("Added to {}.", file.display()));
+            return Ok(added_to(file, backup.as_deref()));
         }
         let HarnessKind::Json { key } = &harness.kind else {
             bail!(
@@ -463,26 +501,33 @@ impl AgentSetup {
         };
         servers.insert(SERVER.to_string(), entry);
         config.insert(key.clone(), Value::Object(servers));
-        let backup = PathBuf::from(format!("{}.co-review.bak", file.display()));
-        if !existing.is_empty() {
-            std::fs::write(&backup, &existing)?;
-        }
+        let backup = backup_of(file, &existing)?;
         std::fs::write(
             file,
             serde_json::to_string_pretty(&Value::Object(config))? + "\n",
         )?;
-        if existing.is_empty() {
-            Ok(format!("Added to {}.", file.display()))
-        } else {
-            let name = backup
-                .file_name()
-                .map(|name| name.to_string_lossy().to_string())
-                .unwrap_or_default();
-            Ok(format!(
-                "Added to {} (previous version saved as {name}).",
-                file.display()
-            ))
-        }
+        Ok(added_to(file, backup.as_deref()))
+    }
+}
+
+/// Keeps `existing` (a config's contents before Co-Review edits it) as `<file>.co-review.bak`; nothing for a new file.
+fn backup_of(file: &Path, existing: &str) -> Result<Option<PathBuf>> {
+    if existing.is_empty() {
+        return Ok(None);
+    }
+    let backup = PathBuf::from(format!("{}.co-review.bak", file.display()));
+    std::fs::write(&backup, existing)?;
+    Ok(Some(backup))
+}
+
+fn added_to(file: &Path, backup: Option<&Path>) -> String {
+    match backup.and_then(Path::file_name) {
+        Some(name) => format!(
+            "Added to {} (previous version saved as {}).",
+            file.display(),
+            name.to_string_lossy()
+        ),
+        None => format!("Added to {}.", file.display()),
     }
 }
 
@@ -612,6 +657,52 @@ mod tests {
         );
         let text = fs::read_to_string(home.path().join(".codex/config.toml")).expect("read");
         assert_eq!(text.matches("[mcp_servers.co-review]").count(), 1);
+    }
+
+    #[test]
+    fn toml_configs_are_backed_up() {
+        let home = tempfile::tempdir().expect("temporary directory");
+        let file = home.path().join(".codex/config.toml");
+        fs::create_dir_all(file.parent().expect("parent")).expect("directory");
+        fs::write(&file, "model = \"o3\"").expect("write");
+        let result = setup(home.path()).apply("codex").expect("apply");
+        assert!(
+            result.ends_with("(previous version saved as config.toml.co-review.bak)."),
+            "{result}"
+        );
+        let text = fs::read_to_string(&file).expect("read");
+        assert!(text.starts_with("model = \"o3\"\n\n[mcp_servers.co-review]"), "{text}");
+        assert_eq!(
+            fs::read_to_string(home.path().join(".codex/config.toml.co-review.bak")).expect("backup"),
+            "model = \"o3\""
+        );
+    }
+
+    #[test]
+    fn plugin_and_packages_need_the_command() {
+        let home = tempfile::tempdir().expect("temporary directory");
+        let setup = setup(home.path());
+        assert!(setup.needs_command("claude-code-plugin"));
+        assert!(setup.needs_command("omp"));
+        assert!(!setup.needs_command("codex"));
+        fs::create_dir_all(home.path().join("bin")).expect("directory");
+        fs::write(home.path().join("bin/co-review"), "").expect("write");
+        assert!(!setup.needs_command("claude-code-plugin"));
+    }
+
+    #[test]
+    fn the_app_launches_its_bundled_command() {
+        let root = tempfile::tempdir().expect("temporary directory");
+        let resources = root.path().join("Co-Review.app/Contents/Resources/app");
+        fs::create_dir_all(resources.join("bin")).expect("directory");
+        fs::create_dir_all(resources.join("plugin/skills/co-review")).expect("directory");
+        fs::write(resources.join("version"), "1.0.0").expect("write");
+        fs::write(resources.join("bin/co-review"), "").expect("write");
+        let app = root.path().join("Co-Review.app/Contents/MacOS/Co-Review");
+        let setup = AgentSetup::for_app(&app);
+        assert_eq!(setup.distribution.as_deref(), Some(resources.as_path()));
+        assert_eq!(setup.executable, resources.join("bin/co-review"));
+        assert_eq!(setup.skills_directory(), Some(resources.join("plugin/skills")));
     }
 
     #[test]

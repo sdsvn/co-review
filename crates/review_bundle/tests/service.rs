@@ -212,6 +212,7 @@ fn run(scenario: &Scenario, root: &Path) -> Value {
                         title: title.clone(),
                         store_path: store_path.as_ref().map(|path| case_dir.join(path)),
                         openspec: openspec.as_ref().map(|path| case_dir.join(path)),
+                        repo: None,
                         author: author(),
                     })
                     .unwrap();

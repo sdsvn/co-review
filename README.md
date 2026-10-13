@@ -145,14 +145,15 @@ Codex, Gemini, OpenCode, Goose, Pi or Oh My Pi) with the model you pick. Then se
 
 ## Usage
 
-Open the **Review** panel (its icon in the side bar, or **Review: Toggle Review Panel** in the command palette) and
-start a review: the entire repository, the current file, a branch against its base, or a commit.
+Open the **Review** panel (its icon in the side bar, or `Cmd+Shift+Alt+R`) and pick what to review: the entire
+repository, the current file, a branch against its base, or a commit. Or right-click a file or folder in the explorer →
+**Start Review of Selection**.
 
 | To comment on | Do this |
 |---|---|
 | A line or range | Click **+** in the gutter (drag for a range), or select and press `Cmd+Alt+M` |
-| A symbol | Right-click inside it → **Add Review Comment on Symbol** |
-| A file or folder | Right-click it in the explorer → **Add Review Comment** |
+| A symbol | Right-click inside it → **Review: Add Review Comment on Symbol** (needs the language's plugin) |
+| A file or folder | Right-click it in the explorer → **Comment** |
 | The repository | **⋯** in the Review panel → **Comment on the repository** |
 
 Once an agent is connected, **Ask Agent** appears next to commenting. Reply, resolve and collapse threads inline; the
@@ -175,9 +176,11 @@ panel lists them by file (**Open / Proposed / Resolved / All**), and **⋯** has
 | `Cmd+Alt+↓` / `Cmd+Alt+↑` | Next / previous comment |
 | `Cmd+Alt+O` | Go to comment… |
 | `Cmd+Alt+V` | Mark the file as viewed (or not) |
+| `Cmd+Shift+Alt+R` | Show or hide the Review panel |
 
-Language servers come from Lapce plugins (**Plugins** in the side bar). Configuration variables and themes are covered
-in [Building and running](docs/running-and-packaging.md).
+Language servers come from Lapce plugins (**Plugins** in the side bar). Co-Review ships **Co-Review Dark** and
+**Co-Review Light** themes and follows the OS setting. Configuration variables and themes are covered in
+[Building and running](docs/running-and-packaging.md).
 
 ## Documentation
 

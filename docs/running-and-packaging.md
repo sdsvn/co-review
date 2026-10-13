@@ -116,8 +116,9 @@ Reviews are saved; the next `co-review` call starts the new version.
 ## The `co-review` command
 
 `install.sh` links the command into `/usr/local/bin` when it is writable, otherwise into `~/.local/bin` (set
-`PREFIX=…` to choose). The Windows installer puts its folder on your `PATH`. On macOS, the app's command palette also
-has **Install the co-review Command in PATH**.
+`PREFIX=…` to choose). The Windows installer puts its folder on your `PATH`. Inside the app, **Review: Install the
+co-review Command** in the command palette does the same as `install.sh` (macOS and Linux); on macOS, **Install the
+co-review Command in PATH** links it into `/usr/local/bin` with administrator rights.
 
 - `co-review [dir]` opens `dir` in Co-Review, or focuses its window if it is already open.
 - `co-review mcp [dir]` connects an agent (stdio MCP) to Co-Review, found through `~/.co-review/server.json`.
@@ -145,8 +146,10 @@ origins.
 
 **Environment.** An app opened from Finder, the Dock or a desktop menu gets a minimal environment, without your shell's
 `PATH`. So at startup Co-Review reads your login shell's environment. That way language servers and ACP agents are
-found just as in a terminal. Launched from a terminal (`co-review`, `make run`), the app keeps that terminal's
-environment.
+found just as in a terminal.
+
+- Launched from a terminal (`co-review`, `make run`), the app keeps that terminal's environment.
+- Set `CO_REVIEW_NO_SHELL_ENV=1` to skip reading the shell environment.
 
 Agents launched over ACP inherit the environment of the Co-Review process. So start Co-Review from a shell where the
 agent is logged in and configured.
@@ -161,6 +164,11 @@ language server on your `PATH` (`gopls` for Go, for instance). Tree-sitter synta
 |---|---|---|
 | `CO_REVIEW_HOME` | `~/.co-review` | Review storage, server registry (`server.json`), logs, worktrees |
 | `CO_REVIEW_PORT` | a running Co-Review's, else `3000` | Port of the MCP server for `co-review` / `co-review mcp` when they start Co-Review |
+| `CO_REVIEW_NO_SHELL_ENV` | — | Set to skip reading the login shell's environment at startup |
 
-Themes, fonts and keybindings are Lapce's settings: **Open Settings** and **Change Color Theme** in the command
-palette.
+Co-Review ships **Co-Review Dark** and **Co-Review Light** themes and follows the OS setting: with `follow-os-theme`
+on (**Open Settings** → **Follow Os Theme**, the default), a theme with a Dark and a Light version shows the one
+matching the OS. Choosing a theme that doesn't match the OS with **Change Color Theme** turns following off; turn it
+back on in the settings.
+Themes, fonts and keybindings are Lapce's settings: **Open Settings**, **Change Color Theme** and **Open Keyboard
+Shortcuts** in the command palette.

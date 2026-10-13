@@ -88,6 +88,9 @@ dim-text = "#A0A1A7"
 "bracket.unpaired" = "$red"
 
 [color-theme.ui]
+# co-review: agents' messages, questions and activity in reviews (every theme falls back to the dark one's).
+"review.agent" = "#059669"
+
 "lapce.error" = "#E51400"
 "lapce.warn" = "#E9A700"
 "lapce.dropdown_shadow" = "#B4B4B4"

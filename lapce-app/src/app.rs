@@ -648,6 +648,21 @@ impl AppData {
                     window_size.set(*size);
                 }
             })
+            // co-review: Co-Review Dark and Light follow the OS appearance (review/theme.rs).
+            .on_event_cont(EventListener::ThemeChanged, {
+                let app_data = self.clone();
+                move |event| {
+                    if let Event::ThemeChanged(theme) = event
+                        && crate::review::theme::os_theme_changed(*theme)
+                    {
+                        let app_data = app_data.clone();
+                        floem::action::exec_after(
+                            std::time::Duration::ZERO,
+                            move |_| app_data.reload_config(),
+                        );
+                    }
+                }
+            })
             .on_event_stop(EventListener::WindowMoved, move |event| {
                 if let Event::WindowMoved(point) = event {
                     position.set(*point);
@@ -3841,7 +3856,10 @@ pub fn launch() {
     }
 
     let stdin = std::io::stdin();
-    if !stdin.is_terminal() {
+    // co-review: CO_REVIEW_NO_SHELL_ENV skips the login shell's environment (as the Theia app did).
+    if !stdin.is_terminal()
+        && std::env::var_os("CO_REVIEW_NO_SHELL_ENV").is_none_or(|value| value.is_empty())
+    {
         trace!(TraceLevel::INFO, "Loading custom environment from shell");
         load_shell_env();
     }

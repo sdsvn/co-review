@@ -1220,6 +1220,133 @@ pub fn comment_on_selection(window_tab: &WindowTabData, intent: ThreadIntent) {
     }
 }
 
+/// **Add Review Comment on Symbol**: a draft on the innermost symbol around the cursor, as the language server lists
+/// the file's symbols (its whole range; anchored by its declaration line).
+pub fn comment_on_symbol(window_tab: &WindowTabData) {
+    let Some(editor) = window_tab.main_split.active_editor.get_untracked() else {
+        return;
+    };
+    let doc = editor.doc();
+    let Some(path) = doc_path(&doc) else {
+        return;
+    };
+    let offset = editor.cursor().with_untracked(|cursor| cursor.offset());
+    let line = doc.buffer.with_untracked(|buffer| buffer.line_of_offset(offset)) as u32;
+    let tab = super::commands::ReviewTab::of(window_tab);
+    let window_tab = Rc::new(window_tab.clone());
+    let uri = file_uri(&path);
+    let proxy = window_tab.common.proxy.clone();
+    let send = floem::ext_event::create_ext_action(window_tab.scope, move |result| {
+        let symbols = match result {
+            Ok(lapce_rpc::proxy::ProxyResponse::GetDocumentSymbols { resp }) => resp,
+            _ => lsp_types::DocumentSymbolResponse::Nested(Vec::new()),
+        };
+        let Some(symbol) = enclosing_symbol(&symbols, line) else {
+            tab.info("No symbol found at the cursor. Language support may still be starting (or the language has no plugin).");
+            return;
+        };
+        let declaration = symbol.selection_range.start.line as usize;
+        let anchor = doc.buffer.with_untracked(|buffer| {
+            (declaration <= buffer.last_line())
+                .then(|| buffer.line_content(declaration).trim_end_matches(['\n', '\r']).to_string())
+        });
+        let location = CodeLocation {
+            kind: LocationKind::Symbol,
+            uri: Some(uri),
+            range: Some(Range {
+                start: Position { line: symbol.range.start.line, character: symbol.range.start.character },
+                end: Position { line: symbol.range.end.line, character: symbol.range.end.character },
+            }),
+            symbol: Some(symbol.path),
+            anchor: anchor.map(|text| CodeAnchor { text, before: None, after: None, syntax: None }),
+            doc_anchor: None,
+            patch_anchor: None,
+            tracked: None,
+            extra: Default::default(),
+        };
+        start_draft(&window_tab, location, ThreadIntent::Comment);
+    });
+    proxy.get_document_symbols(path, send);
+}
+
+/// A symbol around a line, with its dotted path (`OrderService.create`).
+#[derive(Debug, PartialEq)]
+pub struct EnclosingSymbol {
+    pub path: String,
+    pub range: lsp_types::Range,
+    pub selection_range: lsp_types::Range,
+}
+
+/// The innermost symbol whose range contains `line` (0-based). Locals, constants and literals are not part of a
+/// symbol path and are never the symbol (as in the TypeScript `findEnclosing`).
+pub fn enclosing_symbol(
+    symbols: &lsp_types::DocumentSymbolResponse,
+    line: u32,
+) -> Option<EnclosingSymbol> {
+    use lsp_types::{DocumentSymbolResponse, SymbolKind};
+    let ignored = |kind: SymbolKind| {
+        [
+            SymbolKind::VARIABLE,
+            SymbolKind::CONSTANT,
+            SymbolKind::STRING,
+            SymbolKind::NUMBER,
+            SymbolKind::BOOLEAN,
+            SymbolKind::ARRAY,
+            SymbolKind::OBJECT,
+            SymbolKind::KEY,
+            SymbolKind::NULL,
+            SymbolKind::TYPE_PARAMETER,
+        ]
+        .contains(&kind)
+    };
+    let contains = |range: &lsp_types::Range| range.start.line <= line && line <= range.end.line;
+    fn nested(
+        symbols: &[lsp_types::DocumentSymbol],
+        parents: &[String],
+        contains: &dyn Fn(&lsp_types::Range) -> bool,
+        ignored: &dyn Fn(SymbolKind) -> bool,
+    ) -> Option<EnclosingSymbol> {
+        for symbol in symbols.iter().filter(|symbol| contains(&symbol.range)) {
+            let skip = ignored(symbol.kind);
+            let mut path = parents.to_vec();
+            if !skip {
+                path.push(symbol.name.clone());
+            }
+            let children = symbol.children.as_deref().unwrap_or_default();
+            if let Some(child) = nested(children, &path, contains, ignored) {
+                return Some(child);
+            }
+            if !skip {
+                return Some(EnclosingSymbol {
+                    path: path.join("."),
+                    range: symbol.range,
+                    selection_range: symbol.selection_range,
+                });
+            }
+        }
+        None
+    }
+    match symbols {
+        DocumentSymbolResponse::Nested(symbols) => nested(symbols, &[], &contains, &ignored),
+        // A flat list: the smallest symbol around the line, under its container.
+        DocumentSymbolResponse::Flat(symbols) => symbols
+            .iter()
+            .filter(|symbol| !ignored(symbol.kind) && contains(&symbol.location.range))
+            .min_by_key(|symbol| {
+                let range = symbol.location.range;
+                (range.end.line.saturating_sub(range.start.line), u32::MAX - range.start.line)
+            })
+            .map(|symbol| EnclosingSymbol {
+                path: match &symbol.container_name {
+                    Some(container) if !container.is_empty() => format!("{container}.{}", symbol.name),
+                    _ => symbol.name.clone(),
+                },
+                range: symbol.location.range,
+                selection_range: symbol.location.range,
+            }),
+    }
+}
+
 /// **Comment on File / Folder** from the file explorer: a draft in the Review panel (a file opens in the editor
 /// too). The workspace folder itself is a comment on the repository.
 pub fn comment_on_path(window_tab: &WindowTabData, path: &Path, intent: ThreadIntent) {
@@ -1332,6 +1459,49 @@ pub fn unfold(window_tab: &WindowTabData, thread_id: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[allow(deprecated)]
+    fn symbol(
+        name: &str,
+        kind: lsp_types::SymbolKind,
+        lines: (u32, u32),
+        children: Vec<lsp_types::DocumentSymbol>,
+    ) -> lsp_types::DocumentSymbol {
+        let range = lsp_types::Range {
+            start: lsp_types::Position { line: lines.0, character: 0 },
+            end: lsp_types::Position { line: lines.1, character: 1 },
+        };
+        lsp_types::DocumentSymbol {
+            name: name.to_string(),
+            detail: None,
+            kind,
+            tags: None,
+            deprecated: None,
+            range,
+            selection_range: range,
+            children: Some(children),
+        }
+    }
+
+    #[test]
+    fn the_innermost_symbol_is_commented_on() {
+        use lsp_types::SymbolKind;
+        let symbols = lsp_types::DocumentSymbolResponse::Nested(vec![symbol(
+            "OrderService",
+            SymbolKind::CLASS,
+            (0, 20),
+            vec![symbol(
+                "create",
+                SymbolKind::METHOD,
+                (2, 10),
+                vec![symbol("total", SymbolKind::VARIABLE, (4, 4), Vec::new())],
+            )],
+        )]);
+        let found = |line| enclosing_symbol(&symbols, line).map(|symbol| symbol.path);
+        assert_eq!(found(4).as_deref(), Some("OrderService.create"));
+        assert_eq!(found(15).as_deref(), Some("OrderService"));
+        assert_eq!(found(30), None);
+    }
 
     fn job(start: Start) -> Job {
         Job {

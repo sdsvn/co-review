@@ -336,3 +336,8 @@ command = "review.go_to_comment"
 [[keymaps]]
 key = "ctrl+alt+v"
 command = "review.toggle_viewed"
+
+# co-review: show or hide the Review panel (review-panel).
+[[keymaps]]
+key = "ctrl+alt+shift+r"
+command = "review.toggle_panel"

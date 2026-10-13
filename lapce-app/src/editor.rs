@@ -2950,6 +2950,14 @@ impl EditorData {
                     Some(CommandKind::Workbench(
                         LapceWorkbenchCommand::RunInTerminal,
                     )),
+                    // co-review: starting a thread on the selection or the symbol at the cursor (inline-review).
+                    None,
+                    Some(CommandKind::Workbench(
+                        LapceWorkbenchCommand::ReviewComment,
+                    )),
+                    Some(CommandKind::Workbench(
+                        LapceWorkbenchCommand::ReviewCommentSymbol,
+                    )),
                     None,
                     Some(CommandKind::Workbench(
                         LapceWorkbenchCommand::RevealInPanel,

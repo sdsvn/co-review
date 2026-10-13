@@ -261,10 +261,20 @@ fn empty_state(window_tab_data: Rc<WindowTabData>) -> impl View {
         text_button(
             "Start a Review".to_string(),
             true,
-            move || commands::new_review(&tab),
+            {
+                let tab = tab.clone();
+                move || commands::new_review(&tab)
+            },
             config,
         )
-        .style(move |s| s.apply_if(!has_root, |s| s.hide())),
+        .style(move |s| s.margin_bottom(12.0).apply_if(!has_root, |s| s.hide())),
+        text("Want Claude Code, Pi, Oh My Pi or another agent to answer your questions and open reviews of its own work?"),
+        text_button(
+            "Connect an Agent".to_string(),
+            false,
+            move || super::setup::add_to_harness(&tab),
+            config,
+        ),
     ))
     .style(|s| s.flex_col().padding(10.0).width_full())
 }

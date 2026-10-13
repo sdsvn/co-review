@@ -332,6 +332,17 @@ impl Bridge {
             .and_then(Value::as_str)
             .map(str::to_string);
         let id = message.get("id").cloned();
+        // Newer clients (Claude Code 2.1) first probe for the stateless protocol with `server/discover`, and fall
+        // back to `initialize` on "method not found". This bridge speaks the classic protocol: say so here, so the
+        // probe neither starts Co-Review nor reaches it (it would refuse the probe, and the bridge take that for
+        // Co-Review being gone).
+        if method.as_deref() == Some("server/discover") {
+            if let Some(id) = id {
+                self.send(&json!({ "jsonrpc": "2.0", "id": id,
+                    "error": { "code": -32601, "message": "Method not found: server/discover" } }));
+            }
+            return;
+        }
         let handshake = method.as_deref() == Some("initialize");
         let mut state = self.state();
         if handshake {

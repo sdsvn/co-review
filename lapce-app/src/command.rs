@@ -684,6 +684,24 @@ pub enum LapceWorkbenchCommand {
     #[strum(message = "Review: Add Repository Comment")]
     ReviewCommentRepository,
 
+    // co-review: a review of the file or folder selected in the explorer (else the active file), and in-app setup
+    // (cli spec, "In-app setup").
+    #[strum(serialize = "review.start_on_selection")]
+    #[strum(message = "Review: Start Review of Selection")]
+    ReviewStartOnSelection,
+
+    #[strum(serialize = "review.install_skills")]
+    #[strum(message = "Review: Install Agent Skills…")]
+    ReviewInstallSkills,
+
+    #[strum(serialize = "review.install_command")]
+    #[strum(message = "Review: Install the co-review Command")]
+    ReviewInstallCommand,
+
+    #[strum(serialize = "review.setup_harness")]
+    #[strum(message = "Review: Add Co-Review to an Agent Harness (MCP)…")]
+    ReviewSetupHarness,
+
     // co-review: starting threads, moving between them and folding them in the editor (inline-review).
     #[strum(serialize = "review.comment")]
     #[strum(message = "Review: Comment")]
@@ -692,6 +710,10 @@ pub enum LapceWorkbenchCommand {
     #[strum(serialize = "review.ask_agent")]
     #[strum(message = "Review: Ask Agent")]
     ReviewAskAgent,
+
+    #[strum(serialize = "review.comment_symbol")]
+    #[strum(message = "Review: Add Review Comment on Symbol")]
+    ReviewCommentSymbol,
 
     #[strum(serialize = "review.next_comment")]
     #[strum(message = "Review: Next Comment")]
@@ -717,6 +739,10 @@ pub enum InternalCommand {
     ReviewCommentOnPath {
         path: PathBuf,
         ask: bool,
+    },
+    // co-review: Start Review of Selection, from the file explorer.
+    ReviewStartOnPath {
+        path: PathBuf,
     },
     OpenFile {
         path: PathBuf,

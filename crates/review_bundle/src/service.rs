@@ -51,6 +51,8 @@ pub struct OpenBundleParams {
     pub store_path: Option<PathBuf>,
     /// OpenSpec change directory (…/changes/<id>); `<dir>/openspec` is picked up automatically.
     pub openspec: Option<PathBuf>,
+    /// The repository inline content is a diff of: the same diff of two repositories is two reviews.
+    pub repo: Option<PathBuf>,
     pub author: Participant,
 }
 
@@ -64,6 +66,7 @@ impl OpenBundleParams {
             title: None,
             store_path: None,
             openspec: None,
+            repo: None,
             author,
         }
     }
@@ -228,15 +231,17 @@ impl BundleService {
         })
     }
 
-    /// Writes inline content to `<home>/inline/<hash>/`: the same content, the same directory
-    /// (and so the same review).
+    /// Writes inline content to `<home>/inline/<hash>/`: the same content (of the same repository, for a diff), the
+    /// same directory (and so the same review).
     fn write_inline(&self, params: &OpenBundleParams) -> Result<PathBuf> {
         let markdown = params.markdown.as_deref().unwrap_or("");
         let patch = params.patch.as_deref().unwrap_or("");
-        let hash = format!(
-            "{:x}",
-            Sha256::digest(format!("{markdown}\0{patch}").as_bytes())
-        );
+        let mut key = format!("{markdown}\0{patch}");
+        if let Some(repo) = &params.repo {
+            key.push('\0');
+            key.push_str(&repo.to_string_lossy());
+        }
+        let hash = format!("{:x}", Sha256::digest(key.as_bytes()));
         let dir = self.shared.home.join("inline").join(&hash[..12]);
         fs::create_dir_all(&dir)
             .with_context(|| format!("creating inline directory {}", dir.display()))?;

@@ -637,6 +637,39 @@ fn the_handshake_is_answered_without_co_review_which_starts_in_the_background_on
 }
 
 #[test]
+fn a_stateless_discovery_probe_is_refused_as_unknown_without_starting_co_review() {
+    let home = home();
+    // A handshake from an earlier session: the bridge starts nothing until it must.
+    fs::write(
+        home.path().join("mcp-handshake.json"),
+        json!({ "initialize": { "protocolVersion": "2025-11-25", "capabilities": {} }, "tools": tool_list() })
+            .to_string(),
+    )
+    .expect("handshake");
+    let app = home.path().join("app.sh");
+    fs::write(&app, "#!/bin/sh\necho \"$@\" > \"$CO_REVIEW_HOME/started\"\n").expect("app");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&app, fs::Permissions::from_mode(0o755)).expect("executable");
+    }
+    let app = app.display().to_string();
+    let mut agent = Agent::start(home.path(), &[&here()], &[("CO_REVIEW_APP", &app)]);
+    // As Claude Code 2.1 sends it, before `initialize`.
+    agent.write(&json!({ "jsonrpc": "2.0", "id": "server-discover-probe-1", "method": "server/discover",
+        "params": { "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } } }));
+    let reply = agent.wait_for("the probe's answer", |message| {
+        message.get("id") == Some(&json!("server-discover-probe-1"))
+    });
+    assert_eq!(reply["error"]["code"], json!(-32601), "{reply}");
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(
+        !home.path().join("started").exists(),
+        "Co-Review is not started by the probe"
+    );
+}
+
+#[test]
 fn without_a_cached_handshake_or_any_co_review_the_agent_is_told_it_is_not_reachable() {
     let home = home();
     let mut agent = Agent::start(home.path(), &["--port", "1", &here()], &[]);

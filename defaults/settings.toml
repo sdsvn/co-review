@@ -2,7 +2,9 @@
 
 [core]
 modal = false
-color-theme = "Lapce Dark"
+# co-review: Co-Review's own theme, its Dark and Light versions following the OS.
+color-theme = "Co-Review Dark"
+follow-os-theme = true
 icon-theme = "Lapce Codicons"
 custom-titlebar = true
 file-explorer-double-click = false

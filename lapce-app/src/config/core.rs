@@ -22,4 +22,9 @@ pub struct CoreConfig {
         desc = "Enable auto-reload for the plugin when its configuration changes."
     )]
     pub auto_reload_plugin: bool,
+    // co-review: Co-Review Dark and Light follow the OS (desktop-app spec).
+    #[field_names(
+        desc = "Switch between a color theme's Dark and Light versions (such as Co-Review Dark and Co-Review Light) with the OS appearance"
+    )]
+    pub follow_os_theme: bool,
 }

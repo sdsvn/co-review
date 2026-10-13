@@ -447,6 +447,7 @@ impl CoReviewer {
                 title: arguments.title.clone(),
                 store_path: arguments.store_path.clone().map(PathBuf::from),
                 openspec: arguments.openspec.clone().map(PathBuf::from),
+                repo: change.as_ref().map(|(repo, _)| PathBuf::from(repo)),
                 author: agent.clone(),
             };
             let opened = tokio::task::spawn_blocking(move || bundles.open(request)).await;

@@ -18,8 +18,8 @@ Check with `which co-review`.
 
 - If you installed with `install.sh`, or with the Windows installer, it's already there.
 - If you built from source, run `make install-cli`.
-- Or, on macOS, open the command palette in Co-Review (`Cmd+Shift+P`) and run **Install the co-review Command in
-  PATH**.
+- Or, inside Co-Review, open the command palette (`Cmd/Ctrl+Shift+P`) and run **Review: Install the co-review
+  Command** (macOS and Linux).
 
 ## Claude Code
 

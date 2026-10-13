@@ -148,6 +148,23 @@ pub fn run(window_tab: &WindowTabData, command: &LapceWorkbenchCommand) {
             }
         }
         ReviewCommentRepository => comment_on_repository(window_tab),
+        ReviewStartOnSelection => {
+            let selected = match window_tab.file_explorer.select.get_untracked() {
+                Some(lapce_rpc::file::FileNodeViewKind::Path(path)) => Some(path),
+                _ => tab
+                    .main_split
+                    .active_editor
+                    .get_untracked()
+                    .and_then(|editor| editor.doc().content.get_untracked().path().cloned()),
+            };
+            match selected {
+                Some(path) => review_paths(&tab, vec![path]),
+                None => tab.info("Select a file or folder in the explorer, or open a file, to review it."),
+            }
+        }
+        ReviewInstallSkills => super::setup::install_skills(&tab),
+        ReviewInstallCommand => super::setup::install_command(&tab, |_| {}),
+        ReviewSetupHarness => super::setup::add_to_harness(&tab),
         _ => {}
     }
 }
@@ -171,6 +188,35 @@ pub fn new_review(tab: &ReviewTab) {
         move || git_info(&git_root),
         move |git| pick_scope(&tab_then, root, current_file, git),
     );
+}
+
+/// **Start Review of Selection**: a review of these files and folders (the repository's own folder: of the whole
+/// repository), after its title.
+pub fn review_paths(tab: &ReviewTab, paths: Vec<PathBuf>) {
+    let Some(root) = tab.review.root.clone() else {
+        tab.info("Open a repository folder before starting a review.");
+        return;
+    };
+    let paths: Vec<(PathBuf, String)> = paths
+        .into_iter()
+        .filter_map(|path| Some((tab.review.relative_path(&path)?, path)))
+        .map(|(relative, path)| (path, relative))
+        .collect();
+    if paths.is_empty() {
+        tab.info("Only files and folders of this repository can be reviewed here.");
+        return;
+    }
+    let scope = if paths.iter().any(|(_, relative)| relative.is_empty()) {
+        ReviewScope::Repository
+    } else {
+        ReviewScope::Paths {
+            uris: paths
+                .iter()
+                .map(|(path, _)| review_store::path_to_file_uri(&path.to_string_lossy()))
+                .collect(),
+        }
+    };
+    ask_title(tab, &root, scope);
 }
 
 /// The repository's branches and current branch; `None` outside a git repository.
@@ -574,6 +620,11 @@ fn actions_menu(
             LapceWorkbenchCommand::ReviewChooseAgentModel,
         ));
     }
+    choices.push(action(
+        "Add Co-Review to an agent harness (MCP)…",
+        LapceWorkbenchCommand::ReviewSetupHarness,
+    ));
+    choices.push(action("Install agent skills…", LapceWorkbenchCommand::ReviewInstallSkills));
     choices.push(action("New review…", LapceWorkbenchCommand::ReviewNew));
     choices.push(action("Rename review…", LapceWorkbenchCommand::ReviewRename));
     choices.push(action("Archive review", LapceWorkbenchCommand::ReviewArchive));

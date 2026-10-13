@@ -8,12 +8,14 @@ sidebar:
 ## Start a review
 
 The Review panel is where every review begins.
-Open it from its icon in the side bar, or with **Review: Toggle Review Panel** in the command palette, then pick what to review:
+Open it from its icon in the side bar or with `Cmd+Shift+Alt+R`, then pick what to review:
 
 - the **entire repository**
 - the **current file**
 - a **branch** against its base
 - a **commit**
+
+You can also right-click a file or folder in the explorer and choose **Start Review of Selection**.
 
 When Claude Code opens a review, it appears on its own.
 
@@ -25,8 +27,8 @@ Each target has its own gesture:
 |---|---|
 | A line | Hover it and click **+** in the gutter |
 | Several lines | Drag the **+**, or select them and press `Cmd+Alt+M` |
-| A symbol | Right-click inside it then **Add Review Comment on Symbol** |
-| A file or folder | Right-click it in the explorer then **Add Review Comment** |
+| A symbol | Right-click inside it then **Review: Add Review Comment on Symbol** (needs the language's plugin) |
+| A file or folder | Right-click it in the explorer then **Comment** |
 | The repository | **...** in the Review panel then **Comment on the repository** |
 
 Until an agent joins the review, everything is a plain comment.
@@ -91,3 +93,4 @@ The dropdown at the top of the panel switches between reviews. When one is done,
 | `Cmd+Alt+Down` / `Cmd+Alt+Up` | Next / previous comment |
 | `Cmd+Alt+O` | Go to comment... |
 | `Cmd+Alt+V` | Mark the file as viewed (or not) |
+| `Cmd+Shift+Alt+R` | Show or hide the Review panel |

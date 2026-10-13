@@ -329,3 +329,44 @@ async fn closing_the_mcp_session_gives_its_threads_back() {
     }
     panic!("the thread stayed with the closed session");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_same_change_in_two_repositories_is_two_reviews() {
+    let scratch = tempfile::tempdir().unwrap();
+    let store = Arc::new(ReviewStore::with_home(scratch.path().join("home")));
+    let coreviewer = Arc::new(CoReviewer::new(
+        Services::headless(Arc::clone(&store)),
+        None,
+    ));
+    let mut opened = Vec::new();
+    for name in ["one", "two"] {
+        let repo = repository(&scratch.path().join(name));
+        let git = |arguments: &[&str]| {
+            let status = std::process::Command::new("git")
+                .args(arguments)
+                .current_dir(&repo)
+                .status()
+                .unwrap();
+            assert!(status.success());
+        };
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "init"]);
+        std::fs::write(
+            Path::new(&repo).join("src/lib.rs"),
+            "pub fn add(a: i32, b: i32) -> i32 {\n    a.wrapping_add(b)\n}\n",
+        )
+        .unwrap();
+        let session = session(&coreviewer, &repo);
+        let review = call(
+            &session,
+            "open_review",
+            json!({ "diff": "HEAD", "patchName": "change", "open": false }),
+        )
+        .await;
+        let id = review["reviewId"].as_str().unwrap().to_string();
+        let bundle = store.get(&id).unwrap().bundle.unwrap();
+        assert_eq!(bundle.repo.as_deref(), Some(repo.as_str()));
+        opened.push(id);
+    }
+    assert_ne!(opened[0], opened[1], "each repository's change has its own review");
+}

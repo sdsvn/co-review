@@ -689,7 +689,7 @@ impl FileExplorerData {
             ))
         }
 
-        // co-review: comments on a file, a folder or the repository (inline-review).
+        // co-review: comments on a file, a folder or the repository (inline-review), and a review of it.
         menu = menu.separator();
         for (title, ask) in [("Comment", false), ("Ask Agent", true)] {
             let (internal_command, path) = (common.internal_command, path_a.clone());
@@ -700,6 +700,10 @@ impl FileExplorerData {
                 });
             }));
         }
+        let (internal_command, path) = (common.internal_command, path_a.clone());
+        menu = menu.entry(MenuItem::new("Start Review of Selection").action(move || {
+            internal_command.send(InternalCommand::ReviewStartOnPath { path: path.clone() });
+        }));
 
         menu = menu.separator();
 

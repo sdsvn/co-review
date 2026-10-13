@@ -1652,7 +1652,9 @@ impl WindowTabData {
             ReviewNew | ReviewSwitch | ReviewRename | ReviewDelete
             | ReviewArchive | ReviewShowArchived | ReviewActions
             | ReviewGoToComment | ReviewToggleViewed | ReviewConnectAgent
-            | ReviewChooseAgentModel | ReviewSubmit | ReviewCommentRepository => {
+            | ReviewChooseAgentModel | ReviewSubmit | ReviewCommentRepository
+            | ReviewStartOnSelection | ReviewInstallSkills | ReviewInstallCommand
+            | ReviewSetupHarness => {
                 crate::review::commands::run(self, &cmd);
             }
             // co-review: threads in the editor (inline-review).
@@ -1664,6 +1666,7 @@ impl WindowTabData {
                 self,
                 review_model::ThreadIntent::Question,
             ),
+            ReviewCommentSymbol => crate::review::inline::comment_on_symbol(self),
             ReviewNextComment => crate::review::inline::go_to_next_thread(self, true),
             ReviewPreviousComment => {
                 crate::review::inline::go_to_next_thread(self, false)
@@ -1753,6 +1756,13 @@ impl WindowTabData {
                     review_model::ThreadIntent::Comment
                 };
                 crate::review::inline::comment_on_path(self, &path, intent);
+            }
+            // co-review: Start Review of Selection, from the file explorer.
+            InternalCommand::ReviewStartOnPath { path } => {
+                crate::review::commands::review_paths(
+                    &crate::review::commands::ReviewTab::of(self),
+                    vec![path],
+                );
             }
             InternalCommand::TestPathCreation { new_path } => {
                 let naming = self.file_explorer.naming;
@@ -2035,6 +2045,11 @@ impl WindowTabData {
             }
             InternalCommand::SetColorTheme { name, save } => {
                 if save {
+                    // co-review: a theme chosen against the OS appearance stops following it.
+                    crate::review::theme::theme_chosen(
+                        &name,
+                        &self.common.config.get_untracked(),
+                    );
                     // The config file is watched
                     LapceConfig::update_file(
                         "core",

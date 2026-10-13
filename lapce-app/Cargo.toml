@@ -66,6 +66,8 @@ percent-encoding = { version = "2.3.1" }
 # co-review: the review core and MCP server run in the app process (design.md, decision 4).
 review_agents = { path = "../crates/review_agents" }
 review_anchor = { workspace = true }
+# co-review: in-app setup (Install Agent Skills…, Add Co-Review to an Agent Harness…) uses the command's agent_setup.
+review_cli    = { path = "../crates/review_cli" }
 review_bundle = { workspace = true }
 review_code   = { workspace = true }
 review_github = { workspace = true }

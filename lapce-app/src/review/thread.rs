@@ -485,11 +485,24 @@ fn message_view(window_tab_data: Rc<WindowTabData>, message: ReviewMessage) -> i
     };
     let author = message.author.name.clone();
     let time = format_time(message.created_at);
+    // Agents' messages are marked in the agent colour (the themes' `review.agent`).
+    let agent = message.author.kind == ParticipantKind::Agent;
+    let marked = move |dim: bool| {
+        let config = config.get();
+        if agent {
+            config.color(super::theme::AGENT_COLOR)
+        } else if dim {
+            config.color(LapceColor::EDITOR_DIM)
+        } else {
+            config.color(LapceColor::EDITOR_FOREGROUND)
+        }
+    };
     let meta = h_stack((
-        label(move || author.clone()).style(|s| s.font_bold().margin_right(6.0)),
+        label(move || author.clone())
+            .style(move |s| s.font_bold().margin_right(6.0).color(marked(false))),
         label(move || role).style(move |s| {
             s.margin_right(6.0)
-                .color(config.get().color(LapceColor::EDITOR_DIM))
+                .color(marked(true))
                 .apply_if(role.is_empty(), |s| s.hide())
         }),
         label(move || state).style(move |s| {
