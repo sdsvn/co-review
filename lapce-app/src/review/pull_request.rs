@@ -1547,7 +1547,7 @@ fn code_row(page: Page, patch: usize, file: Rc<PatchFile>, index: usize, comment
                 let path = hover_path.clone();
                 let timer = page.hover_timer;
                 let token = exec_after(Duration::from_millis(600), move |token| {
-                    if timer.get_untracked() != token {
+                    if timer.try_get_untracked() != Some(token) {
                         return;
                     }
                     let Some(review) = page.review_untracked() else {

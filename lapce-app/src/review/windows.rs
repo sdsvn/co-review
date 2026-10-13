@@ -7,6 +7,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, mpsc},
+    time::{Duration, Instant},
 };
 
 use floem::{
@@ -36,6 +37,8 @@ pub enum WindowRequest {
         message: String,
         workspace_root: Option<String>,
     },
+    /// Another agent session uses a review of `workspace` (resolved) while its window counts down: it stays open.
+    Rejoined { workspace: PathBuf },
 }
 
 /// Called on the MCP server's threads: forwards each request to the UI thread.
@@ -46,6 +49,9 @@ pub(super) struct AppWindows {
     background: bool,
     /// Workspace (file URI) → the agent sessions that showed its window, in a background start.
     shown_by: Mutex<HashMap<String, HashSet<String>>>,
+    /// Workspace (file URI) → the session that was done with its window last, and when: the window counts down to
+    /// closing, unless another session rejoins it ([`ReviewWindows::joined`]).
+    ending: Mutex<HashMap<String, (String, Instant)>>,
 }
 
 impl AppWindows {
@@ -59,6 +65,7 @@ impl AppWindows {
             store,
             background,
             shown_by: Mutex::default(),
+            ending: Mutex::default(),
         }
     }
 
@@ -74,11 +81,9 @@ impl AppWindows {
 impl ReviewWindows for AppWindows {
     fn show(&self, review_id: &str, workspace: &Path, session_id: &str) -> String {
         if self.background {
-            self.shown_by
-                .lock()
-                .entry(workspace_key(workspace))
-                .or_default()
-                .insert(session_id.to_string());
+            let key = workspace_key(workspace);
+            self.ending.lock().remove(&key);
+            self.shown_by.lock().entry(key).or_default().insert(session_id.to_string());
         }
         // Read here, off the UI thread: the review, its patches and its document decide the pages.
         let pages = pages_to_show(review_id, self.store.get(review_id).as_ref());
@@ -109,6 +114,10 @@ impl ReviewWindows for AppWindows {
             }
             roots
         };
+        let now = Instant::now();
+        self.ending
+            .lock()
+            .extend(closing.iter().map(|root| (root.clone(), (session_id.to_string(), now))));
         for root in closing {
             self.send(WindowRequest::Done {
                 session_id: session_id.to_string(),
@@ -117,7 +126,37 @@ impl ReviewWindows for AppWindows {
             });
         }
     }
+
+    /// A session other than the one that was done rejoins a window counting down (within the countdown): it stays
+    /// open, and closes once that session is done too.
+    fn joined(&self, workspace: &Path, session_id: &str) {
+        if !self.background {
+            return;
+        }
+        let key = workspace_key(workspace);
+        {
+            let mut ending = self.ending.lock();
+            let Some((done_by, at)) = ending.get(&key) else {
+                return;
+            };
+            if at.elapsed() > COUNTDOWN_WINDOW {
+                ending.remove(&key);
+                return;
+            }
+            if done_by == session_id {
+                return;
+            }
+            ending.remove(&key);
+        }
+        self.shown_by.lock().entry(key).or_default().insert(session_id.to_string());
+        self.send(WindowRequest::Rejoined {
+            workspace: review_store::real_path(workspace),
+        });
+    }
 }
+
+/// How long after a session is done another one can rejoin its window: the countdown, and a little slack.
+const COUNTDOWN_WINDOW: Duration = Duration::from_secs(CLOSE_AFTER_SECONDS as u64 + 2);
 
 pub(super) fn handle(core: &ReviewCore, app_data: &AppData, request: WindowRequest) {
     // Opening pages and panels reads signals; the request effect must only track the requests.
@@ -144,6 +183,14 @@ pub(super) fn handle(core: &ReviewCore, app_data: &AppData, request: WindowReque
                 workspace.and_then(|workspace| find_workspace(app_data, &workspace))
             {
                 close_soon(&window_tab, message);
+            }
+        }
+        WindowRequest::Rejoined { workspace } => {
+            if let Some((_, _, window_tab)) = find_workspace(app_data, &workspace)
+                && window_tab.review.closing.get_untracked().is_some()
+            {
+                tracing::info!("the window of {} stays open: an agent rejoined its review", workspace.display());
+                window_tab.review.closing.set(None);
             }
         }
     });
@@ -289,8 +336,8 @@ fn close_soon(window_tab: &WindowTabData, message: String) {
 
 fn tick(closing: floem::reactive::RwSignal<Option<super::workspace::ClosingNotice>>, close: Rc<dyn Fn()>) {
     floem::action::exec_after(std::time::Duration::from_secs(1), move |_| {
-        let Some(notice) = closing.get_untracked() else {
-            // Kept open.
+        // Kept open, or the window was closed meanwhile (its scope is disposed: stop, don't panic).
+        let Some(notice) = closing.try_get_untracked().flatten() else {
             return;
         };
         if notice.seconds <= 1 {
@@ -363,5 +410,54 @@ mod tests {
 
         assert_eq!(pages_to_show("r1", Some(&review(None))), vec![ReviewPage::overview("r1")]);
         assert_eq!(pages_to_show("r1", None), vec![ReviewPage::overview("r1")]);
+    }
+
+    #[test]
+    fn another_session_rejoining_a_window_counting_down_keeps_it_open() {
+        let scratch = tempfile::tempdir().unwrap();
+        let store = Arc::new(ReviewStore::with_home(scratch.path().join("home")));
+        let (workspace, other) = (scratch.path().join("a"), scratch.path().join("b"));
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        let (sender, requests) = mpsc::channel();
+        let windows = AppWindows::new(sender, store, true);
+        let next = || requests.try_recv().ok();
+        windows.show("r1", &workspace, "s1");
+        windows.show("r2", &other, "s9");
+        assert!(matches!(next(), Some(WindowRequest::Show { .. })));
+        assert!(matches!(next(), Some(WindowRequest::Show { .. })));
+        // Nothing counts down yet: using the review changes nothing.
+        windows.joined(&workspace, "s2");
+        assert!(next().is_none());
+
+        // s1's session ends: its window counts down (the other window doesn't).
+        windows.done("s1", "ended", None);
+        assert!(matches!(next(), Some(WindowRequest::Done { .. })));
+        assert!(next().is_none());
+        // The session that was done using the review again (e.g. get_review after approving) changes nothing.
+        windows.joined(&workspace, "s1");
+        assert!(next().is_none());
+        // Another session uses it within the countdown: the window stays open...
+        windows.joined(&workspace, "s2");
+        match next() {
+            Some(WindowRequest::Rejoined { workspace: rejoined }) => {
+                assert_eq!(rejoined, review_store::real_path(&workspace))
+            }
+            other => panic!("{other:?}"),
+        }
+        windows.joined(&workspace, "s3");
+        assert!(next().is_none());
+        // ...and closes once that session is done too.
+        windows.done("s2", "ended", None);
+        assert!(matches!(next(), Some(WindowRequest::Done { .. })));
+
+        // Not started in the background: windows never close for agents.
+        let (sender, requests) = mpsc::channel();
+        let windows = AppWindows::new(sender, Arc::new(ReviewStore::with_home(scratch.path().join("home"))), false);
+        windows.show("r1", &workspace, "s1");
+        windows.done("s1", "ended", None);
+        windows.joined(&workspace, "s2");
+        assert!(matches!(requests.try_recv(), Ok(WindowRequest::Show { .. })));
+        assert!(requests.try_recv().is_err());
     }
 }

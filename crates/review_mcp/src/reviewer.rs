@@ -146,16 +146,23 @@ impl Session {
         self.state.lock().current_review_id.clone()
     }
 
+    /// The review a tool call is about. Using it rejoins its window (`ReviewWindows::joined`).
     fn resolve_review(&self, review_id: Option<&str>, root: Option<&str>) -> Option<Review> {
         let store = &self.reviewer.services.store;
-        if let Some(id) = review_id
+        let review = if let Some(id) = review_id
             .map(str::to_string)
             .or_else(|| self.current_review_id())
         {
-            return store.get(&id);
-        }
-        let workspace = root.map(str::to_string).or_else(|| self.default_root())?;
-        store.list(&path_to_file_uri(&workspace)).into_iter().next()
+            store.get(&id)
+        } else {
+            let workspace = root.map(str::to_string).or_else(|| self.default_root())?;
+            store.list(&path_to_file_uri(&workspace)).into_iter().next()
+        }?;
+        self.reviewer
+            .services
+            .windows
+            .joined(Path::new(&window_root_of(&review)), &self.id);
+        Some(review)
     }
 }
 
@@ -550,6 +557,11 @@ impl CoReviewer {
             "Prepared, not shown to the reviewer yet. Add your first-pass findings, then call open_review({{ reviewId: \"{}\" }}) to show it.",
             review.id
         );
+        if !shown {
+            self.services
+                .windows
+                .joined(Path::new(&workspace), &session.id);
+        }
         if shown {
             if review.closed.is_some() {
                 review = fail_on!(store.set_closed(&review.id, None));

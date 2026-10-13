@@ -215,7 +215,8 @@ sends it back to revise.
 ## Tips
 
 - **The window.** It appears when the agent shows the review. When the agent started Co-Review, the window closes
-  once you approve the review or the agent's session ends, unless you click **Keep open**.
+  once you approve the review or the agent's session ends, unless you click **Keep open** or the agent comes back to
+  the review (a new session) during the countdown. Other windows stay open.
 - **Keep working while you review.** In Claude Code, *"keep answering my review while you fix the tests"* hands the
   review to the background `co-reviewer` subagent.
 - **Several reviews.** The switcher at the top of the Review panel lists them; archive the ones you're done with.

@@ -28,6 +28,11 @@ pub trait ReviewWindows: Send + Sync {
     /// The agent session is done with the window of `workspace_root` (a file URI), or with all its windows when
     /// `None`: a window only that session showed may close. `message` tells the reviewer why.
     fn done(&self, session_id: &str, message: &str, workspace_root: Option<&str>);
+
+    /// The agent session used a review shown in the window of `workspace` (any tool on it): another session than
+    /// the one that was done with the window rejoined it, so a window closing because its agents were done stays
+    /// open.
+    fn joined(&self, _workspace: &Path, _session_id: &str) {}
 }
 
 /// No app: shows nothing, and returns the desktop note.

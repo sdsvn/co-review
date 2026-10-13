@@ -953,11 +953,10 @@ fn watch(loaded: RwSignal<Option<Rc<Loaded>>>, reload: Rc<dyn Fn()>) -> Rc<Cell<
             if !alive.get() {
                 return;
             }
-            let changed = loaded.with_untracked(|loaded| {
-                loaded.as_ref().is_some_and(|loaded| {
-                    std::fs::metadata(&loaded.path).and_then(|metadata| metadata.modified()).ok() != loaded.modified
-                })
-            });
+            // Gone with its window (closing a window disposes its scope before its views are cleaned up): stop.
+            let Some(changed) = changed_on_disk(loaded) else {
+                return;
+            };
             if changed {
                 reload();
             }
@@ -966,6 +965,15 @@ fn watch(loaded: RwSignal<Option<Rc<Loaded>>>, reload: Rc<dyn Fn()>) -> Rc<Cell<
     }
     tick(loaded, reload, alive.clone());
     alive
+}
+
+/// Whether the loaded page's file changed on disk since it was read; None once the page's signal is disposed.
+fn changed_on_disk(loaded: RwSignal<Option<Rc<Loaded>>>) -> Option<bool> {
+    loaded.try_with_untracked(|loaded| {
+        Some(loaded?.as_ref().is_some_and(|loaded| {
+            std::fs::metadata(&loaded.path).and_then(|metadata| metadata.modified()).ok() != loaded.modified
+        }))
+    })
 }
 
 /// Opens a Markdown file rendered, as a page of the window's review (the active one, else the latest), when the
@@ -1051,5 +1059,15 @@ mod tests {
         assert_eq!(placement.marks[0].start, text);
         assert_eq!(placement.steps, ["Back off"]);
         assert_eq!(placement.parts, [("flow".to_string(), "a".to_string())]);
+    }
+
+    #[test]
+    fn a_page_whose_window_closed_stops_watching_its_file() {
+        let scope = Scope::new();
+        let loaded: RwSignal<Option<Rc<Loaded>>> = scope.create_rw_signal(None);
+        assert_eq!(changed_on_disk(loaded), Some(false));
+        // Closing a window disposes its scope; the next poll must stop, not panic (it quit the whole app).
+        scope.dispose();
+        assert_eq!(changed_on_disk(loaded), None);
     }
 }

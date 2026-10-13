@@ -85,7 +85,8 @@ it.
   the file, and go to definition and hover use the language server.
 - **Windows** (`windows.rs`, `stale.rs`): there is one window per repository, and showing a review opens or focuses
   it. Closing a review's window, or quitting, tells its agents (`await_reviewer` returns `closed`). In an app started
-  in the background, a window an agent showed closes after a countdown once that agent is done. An app that an update
+  in the background, a window an agent showed closes after a countdown once that agent is done (another session
+  using one of its reviews stops the countdown), and the app quits with its last window. An app that an update
   replaced on disk quits when it can.
 
 ## Locations that follow the code
