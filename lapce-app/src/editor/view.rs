@@ -1960,12 +1960,6 @@ fn editor_gutter(
         editor_gutter_breakpoints(window_tab_data.clone(), e_data, icon_padding),
         clip(
             stack((
-                // co-review: thread markers and the + to start a thread (inline-review).
-                crate::review::inline::gutter_column(
-                    window_tab_data.clone(),
-                    e_data,
-                    icon_padding,
-                ),
                 editor_gutter_code_lens(
                     window_tab_data.clone(),
                     doc,
@@ -1983,6 +1977,14 @@ fn editor_gutter(
                         }
                     })
                     .style(|s| s.size_pct(100.0, 100.0)),
+                // co-review: thread markers, the + and clicks on line numbers to start a thread
+                // (inline-review); above the line numbers, below the code-action light bulb.
+                crate::review::inline::gutter_column(
+                    window_tab_data.clone(),
+                    e_data,
+                    icon_padding,
+                    gutter_width,
+                ),
                 editor_gutter_code_actions(e_data, gutter_width, icon_padding),
             ))
             .style(|s| s.size_pct(100.0, 100.0)),

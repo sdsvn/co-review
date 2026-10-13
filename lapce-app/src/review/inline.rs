@@ -30,7 +30,7 @@ use floem::{
     event::{Event, EventListener},
     kurbo::{Point, Rect},
     reactive::{
-        RwSignal, Scope, SignalGet, SignalUpdate, SignalWith, create_memo,
+        Memo, RwSignal, Scope, SignalGet, SignalUpdate, SignalWith, create_memo,
         create_rw_signal,
     },
     style::CursorStyle,
@@ -926,9 +926,11 @@ pub fn gutter_column(
     window_tab: Rc<WindowTabData>,
     e_data: RwSignal<EditorData>,
     icon_padding: f32,
+    gutter_width: Memo<f64>,
 ) -> impl View {
     let (editor, doc_signal, config) =
         e_data.with_untracked(|e| (e.editor.clone(), e.doc_signal(), e.common.config));
+    let scroll_delta = editor.scroll_delta;
     let viewport = editor.viewport;
     let screen_lines = editor.screen_lines;
     let hovered = create_rw_signal(None::<usize>);
@@ -1055,6 +1057,12 @@ pub fn gutter_column(
             }
         })
         .on_event_cont(EventListener::PointerLeave, move |_| hovered.set(None))
+        // On top of the line numbers, so it scrolls the editor as the gutter under it does.
+        .on_event_stop(EventListener::PointerWheel, move |event| {
+            if let Event::PointerWheel(pointer) = event {
+                scroll_delta.set(pointer.delta);
+            }
+        })
         .on_event_stop(EventListener::PointerDown, move |event| {
             let Event::PointerDown(pointer) = event else {
                 return;
@@ -1091,13 +1099,16 @@ pub fn gutter_column(
                 start_draft(&press_tab, location, intent);
             }
         })
+        // From the + column across the line numbers, so clicking a line number starts a comment on that line
+        // (dragging over several, a question about them), leaving the code-action light bulb at the right edge.
         .style(move |s| {
             let config = config.get();
             let width = config.ui.icon_size() as f32 + icon_padding * 2.0;
+            let left = width - 8.0;
             s.absolute()
-                .width(width)
+                .width((gutter_width.get() as f32 - left - width).max(width))
                 .height_full()
-                .margin_left(width - 8.0)
+                .margin_left(left)
                 .cursor(CursorStyle::Pointer)
         })
         .debug_name("Review Gutter")
