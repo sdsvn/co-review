@@ -71,11 +71,11 @@ no cmake) in about 10 GB.
     two combine). The app is branded Co-Review: own name, icon, bundle id `dev.co-review.app`, config folder and
     update feed; Lapce's update check points at Co-Review's releases. Lapce's plugin registry stays: language
     support (language servers) comes from Lapce plugins.
+15. **Platforms**: macOS (Apple silicon), Linux (x64, arm64) and Windows (x64), as today. `CO_REVIEW_PORT` stays
+    the MCP server's port.
 16. **Themes follow the OS.** Co-Review Dark and Light are bundled and default; a `core.follow-os-theme` setting
     (on) picks the variant matching the OS appearance. This needs hooks in Lapce's `config.rs`, `config/core.rs`
     and `editor.rs` (listed in `docs/co-review/fork-surface.md`).
-15. **Platforms**: macOS (Apple silicon), Linux (x64, arm64) and Windows (x64), as today. `CO_REVIEW_PORT` stays
-    the MCP server's port.
 
 ### Crates
 
