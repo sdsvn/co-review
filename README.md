@@ -151,7 +151,7 @@ repository, the current file, a branch against its base, or a commit. Or right-c
 
 | To comment on | Do this |
 |---|---|
-| A line or range | Click **+** in the gutter (drag for a range), or select and press `Cmd+Alt+M` |
+| A line or range | Click **+** in the gutter (drag for a range), or select and click **Comment** on the bar under the selection (`Cmd+Alt+M`) |
 | A symbol | Right-click inside it → **Review: Add Review Comment on Symbol** (needs the language's plugin) |
 | A file or folder | Right-click it in the explorer → **Comment** |
 | The repository | **⋯** in the Review panel → **Comment on the repository** |

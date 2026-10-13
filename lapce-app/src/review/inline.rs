@@ -648,13 +648,18 @@ pub fn editor_threads(window_tab: Rc<WindowTabData>, e_data: RwSignal<EditorData
     let doc_signal = e_data.with_untracked(|editor| editor.doc_signal());
     let origin = create_rw_signal(Point::ZERO);
     let size = create_rw_signal(Rect::ZERO);
-    dyn_container(
-        move || doc_signal.with(|doc| doc.content.with(|content| content.path().cloned())),
-        move |path| match path {
-            Some(path) => doc_overlay(window_tab.clone(), e_data, path, origin, size).into_any(),
-            None => empty().into_any(),
-        },
-    )
+    let bar = super::selection_bar::selection_bar(window_tab.clone(), e_data, origin, size);
+    floem::views::stack((
+        dyn_container(
+            move || doc_signal.with(|doc| doc.content.with(|content| content.path().cloned())),
+            move |path| match path {
+                Some(path) => doc_overlay(window_tab.clone(), e_data, path, origin, size).into_any(),
+                None => empty().into_any(),
+            },
+        )
+        .style(|s| s.absolute().size_full()),
+        bar,
+    ))
     .on_move(move |point| origin.set(point))
     .on_resize(move |rect| size.set(rect))
     // The overlay covers the editor and its gutter: it must let scrolling and clicks through to them. Floem
@@ -1168,13 +1173,7 @@ pub fn comment_on_selection(window_tab: &WindowTabData, intent: ThreadIntent) {
     let Some(path) = doc_path(&doc) else {
         return;
     };
-    let (start, end) = editor.cursor().with_untracked(|cursor| match &cursor.mode {
-        CursorMode::Normal(offset) => (*offset, *offset),
-        CursorMode::Visual { start, end, .. } => ((*start).min(*end), (*start).max(*end) + 1),
-        CursorMode::Insert(selection) => selection
-            .first()
-            .map_or((0, 0), |region| (region.min(), region.max())),
-    });
+    let (start, end) = editor.cursor().with_untracked(|cursor| selected_range(&cursor.mode));
     let location = doc.buffer.with_untracked(|buffer| {
         let end = end.min(buffer.len());
         let (first, first_col) = buffer.offset_to_line_col(start);
@@ -1188,10 +1187,7 @@ pub fn comment_on_selection(window_tab: &WindowTabData, intent: ThreadIntent) {
             let text = line_text(line);
             utf16_len(text.get(..col).unwrap_or(&text))
         };
-        let identifier = !selected.is_empty()
-            && selected.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '$')
-            && !selected.chars().next().is_some_and(|c| c.is_ascii_digit());
-        let symbol = identifier.then(|| {
+        let symbol = is_identifier(&selected).then(|| {
             let language = path
                 .extension()
                 .map(|extension| extension.to_string_lossy().into_owned())
@@ -1232,6 +1228,24 @@ pub fn comment_on_selection(window_tab: &WindowTabData, intent: ThreadIntent) {
     if let Some(location) = location {
         start_draft(window_tab, location, intent);
     }
+}
+
+/// The selected offsets (`start..end`) of the first selection; empty without a selection.
+pub fn selected_range(mode: &CursorMode) -> (usize, usize) {
+    match mode {
+        CursorMode::Normal(offset) => (*offset, *offset),
+        CursorMode::Visual { start, end, .. } => ((*start).min(*end), (*start).max(*end) + 1),
+        CursorMode::Insert(selection) => selection
+            .first()
+            .map_or((0, 0), |region| (region.min(), region.max())),
+    }
+}
+
+/// Whether the selected text is one identifier: a comment on it is a comment on a symbol.
+pub fn is_identifier(text: &str) -> bool {
+    !text.is_empty()
+        && text.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '$')
+        && !text.chars().next().is_some_and(|c| c.is_ascii_digit())
 }
 
 /// **Add Review Comment on Symbol**: a draft on the innermost symbol around the cursor, as the language server lists

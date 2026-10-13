@@ -23,6 +23,7 @@ mod submit;
 pub mod theme;
 pub mod drafts;
 pub mod inline;
+mod selection_bar;
 pub mod thread;
 mod windows;
 mod workspace;

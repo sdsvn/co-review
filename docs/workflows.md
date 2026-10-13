@@ -56,8 +56,8 @@ sequenceDiagram
 |---|---|
 | Keep or drop a proposed finding | ✓ **Accept finding** / ⊘ **Dismiss finding** on the thread (the panel's **Proposed** tab lists them) |
 | Ask about a finding | Reply in its thread; the agent answers there |
-| Comment on code | **+** in the gutter (drag for several lines), or select and press `Cmd+Alt+M` |
-| Ask the agent about code | Select it and press `Cmd+Alt+A` (**Ask Agent**) |
+| Comment on code | **+** in the gutter (drag for several lines), or select it and click **Comment** on the bar under the selection (`Cmd+Alt+M`) |
+| Ask the agent about code | Select it and click **Ask Agent** on the bar under the selection (`Cmd+Alt+A`) |
 | Suggest an edit | In a comment on a patch line or document text, **Suggest a change** |
 | Move between threads | `Cmd+Alt+↓` / `Cmd+Alt+↑`, or click a thread in the panel |
 | Finish | **Submit review…** in the panel: **Approve**, **Request changes** or **Comment**, with a message |
