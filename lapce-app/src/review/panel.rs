@@ -38,7 +38,7 @@ use crate::{
     window_tab::WindowTabData,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(super) enum Filter {
     Open,
     Proposed,
@@ -83,14 +83,9 @@ pub fn review_panel(
     position: PanelPosition,
 ) -> impl View {
     let config = window_tab_data.common.config;
-    let window_tab_data_open = window_tab_data.panel.section_open(PanelSection::Reviews);
-    let content = panel_content(window_tab_data);
+    let open = window_tab_data.panel.section_open(PanelSection::Reviews);
     PanelBuilder::new(config, position)
-        .add(
-            "Review",
-            content,
-            window_tab_data_open,
-        )
+        .add("Review", panel_content(window_tab_data), open)
         .build()
         .debug_name("Review Panel")
 }
@@ -636,21 +631,13 @@ fn threads_view(window_tab_data: Rc<WindowTabData>, active: Memo<Option<Arc<Revi
             };
             [Filter::Open, Filter::Proposed, Filter::Resolved, Filter::OutOfScope, Filter::All]
                 .into_iter()
-                .map(|filter| {
-                    (filter.name(), review.threads.iter().filter(|thread| filter.keeps(thread)).count())
-                })
-                .collect::<BTreeMap<&'static str, usize>>()
+                .map(|filter| (filter, review.threads.iter().filter(|thread| filter.keeps(thread)).count()))
+                .collect::<BTreeMap<Filter, usize>>()
         })
     });
+    let count = move |filter: Filter| counts.with(|counts| counts.get(&filter).copied().unwrap_or(0));
     // Until the reviewer picks a filter (and again whenever a review is shown), the panel picks it.
-    let effective = create_memo(move |_| {
-        filter.get().unwrap_or_else(|| {
-            counts.with(|counts| {
-                let count = |name| counts.get(name).copied().unwrap_or(0);
-                pick_filter(count("Proposed"))
-            })
-        })
-    });
+    let effective = create_memo(move |_| filter.get().unwrap_or_else(|| pick_filter(count(Filter::Proposed))));
     {
         let root = window_tab_data.review.root.clone();
         create_effect(move |shown: Option<Filter>| {
@@ -673,13 +660,10 @@ fn threads_view(window_tab_data: Rc<WindowTabData>, active: Memo<Option<Arc<Revi
         })
     };
     let filter_button = move |choice: Filter, hide_when_empty: bool| {
-        label(move || format!("{} {}", choice.name(), counts.with(|c| c.get(choice.name()).copied().unwrap_or(0))))
-            .on_click_stop(move |_| {
-                filter.set(Some(choice));
-            })
+        label(move || format!("{} {}", choice.name(), count(choice)))
+            .on_click_stop(move |_| filter.set(Some(choice)))
             .style(move |s| {
                 let config = config.get();
-                let count = counts.with(|c| c.get(choice.name()).copied().unwrap_or(0));
                 s.padding_horiz(6.0)
                     .padding_vert(1.0)
                     .margin_right(4.0)
@@ -689,7 +673,7 @@ fn threads_view(window_tab_data: Rc<WindowTabData>, active: Memo<Option<Arc<Revi
                         s.background(config.color(LapceColor::PANEL_CURRENT_BACKGROUND))
                             .font_bold()
                     })
-                    .apply_if(hide_when_empty && count == 0, |s| s.hide())
+                    .apply_if(hide_when_empty && count(choice) == 0, |s| s.hide())
             })
     };
     let filters = h_stack((
@@ -816,22 +800,20 @@ fn group_view(
     let count = ids.len();
     let heading = if area { format!("{key}  {count}") } else { key.clone() };
     let selected = tab.review.selected_thread;
-    let header_tab = tab.clone();
+    let open = move |thread_id: &str| {
+        if let Some(review) = active.get_untracked()
+            && let Some(thread) = review.threads.iter().find(|thread| thread.id == thread_id)
+        {
+            commands::open_thread(&tab, &review, thread);
+        }
+    };
     let first = ids.first().cloned();
+    let header_open = open.clone();
     v_stack((
         label(move || heading.clone())
             .on_click_stop(move |_| {
-                if area {
-                    return;
-                }
-                let Some(review) = active.get_untracked() else {
-                    return;
-                };
-                if let Some(thread) = first
-                    .as_ref()
-                    .and_then(|id| review.threads.iter().find(|thread| &thread.id == id))
-                {
-                    commands::open_thread(&header_tab, &review, thread);
+                if let Some(first) = first.as_deref().filter(|_| !area) {
+                    header_open(first);
                 }
             })
             .style(move |s| {
@@ -849,16 +831,8 @@ fn group_view(
             move || ids.clone(),
             |id| id.clone(),
             move |thread_id| {
-                let tab = tab.clone();
-                let open_id = thread_id.clone();
-                let on_open: Rc<dyn Fn()> = Rc::new(move || {
-                    let Some(review) = active.get_untracked() else {
-                        return;
-                    };
-                    if let Some(thread) = review.threads.iter().find(|thread| thread.id == open_id) {
-                        commands::open_thread(&tab, &review, thread);
-                    }
-                });
+                let (open, open_id) = (open.clone(), thread_id.clone());
+                let on_open: Rc<dyn Fn()> = Rc::new(move || open(&open_id));
                 let highlighted = thread_id.clone();
                 thread_view(
                     window_tab_data.clone(),

@@ -8,7 +8,7 @@ use floem::{ext_event::create_ext_action, reactive::SignalGet};
 use lapce_rpc::proxy::ProxyResponse;
 use lapce_xi_rope::Rope;
 use lsp_types::{GotoDefinitionResponse, HoverContents, MarkedString, Position};
-use review_model::{CodeLocation, Review};
+use review_model::Review;
 
 use super::ReviewCore;
 use crate::{
@@ -265,16 +265,4 @@ fn hover_content(hover: lsp_types::Hover, config: &crate::config::LapceConfig) -
             .unwrap_or_default(),
         HoverContents::Markup(content) => parse_markdown(&content.value, 1.8, config),
     }
-}
-
-/// Where a comment written in the editor goes: on lines the change's diff shows (added or context, reading as they do
-/// in the diff), a comment on the diff, so it is on the pull-request page and posted to GitHub like one made there;
-/// anywhere else `location` itself. Reads the review's patches: call it off the UI thread, with
-/// `ReviewCore::services.code_folders`, before creating a thread from the editor.
-pub fn comment_location(
-    folders: &review_code::CodeFolders,
-    review: &Review,
-    location: CodeLocation,
-) -> CodeLocation {
-    folders.on_diff(review, &location).unwrap_or(location)
 }

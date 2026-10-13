@@ -54,7 +54,8 @@ use review_mcp::{CoReviewer, ServerHandle, ServerOptions, Services};
 use review_store::{ReviewChange, ReviewStore};
 use sha2::{Digest, Sha256};
 pub use changed_files::open_changed_file;
-pub use windows::{WindowRequest, open_or_focus_folder};
+use windows::WindowRequest;
+pub use windows::open_or_focus_folder;
 pub use workspace::ReviewWorkspaceData;
 
 use crate::{app::AppData, panel::kind::PanelKind, window_tab::WindowTabData};
@@ -136,7 +137,12 @@ impl ReviewCore {
             listening,
             reviewer: server.as_ref().map(|server| Arc::clone(server.reviewer())),
             server: RefCell::new(server),
-            changes: store_changes(&store),
+            changes: {
+                let changes = store.subscribe_changes();
+                forwarded("ReviewStoreChanges", "review changes will not reach the window", move || {
+                    changes.recv_blocking().ok()
+                })
+            },
             requests: create_signal_from_channel(request_receiver),
             services,
             background,
@@ -318,24 +324,11 @@ pub(crate) fn show_review(window_tab: &WindowTabData, pages: Vec<ReviewPage>) {
         reveal_page(window_tab, front.clone());
     }
     window_tab.common.focus.set(crate::window_tab::Focus::Workbench);
-    let in_front = window_tab.main_split.active_editor_tab.get_untracked().and_then(|id| {
-        window_tab.main_split.editor_tabs.with_untracked(|tabs| {
-            tabs.get(&id).and_then(|tab| {
-                tab.with_untracked(|tab| match tab.children.get(tab.active) {
-                    Some((_, _, crate::editor_tab::EditorTabChild::Review(_, page))) => {
-                        Some((page.kind, tab.active, tab.children.len()))
-                    }
-                    _ => None,
-                })
-            })
-        })
-    });
     tracing::info!(
-        "review {} in front in {}: pages {:?}, focused tab (page, index, tabs) {:?}",
+        "review {} in front in {}: pages {:?}",
         front.review_id,
         window_tab.review.root.as_deref().map(|root| root.display().to_string()).unwrap_or_default(),
         pages.iter().map(|page| page.kind).collect::<Vec<_>>(),
-        in_front
     );
 }
 
@@ -438,21 +431,23 @@ fn workspace_uri(workspace: &Path) -> String {
     review_store::path_to_file_uri(&workspace.to_string_lossy())
 }
 
-/// Store changes as a signal: the store broadcasts on a smol channel, Floem reads std channels.
-fn store_changes(store: &ReviewStore) -> ReadSignal<Option<ReviewChange>> {
-    let changes = store.subscribe_changes();
+/// A broadcast as a signal: the review crates broadcast on smol channels (`recv` blocks for the next message), Floem
+/// reads std channels.
+fn forwarded<T: Send + 'static>(
+    name: &str,
+    lost: &str,
+    mut recv: impl FnMut() -> Option<T> + Send + 'static,
+) -> ReadSignal<Option<T>> {
     let (sender, receiver) = mpsc::channel();
-    let forwarded = std::thread::Builder::new()
-        .name("ReviewStoreChanges".to_owned())
-        .spawn(move || {
-            while let Ok(change) = changes.recv_blocking() {
-                if sender.send(change).is_err() {
-                    break;
-                }
+    let forwarding = std::thread::Builder::new().name(name.to_owned()).spawn(move || {
+        while let Some(message) = recv() {
+            if sender.send(message).is_err() {
+                break;
             }
-        });
-    if let Err(error) = forwarded {
-        tracing::error!("review changes will not reach the window: {error}");
+        }
+    });
+    if let Err(error) = forwarding {
+        tracing::error!("{lost}: {error}");
     }
     create_signal_from_channel(receiver)
 }
@@ -472,24 +467,13 @@ fn record_app(home: &Path) {
     }
 }
 
-/// MCP agents' presence as a signal: the tracker broadcasts on a smol channel, Floem reads std channels.
+/// MCP agents' presence as a signal.
 fn presence_signal(services: &Services) -> RwSignal<im::HashMap<String, bool>> {
     let listening = create_rw_signal(im::HashMap::new());
     let presence = services.presence.subscribe();
-    let (sender, receiver) = mpsc::channel();
-    let forwarded = std::thread::Builder::new()
-        .name("ReviewAgentPresence".to_owned())
-        .spawn(move || {
-            while let Ok(update) = presence.recv_blocking() {
-                if sender.send(update).is_err() {
-                    break;
-                }
-            }
-        });
-    if let Err(error) = forwarded {
-        tracing::error!("agents' listening status will not reach the window: {error}");
-    }
-    let updates = create_signal_from_channel(receiver);
+    let updates = forwarded("ReviewAgentPresence", "agents' listening status will not reach the window", move || {
+        presence.recv_blocking().ok()
+    });
     create_effect(move |_| {
         if let Some(update) = updates.get() {
             listening.update(|listening| {

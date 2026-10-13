@@ -57,14 +57,22 @@ pub struct ReviewWorkspaceData {
     pub(super) shown: Rc<Cell<bool>>,
 }
 
-/// A comment being written: where it goes, its text so far and whether it asks the agent.
-#[derive(Clone, Debug, PartialEq)]
+/// A comment being written: where it goes, its text so far and whether it asks the agent. Kept in `drafts.json` with
+/// the Theia app's `ReviewDraft` fields.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReviewDraft {
     pub id: String,
     pub review_id: String,
     pub location: CodeLocation,
+    #[serde(default)]
     pub body: String,
+    #[serde(rename = "defaultIntent", default = "comment")]
     pub intent: ThreadIntent,
+}
+
+fn comment() -> ThreadIntent {
+    ThreadIntent::Comment
 }
 
 /// Why the window closes, and in how many seconds.
@@ -346,17 +354,10 @@ fn belongs(review: &Review, uri: &str) -> bool {
 /// The coverage of the repository at `root` given the review's viewed files (path → when, in ms).
 fn compute_coverage(root: &Path, viewed: BTreeMap<String, u64>) -> Option<ReviewCoverage> {
     let index = review_index::RepoIndex::new();
-    match index.build(root) {
-        Ok(map) => {
-            let viewed = viewed
-                .into_iter()
-                .map(|(path, at)| (path, at as f64))
-                .collect();
-            Some(index.coverage(&map, &viewed))
-        }
-        Err(error) => {
-            tracing::error!("no coverage for {}: {error:#}", root.display());
-            None
-        }
-    }
+    let map = index
+        .build(root)
+        .inspect_err(|error| tracing::error!("no coverage for {}: {error:#}", root.display()))
+        .ok()?;
+    let viewed = viewed.into_iter().map(|(path, at)| (path, at as f64)).collect();
+    Some(index.coverage(&map, &viewed))
 }

@@ -748,9 +748,8 @@ fn doc_overlay(
             let doc = doc_signal.get();
             doc.loaded.get();
             let active = review.active_review();
-            let drafts = review.drafts.get();
+            let drafts: Vec<_> = review.drafts.get().into_iter().collect();
             let folded = folded.get();
-            let drafts: Vec<_> = drafts.into_iter().collect();
             threads.refresh(&doc, active.as_deref(), &drafts, &folded);
         });
     }
@@ -862,19 +861,11 @@ fn doc_overlay(
                     let left = (content_origin.x - origin.x).max(0.0) + 8.0;
                     let width = (size.width() - left - 24.0).clamp(200.0, 960.0);
                     tracing::trace!("review thread {key:?} at line {line:?}: top {top:?}, left {left}, width {width}");
-                    match top {
-                        Some(top) => s
-                            .absolute()
-                            .margin_top(top as f32)
-                            .margin_left(left as f32)
-                            .width(width as f32),
-                        // Off screen: laid out out of sight, so it can still be measured.
-                        None => s
-                            .absolute()
-                            .margin_top(-10000.0_f32)
-                            .margin_left(left as f32)
-                            .width(width as f32),
-                    }
+                    // Off screen: laid out out of sight, so it can still be measured.
+                    s.absolute()
+                        .margin_top(top.unwrap_or(-10000.0) as f32)
+                        .margin_left(left as f32)
+                        .width(width as f32)
                 })
         },
     )
@@ -910,7 +901,7 @@ pub fn draft_view(window_tab: Rc<WindowTabData>, draft_id: String) -> impl View 
     };
     let title = label(move || {
         let place = draft
-            .with(|d| d.as_ref().map(|d| location_label_of(&d.location)))
+            .with(|d| d.as_ref().map(|d| location_label(&d.location)))
             .unwrap_or_default();
         if asking() {
             format!("Ask the agent · {place}")
@@ -1005,27 +996,6 @@ pub fn draft_view(window_tab: Rc<WindowTabData>, draft_id: String) -> impl View 
             .color(config.color(LapceColor::EDITOR_FOREGROUND))
     })
     .debug_name("Review Draft")
-}
-
-fn location_label_of(location: &CodeLocation) -> String {
-    let thread = ReviewThread {
-        id: String::new(),
-        number: 0,
-        location: location.clone(),
-        messages: Vec::new(),
-        status: ThreadStatus::Open,
-        intent: ThreadIntent::Comment,
-        severity: None,
-        origin: None,
-        source_id: None,
-        labels: None,
-        proposal: None,
-        agent_state: None,
-        created_at: 0,
-        updated_at: 0,
-        extra: Default::default(),
-    };
-    location_label(&thread)
 }
 
 // ---- The gutter column: markers and **+** ----
@@ -1335,13 +1305,10 @@ pub fn comment_on_selection(window_tab: &WindowTabData, intent: ThreadIntent) {
             extra: Default::default(),
         })
     });
-    let location = match location {
-        Some(location) => Some(location),
-        None => {
-            let line = doc.buffer.with_untracked(|buffer| buffer.line_of_offset(start));
-            lines_location(&doc, line, line)
-        }
-    };
+    let location = location.or_else(|| {
+        let line = doc.buffer.with_untracked(|buffer| buffer.line_of_offset(start));
+        lines_location(&doc, line, line)
+    });
     if let Some(location) = location {
         start_draft(window_tab, location, intent);
     }

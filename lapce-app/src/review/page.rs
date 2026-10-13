@@ -5,8 +5,7 @@ use std::{rc::Rc, sync::Arc};
 
 use floem::{
     IntoView, View,
-    reactive::{Memo, ReadSignal, SignalGet, SignalWith, create_memo},
-    views::{Decorators, container, label, stack},
+    reactive::{Memo, ReadSignal, SignalGet, create_memo},
 };
 use serde::{Deserialize, Serialize};
 
@@ -52,31 +51,20 @@ pub enum ReviewPageKind {
 }
 
 impl ReviewPage {
+    fn new(review_id: &str, kind: ReviewPageKind, path: Option<String>) -> Self {
+        Self { review_id: review_id.to_string(), kind, path, title: None }
+    }
+
     pub fn overview(review_id: &str) -> Self {
-        Self {
-            review_id: review_id.to_string(),
-            kind: ReviewPageKind::Overview,
-            path: None,
-            title: None,
-        }
+        Self::new(review_id, ReviewPageKind::Overview, None)
     }
 
     pub fn pull_request(review_id: &str) -> Self {
-        Self {
-            review_id: review_id.to_string(),
-            kind: ReviewPageKind::PullRequest,
-            path: None,
-            title: None,
-        }
+        Self::new(review_id, ReviewPageKind::PullRequest, None)
     }
 
     pub fn document(review_id: &str, path: &std::path::Path) -> Self {
-        Self {
-            review_id: review_id.to_string(),
-            kind: ReviewPageKind::Document,
-            path: Some(path.to_string_lossy().into_owned()),
-            title: None,
-        }
+        Self::new(review_id, ReviewPageKind::Document, Some(path.to_string_lossy().into_owned()))
     }
 
     /// The same page, its tab titled `title`.
@@ -103,14 +91,13 @@ pub fn review_page_view_info(
     page: &ReviewPage,
     config: ReadSignal<Arc<LapceConfig>>,
 ) -> Memo<EditorTabChildViewInfo> {
-    let name = match &page.path {
-        _ if page.title.is_some() => page.title.clone().unwrap_or_default(),
+    let name = page.title.clone().unwrap_or_else(|| match &page.path {
         Some(path) if page.kind == ReviewPageKind::Document => std::path::Path::new(path)
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.clone()),
         _ => page.kind.name().to_string(),
-    };
+    });
     let path = page.path.clone().map(std::path::PathBuf::from);
     create_memo(move |_| {
         let config = config.get();
@@ -126,50 +113,13 @@ pub fn review_page_view_info(
 }
 
 /// The content of a review page's tab.
-pub fn review_page_view(
-    window_tab_data: Rc<WindowTabData>,
-    page: ReviewPage,
-) -> impl View {
-    if matches!(page.kind, ReviewPageKind::Overview | ReviewPageKind::Document) {
-        return super::document::document_page(window_tab_data, page).into_any();
+pub fn review_page_view(window_tab_data: Rc<WindowTabData>, page: ReviewPage) -> impl View {
+    match page.kind {
+        ReviewPageKind::Overview | ReviewPageKind::Document => {
+            super::document::document_page(window_tab_data, page).into_any()
+        }
+        ReviewPageKind::PullRequest => {
+            super::pull_request::pull_request_page(window_tab_data, page.review_id).into_any()
+        }
     }
-    if page.kind == ReviewPageKind::PullRequest {
-        return super::pull_request::pull_request_page(window_tab_data, page.review_id)
-            .into_any();
-    }
-    let config = window_tab_data.common.config;
-    let reviews = window_tab_data.review.reviews;
-    let review_id = page.review_id.clone();
-    let title = move || {
-        reviews
-            .with(|reviews| {
-                reviews
-                    .iter()
-                    .find(|review| review.id == review_id)
-                    .map(|review| review.title.clone())
-            })
-            .unwrap_or_else(|| "Review".to_string())
-    };
-    let kind = page.kind;
-    container(
-        stack((
-            label(title).style(|s| s.font_size(20.0).font_bold()),
-            label(move || kind.name()).style(move |s| {
-                s.margin_top(4.0)
-                    .color(config.get().color(LapceColor::EDITOR_DIM))
-            }),
-            label(|| "This page is not built yet.").style(move |s| {
-                s.margin_top(16.0)
-                    .color(config.get().color(LapceColor::EDITOR_DIM))
-            }),
-        ))
-        .style(|s| s.flex_col().padding(24.0)),
-    )
-    .style(move |s| {
-        s.size_full()
-            .background(config.get().color(LapceColor::EDITOR_BACKGROUND))
-            .color(config.get().color(LapceColor::EDITOR_FOREGROUND))
-    })
-    .debug_name("Review Page")
-    .into_any()
 }

@@ -138,7 +138,7 @@ pub fn selection_bar(
         });
     });
 
-    // What the settled selection is: more than whitespace, and whether it's one identifier.
+    // What the settled selection is: more than whitespace, whether it's one identifier, and whether it spans lines.
     let selected = create_memo(move |_| {
         let (start, end) = settled.get()?;
         let doc = doc_signal.get();
@@ -146,7 +146,8 @@ pub fn selection_bar(
             let end = end.min(buffer.len());
             (start < end).then(|| {
                 let text = buffer.slice_to_cow(start..end);
-                (!text.trim().is_empty(), is_identifier(&text))
+                let multi_line = buffer.line_of_offset(start) != buffer.line_of_offset(end);
+                (!text.trim().is_empty(), is_identifier(&text), multi_line)
             })
         })
     });
@@ -170,7 +171,7 @@ pub fn selection_bar(
             selection: selection.get(),
             settled: settled.get(),
             used: used.get(),
-            has_text: selected.get().is_some_and(|(has_text, _)| has_text),
+            has_text: selected.get().is_some_and(|(has_text, _, _)| has_text),
             dragging: dragging.get(),
             focused: focused.get(),
             in_workspace: in_workspace.get(),
@@ -214,10 +215,22 @@ pub fn selection_bar(
         })
     };
 
-    let button = move |text: &'static str, primary: bool, run: Rc<dyn Fn()>| {
+    let act = {
+        let window_tab = window_tab.clone();
+        Rc::new(move |action: Option<ThreadIntent>| {
+            used.set(selection.get_untracked());
+            match action {
+                Some(intent) => comment_on_selection(&window_tab, intent),
+                None => comment_on_symbol(&window_tab),
+            }
+        })
+    };
+    // `action`: a comment or question on the selection, or (`None`) a comment on the symbol.
+    let button = move |text: &'static str, primary: bool, action: Option<ThreadIntent>| {
+        let act = act.clone();
         label(move || text)
             // On press, so the editor keeps its selection and focus.
-            .on_event_stop(EventListener::PointerDown, move |_| run())
+            .on_event_stop(EventListener::PointerDown, move |_| act(action))
             .style(move |s| {
                 let config = config.get();
                 s.padding_horiz(8.0)
@@ -233,47 +246,19 @@ pub fn selection_bar(
                     .hover(|s| s.background(config.color(LapceColor::PANEL_HOVERED_BACKGROUND)))
             })
     };
-    let act = {
-        let window_tab = window_tab.clone();
-        Rc::new(move |action: Option<ThreadIntent>| {
-            used.set(selection.get_untracked());
-            match action {
-                Some(intent) => comment_on_selection(&window_tab, intent),
-                None => comment_on_symbol(&window_tab),
-            }
-        })
-    };
-    let multi_line = create_memo(move |_| {
-        let (start, end) = settled.get()?;
-        let doc = doc_signal.get();
-        Some(doc.buffer.with(|buffer| {
-            buffer.line_of_offset(start) != buffer.line_of_offset(end.min(buffer.len()))
-        }))
-    });
     dyn_container(
         move || {
-            (
-                has_agent.get(),
-                multi_line.get().unwrap_or(false),
-                selected.get().is_some_and(|(_, identifier)| identifier),
-            )
+            let (identifier, multi_line) = selected.get().map_or((false, false), |(_, identifier, multi)| (identifier, multi));
+            (has_agent.get(), multi_line, identifier)
         },
         move |(agent, multi_line, identifier)| {
-            let mut buttons: Vec<floem::AnyView> = Vec::new();
+            let mut buttons = Vec::new();
             if agent {
-                let act = act.clone();
-                buttons.push(
-                    button("Ask Agent", multi_line, Rc::new(move || act(Some(ThreadIntent::Question)))).into_any(),
-                );
+                buttons.push(button("Ask Agent", multi_line, Some(ThreadIntent::Question)));
             }
-            let comment = act.clone();
-            buttons.push(
-                button("Comment", !agent || !multi_line, Rc::new(move || comment(Some(ThreadIntent::Comment))))
-                    .into_any(),
-            );
+            buttons.push(button("Comment", !agent || !multi_line, Some(ThreadIntent::Comment)));
             if identifier {
-                let symbol = act.clone();
-                buttons.push(button("Comment on Symbol", false, Rc::new(move || symbol(None))).into_any());
+                buttons.push(button("Comment on Symbol", false, None));
             }
             h_stack_from_iter(buttons).into_any()
         },

@@ -24,19 +24,11 @@ use crate::{app::AppData, window::WindowData, window_tab::WindowTabData};
 /// What the MCP server asks of the app's windows, handled on the UI thread.
 #[derive(Clone, Debug)]
 pub enum WindowRequest {
-    /// Show `review_id`'s `pages` (the first in front, see [`front_pages`]) in the window of `workspace` (resolved
+    /// Show a review's `pages` (the first in front, see [`front_pages`]) in the window of `workspace` (resolved
     /// through symbolic links).
-    Show {
-        review_id: String,
-        workspace: PathBuf,
-        pages: Vec<ReviewPage>,
-    },
-    /// The agent session is done with the window of `workspace_root` (a file URI), or with all of its windows.
-    Done {
-        session_id: String,
-        message: String,
-        workspace_root: Option<String>,
-    },
+    Show { workspace: PathBuf, pages: Vec<ReviewPage> },
+    /// The agent session is done with the window of `workspace_root` (a file URI).
+    Done { session_id: String, message: String, workspace_root: String },
     /// Another agent session uses a review of `workspace` (resolved) while its window counts down: it stays open.
     Rejoined { workspace: PathBuf },
 }
@@ -87,11 +79,7 @@ impl ReviewWindows for AppWindows {
         }
         // Read here, off the UI thread: the review, its patches and its document decide the pages.
         let pages = front_pages(review_id, self.store.get(review_id).as_ref());
-        self.send(WindowRequest::Show {
-            review_id: review_id.to_string(),
-            workspace: review_store::real_path(workspace),
-            pages,
-        });
+        self.send(WindowRequest::Show { workspace: review_store::real_path(workspace), pages });
         SHOWN_NOTE.to_string()
     }
 
@@ -122,7 +110,7 @@ impl ReviewWindows for AppWindows {
             self.send(WindowRequest::Done {
                 session_id: session_id.to_string(),
                 message: message.to_string(),
-                workspace_root: Some(root),
+                workspace_root: root,
             });
         }
     }
@@ -161,26 +149,11 @@ const COUNTDOWN_WINDOW: Duration = Duration::from_secs(CLOSE_AFTER_SECONDS as u6
 pub(super) fn handle(core: &ReviewCore, app_data: &AppData, request: WindowRequest) {
     // Opening pages and panels reads signals; the request effect must only track the requests.
     untrack(|| match request {
-        WindowRequest::Show {
-            review_id: _,
-            workspace,
-            pages,
-        } => show_pages(core, app_data, pages, workspace),
-        WindowRequest::Done {
-            session_id,
-            message,
-            workspace_root,
-        } => {
-            tracing::info!(
-                "agent session {session_id} is done with {}: {message}",
-                workspace_root.as_deref().unwrap_or("all its windows")
-            );
-            let workspace = workspace_root
-                .as_deref()
-                .and_then(review_store::file_uri_to_path)
-                .map(PathBuf::from);
-            if let Some((_, _, window_tab)) =
-                workspace.and_then(|workspace| find_workspace(app_data, &workspace))
+        WindowRequest::Show { workspace, pages } => show_pages(core, app_data, pages, workspace),
+        WindowRequest::Done { session_id, message, workspace_root } => {
+            tracing::info!("agent session {session_id} is done with {workspace_root}: {message}");
+            if let Some((_, _, window_tab)) = review_store::file_uri_to_path(&workspace_root)
+                .and_then(|workspace| find_workspace(app_data, Path::new(&workspace)))
             {
                 close_soon(&window_tab, message);
             }

@@ -13,31 +13,13 @@ use std::{
 use floem::{
     action::exec_after,
     ext_event::create_ext_action,
-    reactive::{SignalUpdate, SignalWith},
+    reactive::{SignalGet, SignalUpdate, SignalWith},
 };
 use review_model::{CodeLocation, Review, ThreadIntent};
 use review_store::CreateReviewParams;
-use serde::{Deserialize, Serialize};
 
 use super::{ReviewCore, thread::run, workspace::ReviewDraft};
 use crate::{id::WindowTabId, window_tab::WindowTabData};
-
-/// A draft as `drafts.json` keeps it (the Theia app's `ReviewDraft` fields).
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DraftRecord {
-    id: String,
-    review_id: String,
-    location: CodeLocation,
-    #[serde(default)]
-    body: String,
-    #[serde(default = "comment")]
-    default_intent: ThreadIntent,
-}
-
-fn comment() -> ThreadIntent {
-    ThreadIntent::Comment
-}
 
 thread_local! {
     static KEPT: RefCell<HashSet<WindowTabId>> = RefCell::new(HashSet::new());
@@ -63,17 +45,7 @@ pub fn keep(window_tab: &WindowTabData) {
     let loaded = Rc::new(Cell::new(false));
     {
         let loaded = loaded.clone();
-        let send = create_ext_action(cx, move |records: Vec<DraftRecord>| {
-            let restored: im::Vector<ReviewDraft> = records
-                .into_iter()
-                .map(|record| ReviewDraft {
-                    id: record.id,
-                    review_id: record.review_id,
-                    location: record.location,
-                    body: record.body,
-                    intent: record.default_intent,
-                })
-                .collect();
+        let send = create_ext_action(cx, move |restored: Vec<ReviewDraft>| {
             drafts.update(|drafts| {
                 for draft in restored {
                     if !drafts.iter().any(|existing| existing.id == draft.id) {
@@ -102,18 +74,7 @@ pub fn keep(window_tab: &WindowTabData) {
     }
     let generation = Rc::new(Cell::new(0u64));
     cx.create_effect(move |_| {
-        let records: Vec<DraftRecord> = drafts.with(|drafts| {
-            drafts
-                .iter()
-                .map(|draft| DraftRecord {
-                    id: draft.id.clone(),
-                    review_id: draft.review_id.clone(),
-                    location: draft.location.clone(),
-                    body: draft.body.clone(),
-                    default_intent: draft.intent,
-                })
-                .collect()
-        });
+        let records = drafts.get();
         if !loaded.get() {
             return;
         }
@@ -128,7 +89,7 @@ pub fn keep(window_tab: &WindowTabData) {
     });
 }
 
-fn save(file: PathBuf, records: Vec<DraftRecord>) {
+fn save(file: PathBuf, records: im::Vector<ReviewDraft>) {
     let written = std::thread::Builder::new()
         .name("ReviewDraftsSave".to_owned())
         .spawn(move || {
@@ -177,33 +138,22 @@ pub fn add(
         return;
     };
     let active = window_tab.review.active;
-    let send = create_ext_action(window_tab.scope, move |review: Option<Review>| {
-        if let Some(review) = review {
-            active.set(Some(review.id.clone()));
-            place(review.id);
-        }
+    let send = create_ext_action(window_tab.scope, move |review: Review| {
+        active.set(Some(review.id.clone()));
+        place(review.id);
     });
     run(window_tab, "starting a review", move |backend| {
         let name = root
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "the repository".to_string());
-        let created = backend.services.store.create(CreateReviewParams {
+        send(backend.services.store.create(CreateReviewParams {
             workspace_root: review_store::path_to_file_uri(&root.to_string_lossy()),
             title: format!("Review of {name}"),
             scope: review_model::ReviewScope::Repository,
             author: backend.user(),
-        });
-        match created {
-            Ok(review) => {
-                send(Some(review));
-                Ok(())
-            }
-            Err(error) => {
-                send(None);
-                Err(error.into())
-            }
-        }
+        })?);
+        Ok(())
     });
 }
 
@@ -255,22 +205,9 @@ fn insert(
     }
 }
 
-/// The drafts of a review (tracked), oldest first.
-pub fn of_review(window_tab: &WindowTabData, review_id: &str) -> Vec<ReviewDraft> {
-    window_tab.review.drafts.with(|drafts| {
-        drafts
-            .iter()
-            .filter(|draft| draft.review_id == review_id)
-            .cloned()
-            .collect()
-    })
-}
-
 pub fn set_body(window_tab: &WindowTabData, draft_id: &str, body: String) {
     window_tab.review.drafts.update(|drafts| {
-        if let Some(draft) = drafts.iter_mut().find(|draft| draft.id == draft_id)
-            && draft.body != body
-        {
+        if let Some(draft) = drafts.iter_mut().find(|draft| draft.id == draft_id) {
             draft.body = body;
         }
     });
@@ -306,19 +243,10 @@ pub fn submit(window_tab: &WindowTabData, draft_id: &str, intent: ThreadIntent) 
         })
     };
     run(window_tab, "sending the comment", move |backend| {
-        let created = backend.start_thread(
-            &draft.review_id,
-            draft.location.clone(),
-            draft.body.trim().to_string(),
-            intent,
-        );
-        match created {
-            Ok(_) => Ok(()),
-            Err(error) => {
-                restore(());
-                Err(error)
-            }
-        }
+        backend
+            .start_thread(&draft.review_id, draft.location.clone(), draft.body.trim().to_string(), intent)
+            .map(drop)
+            .inspect_err(|_| restore(()))
     });
 }
 

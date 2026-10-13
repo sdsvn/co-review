@@ -28,7 +28,7 @@ use lapce_core::{command::FocusCommand, mode::Mode};
 use review_agents::{AgentService, answers};
 use review_mcp::Services;
 use review_model::{
-    AgentActivity, AgentState, AnchorStatus, MessageStatus, ParticipantKind,
+    AgentActivity, AgentState, AnchorStatus, CodeLocation, MessageStatus, ParticipantKind,
     PermissionRequest, Proposal, ProposalStatus, Review, ReviewMessage,
     ReviewThread, ThreadIntent, ThreadStatus, ToolStatus,
 };
@@ -37,10 +37,7 @@ use super::ReviewCore;
 use crate::{
     command::{CommandExecuted, CommandKind, InternalCommand, LapceCommand},
     config::{LapceConfig, color::LapceColor},
-    editor::{
-        EditorData,
-        location::{EditorLocation, EditorPosition},
-    },
+    editor::{EditorData, location::EditorPosition},
     keypress::{KeyPressFocus, condition::Condition},
     markdown::{MarkdownContent, parse_markdown},
     text_input::TextInputBuilder,
@@ -85,7 +82,6 @@ pub fn thread_view(
                     agent_name: review.agent.as_ref().map(|agent| agent.name.clone()),
                     link: review.agent.as_ref().map(|agent| agent_link(agent, listening)),
                     stand_in: review.agent.as_ref().and_then(acp_stand_in),
-                    has_agent: review.agent.is_some(),
                     agent_ids: review
                         .agent
                         .as_ref()
@@ -152,7 +148,6 @@ struct ThreadContext {
     link: Option<AgentLink>,
     /// The ACP agent that can answer here instead of the review's MCP agent.
     stand_in: Option<review_model::AgentConfig>,
-    has_agent: bool,
     /// The ids the review's agent writes as (`<id>` over MCP, `agent:<id>` over ACP).
     agent_ids: Vec<String>,
 }
@@ -184,7 +179,7 @@ fn thread_header(
     let location = {
         let on_open = options.on_open.clone();
         let clickable = on_open.is_some();
-        label(move || get(&|f| Some(location_label(&f.thread))).unwrap_or_default())
+        label(move || get(&|f| Some(location_label(&f.thread.location))).unwrap_or_default())
             .on_click_stop(move |_| {
                 if let Some(on_open) = &on_open {
                     on_open();
@@ -274,7 +269,7 @@ fn thread_header(
                         let queued = f.thread.agent_state == Some(AgentState::Queued);
                         HeaderActions {
                             status: f.thread.status,
-                            can_ask: f.has_agent && !resolved && !busy && !engaged && !queued,
+                            can_ask: f.agent_name.is_some() && !resolved && !busy && !engaged && !queued,
                             agent_name: f.agent_name.clone().unwrap_or_default(),
                             link: f.link,
                             stand_in: f
@@ -360,7 +355,7 @@ fn thread_header(
                             }),
                     ));
                 }
-                h_stack_boxed(buttons).into_any()
+                floem::views::h_stack_from_iter(buttons).into_any()
             },
         )
     };
@@ -380,7 +375,7 @@ fn thread_header(
     items.push(Box::new(state));
     items.push(Box::new(empty().style(|s| s.flex_grow(1.0_f32))));
     items.push(Box::new(actions));
-    h_stack_boxed(items).style(|s| s.width_full().items_center().flex_wrap(floem::style::FlexWrap::Wrap))
+    floem::views::h_stack_from_iter(items).style(|s| s.width_full().items_center().flex_wrap(floem::style::FlexWrap::Wrap))
 }
 
 #[derive(Clone, PartialEq)]
@@ -577,7 +572,7 @@ fn message_view(window_tab_data: Rc<WindowTabData>, message: ReviewMessage) -> i
     if let Some(permission) = permission {
         items.push(Box::new(permission));
     }
-    v_stack_boxed(items).style(move |s| {
+    v_stack_from_iter(items).style(move |s| {
         s.width_full()
             .flex_col()
             .margin_top(6.0)
@@ -793,11 +788,7 @@ pub fn markdown_view(window_tab_data: Rc<WindowTabData>, body: &str) -> impl Vie
 /// A link in a message: code (`path:line`, `path:10-20`, `path#L10-L20`), a page (`/x.md`) or a web address.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MessageLink {
-    Code {
-        path: String,
-        line: Option<u32>,
-        end_line: Option<u32>,
-    },
+    Code { path: String, line: Option<u32> },
     Web(String),
 }
 
@@ -838,45 +829,20 @@ pub fn parse_link(word: &str) -> Option<MessageLink> {
                 .chars()
                 .all(|c| c.is_alphanumeric() || "/._-@+~".contains(c))
     };
-    let number = |text: &str| text.parse::<u32>().ok().filter(|n| *n > 0);
+    // The first line of `10`, `10-20` (or `L10-L20`).
+    let first_line = |lines: &str| lines.split('-').next()?.parse::<u32>().ok().filter(|n| *n > 0);
+    let code = |path: &str, line| Some(MessageLink::Code { path: path.to_string(), line });
     // path#L10-L20
     if let Some((path, anchor)) = word.split_once("#L") {
-        if !is_path(path) {
-            return None;
-        }
-        let (start, end) = match anchor.split_once('-') {
-            Some((start, end)) => (number(start), number(end.trim_start_matches('L'))),
-            None => (number(anchor), None),
-        };
-        return Some(MessageLink::Code {
-            path: path.to_string(),
-            line: start,
-            end_line: end,
-        });
+        return if is_path(path) { code(path, first_line(anchor)) } else { None };
     }
     // path:10 or path:10-20
     if let Some((path, lines)) = word.split_once(':') {
-        if !is_path(path) {
-            return None;
-        }
-        let (start, end) = match lines.split_once('-') {
-            Some((start, end)) => (number(start), number(end)),
-            None => (number(lines), None),
-        };
-        start?;
-        return Some(MessageLink::Code {
-            path: path.to_string(),
-            line: start,
-            end_line: end,
-        });
+        return if is_path(path) { code(path, Some(first_line(lines)?)) } else { None };
     }
     // /docs/x.md: a page of the repository
     if word.starts_with('/') && word.ends_with(".md") && is_path(word) {
-        return Some(MessageLink::Code {
-            path: word.to_string(),
-            line: None,
-            end_line: None,
-        });
+        return code(word, None);
     }
     None
 }
@@ -890,7 +856,7 @@ pub fn open_link(window_tab_data: &WindowTabData, link: &MessageLink) {
                 tracing::error!("could not open {url}: {error}");
             }
         }
-        MessageLink::Code { path, line, .. } => {
+        MessageLink::Code { path, line } => {
             let Some(path) = resolve_path(window_tab_data, path) else {
                 tracing::warn!("no file {path} in the workspace");
                 return;
@@ -906,13 +872,7 @@ pub fn open_location(window_tab_data: &WindowTabData, path: PathBuf, line: Optio
         .common
         .internal_command
         .send(InternalCommand::JumpToLocation {
-            location: EditorLocation {
-                path,
-                position: line.map(EditorPosition::Line),
-                scroll_offset: None,
-                ignore_unconfirmed: false,
-                same_editor_tab: false,
-            },
+            location: super::code::editor_location(path, line.map(EditorPosition::Line)),
         });
 }
 
@@ -1075,17 +1035,8 @@ fn badge(
     })
 }
 
-fn h_stack_boxed(items: Vec<Box<dyn View>>) -> floem::views::Stack {
-    floem::views::h_stack_from_iter(items)
-}
-
-fn v_stack_boxed(items: Vec<Box<dyn View>>) -> floem::views::Stack {
-    v_stack_from_iter(items)
-}
-
 /// Where a thread is, for its header: the file and lines, or what it is on.
-pub fn location_label(thread: &ReviewThread) -> String {
-    let location = &thread.location;
+pub fn location_label(location: &CodeLocation) -> String {
     let file = location
         .uri
         .as_deref()
@@ -1306,7 +1257,8 @@ impl Backend {
     }
 
     /// A new thread from the reviewer (a question when `intent` asks); on lines a change review's diff shows it is a
-    /// comment on the diff (`code::comment_location`). The review's ACP agent answers when it should.
+    /// comment on the diff, so it is on the pull-request page and posted to GitHub like one made there. The review's ACP
+    /// agent answers when it should.
     pub fn start_thread(
         &self,
         review_id: &str,
@@ -1316,7 +1268,7 @@ impl Backend {
     ) -> anyhow::Result<ReviewThread> {
         let location = match self.services.store.get(review_id) {
             Some(review) if location.kind != review_model::LocationKind::Patch => {
-                super::code::comment_location(&self.services.code_folders, &review, location)
+                self.services.code_folders.on_diff(&review, &location).unwrap_or(location)
             }
             _ => location,
         };
@@ -1632,35 +1584,19 @@ mod tests {
     fn parses_code_links() {
         assert_eq!(
             parse_link("src/orders.ts:42"),
-            Some(MessageLink::Code {
-                path: "src/orders.ts".into(),
-                line: Some(42),
-                end_line: None
-            })
+            Some(MessageLink::Code { path: "src/orders.ts".into(), line: Some(42) })
         );
         assert_eq!(
             parse_link("service.go:10-12."),
-            Some(MessageLink::Code {
-                path: "service.go".into(),
-                line: Some(10),
-                end_line: Some(12)
-            })
+            Some(MessageLink::Code { path: "service.go".into(), line: Some(10) })
         );
         assert_eq!(
             parse_link("src/a.rs#L10-L20"),
-            Some(MessageLink::Code {
-                path: "src/a.rs".into(),
-                line: Some(10),
-                end_line: Some(20)
-            })
+            Some(MessageLink::Code { path: "src/a.rs".into(), line: Some(10) })
         );
         assert_eq!(
             parse_link("/docs/design.md"),
-            Some(MessageLink::Code {
-                path: "/docs/design.md".into(),
-                line: None,
-                end_line: None
-            })
+            Some(MessageLink::Code { path: "/docs/design.md".into(), line: None })
         );
         assert_eq!(parse_link("note:"), None);
         assert_eq!(parse_link("12:30"), None);
