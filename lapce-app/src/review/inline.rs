@@ -77,7 +77,7 @@ pub enum ItemKey {
 }
 
 /// A thread or draft placed in an open file.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Item {
     pub key: ItemKey,
     /// The 0-based line it shows under (the last line of its range).
@@ -85,8 +85,6 @@ pub struct Item {
     /// Only the gutter marker shows.
     pub folded: bool,
     pub kind: MarkerKind,
-    /// The first message (or the draft's text), for the gutter marker's hover.
-    pub summary: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -154,6 +152,9 @@ pub struct DocThreads {
     live: RefCell<HashMap<ItemKey, Live>>,
     tracking: RefCell<Tracking>,
     pub items: RwSignal<Vec<Item>>,
+    /// Each item's first message (or the draft's text), for its gutter marker's hover. Apart from `items`, so typing
+    /// in a draft changes no item: the editor isn't laid out again and the draft stays where it is.
+    pub summaries: RwSignal<HashMap<ItemKey, String>>,
     /// Phantom rows of each unfolded item, from its measured height.
     pub rows: RwSignal<HashMap<ItemKey, usize>>,
 }
@@ -188,6 +189,7 @@ fn doc_threads_or_new(path: &Path) -> Rc<DocThreads> {
                     live: RefCell::default(),
                     tracking: RefCell::default(),
                     items: cx.create_rw_signal(Vec::new()),
+                    summaries: cx.create_rw_signal(HashMap::new()),
                     rows: cx.create_rw_signal(HashMap::new()),
                 })
             })
@@ -535,34 +537,19 @@ impl DocThreads {
     }
 
     /// Places the entries on their live lines; out-of-scope ones (and ones not placed yet) are left out. The editors
-    /// on the file lay out again when the items change (see `doc_overlay`).
+    /// on the file lay out again when the items change (see `doc_overlay`), not when only a summary does.
     fn place(&self) {
-        let live = self.live.borrow();
-        let mut items: Vec<Item> = self
-            .entries
-            .borrow()
-            .iter()
-            .filter_map(|entry| {
-                let line = live.get(&entry.key)?.line?;
-                Some(Item {
-                    key: entry.key.clone(),
-                    line,
-                    folded: entry.folded,
-                    kind: entry.kind,
-                    summary: entry.summary.clone(),
-                })
-            })
-            .collect();
-        drop(live);
-        items.sort_by_key(|item| item.line);
-        let changed = self.items.with_untracked(|current| *current != items);
-        if changed {
+        let (items, summaries) = placed_items(&self.entries.borrow(), &self.live.borrow());
+        if self.items.with_untracked(|current| *current != items) {
             tracing::debug!(
                 "review threads in {}: {:?}",
                 self.uri,
                 items.iter().map(|item| (item.line, item.folded)).collect::<Vec<_>>()
             );
             self.items.set(items);
+        }
+        if self.summaries.with_untracked(|current| *current != summaries) {
+            self.summaries.set(summaries);
         }
     }
 
@@ -577,10 +564,13 @@ impl DocThreads {
             .with_untracked(|current| current.get(key) != Some(&rows));
         if changed {
             tracing::debug!("review thread {key:?} is {height}px high: {rows} rows");
-            self.rows.update(|current| {
-                current.insert(key.clone(), rows);
+            // Together, so the views place themselves once, on the layout with the new rows.
+            floem::reactive::batch(|| {
+                self.rows.update(|current| {
+                    current.insert(key.clone(), rows);
+                });
+                doc.clear_text_cache();
             });
-            doc.clear_text_cache();
         }
     }
 }
@@ -591,6 +581,29 @@ fn real_uri(uri: &str) -> String {
         Some(path) => file_uri(Path::new(&path)),
         None => uri.to_string(),
     }
+}
+
+/// The items of a file (on their live lines, in line order) and their summaries. An item depends only on where an
+/// entry shows and how, never on its text.
+fn placed_items(entries: &[Entry], live: &HashMap<ItemKey, Live>) -> (Vec<Item>, HashMap<ItemKey, String>) {
+    let mut items: Vec<Item> = entries
+        .iter()
+        .filter_map(|entry| {
+            let line = live.get(&entry.key)?.line?;
+            Some(Item {
+                key: entry.key.clone(),
+                line,
+                folded: entry.folded,
+                kind: entry.kind,
+            })
+        })
+        .collect();
+    items.sort_by_key(|item| item.line);
+    let summaries = entries
+        .iter()
+        .map(|entry| (entry.key.clone(), entry.summary.clone()))
+        .collect();
+    (items, summaries)
 }
 
 fn summary(body: &str) -> String {
@@ -641,6 +654,48 @@ fn live_range(location: &CodeLocation, text: &str, snapshots: Option<&Path>) -> 
 }
 
 // ---- The overlay with the threads, over an editor's text ----
+
+/// What places an item's view on its rows.
+struct ItemRows<'a> {
+    /// Phantom rows under the item's line, for every item there.
+    rows_total: usize,
+    /// Rows of the items before this one on the line.
+    rows_before: usize,
+    /// Visual lines of the line's text layout, phantom rows included.
+    layout_lines: usize,
+    /// The line's visual lines on screen: (index in the line, y).
+    on_screen: &'a [(usize, f64)],
+    /// The screen's last visual line is one of the line's.
+    line_ends_screen: bool,
+    line_height: f64,
+}
+
+#[derive(Debug, PartialEq)]
+enum Placed {
+    /// The y of the item's first row.
+    At(f64),
+    OffScreen,
+    /// The layout or the screen lines don't have the item's rows yet (the editor is being laid out again).
+    Unsettled,
+}
+
+/// Where an item's view goes: on its first row, when its rows are on screen.
+fn item_top(rows: ItemRows) -> Placed {
+    let Some(first_row) = rows.layout_lines.checked_sub(rows.rows_total) else {
+        return Placed::Unsettled;
+    };
+    let found = rows
+        .on_screen
+        .iter()
+        .find(|(index, _)| *index >= first_row)
+        .map(|(index, y)| y - (index - first_row) as f64 * rows.line_height);
+    match found {
+        Some(y) => Placed::At(y + rows.rows_before as f64 * rows.line_height),
+        // The line's text is on screen and the screen goes on after it, but its rows aren't there.
+        None if !rows.on_screen.is_empty() && !rows.line_ends_screen => Placed::Unsettled,
+        None => Placed::OffScreen,
+    }
+}
 
 /// The threads and drafts of the editor's file, on the rows reserved for them (`co-review:` hook in
 /// `editor_container_view`). Absolutely positioned over the editor; only the threads take pointer events.
@@ -746,6 +801,7 @@ fn doc_overlay(
             };
             let measured_key = key.clone();
             let measure_threads = threads.clone();
+            let last_top = Rc::new(std::cell::Cell::new(None::<f64>));
             container(content)
                 .on_resize(move |rect| {
                     let line_height = config.get_untracked().editor.line_height() as f64;
@@ -755,6 +811,12 @@ fn doc_overlay(
                 .on_event_stop(EventListener::PointerDown, |_| {})
                 .style(move |s| {
                     let s = s.pointer_events_auto();
+                    // An overlay whose editor view is gone (the file's threads outlive it): nothing to place.
+                    let (Some(origin), Some(size), Some(content_origin)) =
+                        (origin.try_get(), size.try_get(), content_origin.try_get())
+                    else {
+                        return s.hide();
+                    };
                     let config = config.get();
                     let line_height = config.editor.line_height() as f64;
                     let viewport = viewport.get();
@@ -762,23 +824,43 @@ fn doc_overlay(
                         items.iter().find(|item| item.key == key).map(|item| item.line)
                     });
                     let top = line.and_then(|line| {
-                        let rows_total = threads.rows_at(line);
-                        let layout_lines = editor.text_layout(line).line_count();
-                        let first_row = layout_lines.checked_sub(rows_total)?;
-                        let y = screen_lines.with(|screen_lines| {
-                            screen_lines.iter_line_info().find_map(|info| {
-                                let rvline = info.vline_info.rvline;
-                                (rvline.line == line && rvline.line_index >= first_row).then(|| {
-                                    info.vline_y
-                                        - (rvline.line_index - first_row) as f64 * line_height
-                                })
-                            })
-                        })?;
-                        let before = threads.rows_before(&key, line) as f64 * line_height;
-                        Some(y + before - viewport.y0 + GAP / 2.0)
+                        // Without creating layouts' events: a layout made here would lay the editor out again
+                        // from inside this style, re-entering it.
+                        let layout_lines = editor.text_layout_trigger(line, false).line_count();
+                        let rows: Vec<(usize, f64)> = screen_lines.with(|screen_lines| {
+                            screen_lines
+                                .iter_line_info()
+                                .filter(|info| info.vline_info.rvline.line == line)
+                                .map(|info| (info.vline_info.rvline.line_index, info.vline_y))
+                                .collect()
+                        });
+                        let last_row_on_screen = screen_lines.with(|screen_lines| {
+                            screen_lines.lines.last().is_some_and(|rvline| rvline.line == line)
+                        });
+                        let placed = item_top(ItemRows {
+                            rows_total: threads.rows_at(line),
+                            rows_before: threads.rows_before(&key, line),
+                            layout_lines,
+                            on_screen: &rows,
+                            line_ends_screen: last_row_on_screen,
+                            line_height,
+                        });
+                        match placed {
+                            Placed::At(y) => {
+                                let top = y - viewport.y0 + GAP / 2.0;
+                                last_top.set(Some(top));
+                                Some(top)
+                            }
+                            Placed::OffScreen => {
+                                last_top.set(None);
+                                None
+                            }
+                            // The editor is being laid out again: where it was.
+                            Placed::Unsettled => last_top.get(),
+                        }
                     });
-                    let left = (content_origin.get().x - origin.get().x).max(0.0) + 8.0;
-                    let width = (size.get().width() - left - 24.0).clamp(200.0, 960.0);
+                    let left = (content_origin.x - origin.x).max(0.0) + 8.0;
+                    let width = (size.width() - left - 24.0).clamp(200.0, 960.0);
                     tracing::trace!("review thread {key:?} at line {line:?}: top {top:?}, left {left}, width {width}");
                     match top {
                         Some(top) => s
@@ -940,11 +1022,16 @@ pub fn gutter_column(
     let screen_lines = editor.screen_lines;
     let hovered = create_rw_signal(None::<usize>);
     let dragging = create_rw_signal(None::<(usize, usize)>);
-    let items = create_memo(move |_| {
+    let threads = create_memo(move |_| {
         let doc = doc_signal.get();
         let path = doc.content.with(|content| content.path().cloned());
         path.and_then(|path| doc_threads(&path))
-            .map(|threads| threads.items.get())
+            .map(|threads| (threads.items, threads.summaries))
+    });
+    let items = create_memo(move |_| {
+        threads
+            .get()
+            .map(|(items, _)| items.get())
             .unwrap_or_default()
     });
     let folded = folded_signal(&window_tab);
@@ -967,9 +1054,15 @@ pub fn gutter_column(
 
     let markers = dyn_stack(
         move || items.get(),
-        |item| (item.key.clone(), item.line, item.folded, item.kind, item.summary.clone()),
+        |item| item.clone(),
         move |item| {
-            let summary = item.summary.clone();
+            let key = item.key.clone();
+            let summary = move || {
+                threads
+                    .get_untracked()
+                    .and_then(|(_, summaries)| summaries.with(|summaries| summaries.get(&key).cloned()))
+                    .unwrap_or_default()
+            };
             let color = match item.kind {
                 MarkerKind::Question => LapceColor::EDITOR_LINK,
                 MarkerKind::Proposed => LapceColor::LAPCE_WARN,
@@ -985,7 +1078,7 @@ pub fn gutter_column(
                 })),
                 move || {
                     let summary = summary.clone();
-                    label(move || summary.clone()).style(move |s| {
+                    label(summary).style(move |s| {
                         let config = config.get();
                         s.max_width(400.0)
                             .padding_horiz(8.0)
@@ -1557,6 +1650,57 @@ mod tests {
         let tracked = review_anchor::range_in(before, "v1", 10, 19, AnchorStatus::Active, None);
         let placed = placements(Some(before), "fn a() {}\n", vec![job(Start::Tracked(Box::new(tracked)))], None);
         assert_eq!(placed[0].1.line, None);
+    }
+
+    fn draft_entry(body: &str) -> Entry {
+        Entry {
+            key: ItemKey::Draft("d1".to_string()),
+            location: serde_json::from_value(serde_json::json!({ "kind": "line" })).unwrap(),
+            folded: false,
+            kind: MarkerKind::Draft,
+            summary: summary(body),
+        }
+    }
+
+    /// Typing in a draft changes its summary only: the items (and so the editor's layout and the draft's place)
+    /// stay as they are.
+    #[test]
+    fn typing_in_a_draft_changes_no_item() {
+        let live = HashMap::from([(
+            ItemKey::Draft("d1".to_string()),
+            Live { basis: "b".to_string(), tracked: None, line: Some(4) },
+        )]);
+        let (before, before_summaries) = placed_items(&[draft_entry("Th")], &live);
+        let (after, after_summaries) = placed_items(&[draft_entry("This needs a test")], &live);
+        assert_eq!(before, after);
+        assert_eq!(after[0].line, 4);
+        assert_ne!(before_summaries, after_summaries);
+    }
+
+    fn rows(layout_lines: usize, on_screen: &[(usize, f64)], line_ends_screen: bool) -> ItemRows<'_> {
+        ItemRows {
+            rows_total: 5,
+            rows_before: 0,
+            layout_lines,
+            on_screen,
+            line_ends_screen,
+            line_height: 20.0,
+        }
+    }
+
+    #[test]
+    fn a_thread_sits_on_its_rows_and_keeps_its_place_while_the_editor_lays_out_again() {
+        // The line's text (index 0) and its five rows (1..=5), from y 100.
+        let screen: Vec<(usize, f64)> = (0..6).map(|index| (index, 100.0 + index as f64 * 20.0)).collect();
+        assert_eq!(item_top(rows(6, &screen, false)), Placed::At(120.0));
+        // Scrolled so that only the last two rows show: the view starts above the screen.
+        assert_eq!(item_top(rows(6, &screen[4..], false)), Placed::At(120.0));
+        // The layout doesn't have the rows yet, or the screen lines are from before them: not hidden.
+        assert_eq!(item_top(rows(1, &screen, false)), Placed::Unsettled);
+        assert_eq!(item_top(rows(6, &screen[..1], false)), Placed::Unsettled);
+        // Off screen: the line isn't there, or its rows are below the screen's end.
+        assert_eq!(item_top(rows(6, &[], false)), Placed::OffScreen);
+        assert_eq!(item_top(rows(6, &screen[..1], true)), Placed::OffScreen);
     }
 
     #[test]
