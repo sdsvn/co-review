@@ -12,9 +12,6 @@ use super::config::FlowLayoutConfig;
 pub(crate) struct FlowGraph {
     /// Node IDs in order
     pub node_ids: Vec<String>,
-    /// Map from node ID to index (kept for potential future edge routing enhancements)
-    #[allow(dead_code)]
-    pub id_to_index: HashMap<String, usize>,
     /// Node sizes (indexed by node index)
     pub node_sizes: Vec<crate::egui::Vec2>,
     /// Outgoing edges: node_index -> Vec<target_index>
@@ -26,10 +23,8 @@ pub(crate) struct FlowGraph {
     /// Subgraph membership: node_index -> Option<subgraph_id>
     /// None means the node is not in any subgraph
     pub node_subgraph: Vec<Option<String>>,
-    /// Subgraph info: subgraph_id -> (node_indices, child_subgraph_ids)
-    pub subgraph_info: HashMap<String, (Vec<usize>, Vec<String>)>,
-    /// Subgraph direction overrides: subgraph_id -> direction
-    pub subgraph_directions: HashMap<String, FlowDirection>,
+    /// Subgraph members: subgraph_id -> node_indices
+    pub subgraph_info: HashMap<String, Vec<usize>>,
 }
 
 impl FlowGraph {
@@ -84,8 +79,7 @@ impl FlowGraph {
 
         // Build subgraph membership mapping
         let mut node_subgraph: Vec<Option<String>> = vec![None; n];
-        let mut subgraph_info: HashMap<String, (Vec<usize>, Vec<String>)> = HashMap::new();
-        let mut subgraph_directions: HashMap<String, FlowDirection> = HashMap::new();
+        let mut subgraph_info: HashMap<String, Vec<usize>> = HashMap::new();
 
         for subgraph in &flowchart.subgraphs {
             let mut node_indices = Vec::new();
@@ -97,25 +91,17 @@ impl FlowGraph {
                     }
                 }
             }
-            subgraph_info.insert(
-                subgraph.id.clone(),
-                (node_indices, subgraph.child_subgraph_ids.clone()),
-            );
-            if let Some(direction) = subgraph.direction {
-                subgraph_directions.insert(subgraph.id.clone(), direction);
-            }
+            subgraph_info.insert(subgraph.id.clone(), node_indices);
         }
 
         FlowGraph {
             node_ids,
-            id_to_index,
             node_sizes,
             outgoing,
             incoming,
             back_edges: Vec::new(),
             node_subgraph,
             subgraph_info,
-            subgraph_directions,
         }
     }
 

@@ -11,7 +11,7 @@ use floem::{
 use review_markdown::StepNode;
 use review_model::{DocAnchor, DocAnchorType};
 
-use super::markdown_view::{Action, PageContext, comment_icon, step_text, with_slot};
+use super::markdown_view::{Action, PageContext, TextKind, comment_icon, text_block, with_slot};
 use crate::config::color::LapceColor;
 
 /// The steps of a tree; `design`: the Design section's, which the level switch folds.
@@ -62,7 +62,7 @@ fn step_view(ctx: &PageContext, step: &StepNode, design: bool) -> floem::AnyView
     };
     let line = h_stack((
         chevron,
-        step_text(ctx, step).style(|s| s.flex_grow(1.0_f32).flex_basis(0.0_f32)),
+        text_block(ctx, &step.text, TextKind::Body).style(|s| s.flex_grow(1.0_f32).flex_basis(0.0_f32)),
         comment,
     ))
     .style(move |s| {

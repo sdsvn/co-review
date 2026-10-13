@@ -14,14 +14,12 @@ use crate::egui::{Pos2, Vec2};
 use super::super::types::*;
 use super::config::FlowLayoutConfig;
 use super::graph::FlowGraph;
-use super::subgraph::{SubgraphInternalLayout, SubgraphLayoutEngine};
 
 /// Sugiyama-style layered graph layout algorithm.
 pub(crate) struct SugiyamaLayout {
     pub graph: FlowGraph,
     direction: FlowDirection,
     config: FlowLayoutConfig,
-    available_width: f32,
     /// Assigned layer for each node (indexed by node index)
     node_layers: Vec<usize>,
     /// Nodes in each layer, ordered for crossing minimization
@@ -29,18 +27,12 @@ pub(crate) struct SugiyamaLayout {
 }
 
 impl SugiyamaLayout {
-    pub fn new(
-        graph: FlowGraph,
-        direction: FlowDirection,
-        config: FlowLayoutConfig,
-        available_width: f32,
-    ) -> Self {
+    pub fn new(graph: FlowGraph, direction: FlowDirection, config: FlowLayoutConfig) -> Self {
         let n = graph.node_count();
         SugiyamaLayout {
             graph,
             direction,
             config,
-            available_width,
             node_layers: vec![0; n],
             layers: Vec::new(),
         }
@@ -51,12 +43,6 @@ impl SugiyamaLayout {
         if self.graph.node_count() == 0 {
             return FlowchartLayout::default();
         }
-
-        // Step 0: Layout subgraphs inside-out and compute their bounding boxes
-        let subgraph_layouts = self.layout_subgraphs_inside_out();
-
-        // Store original node sizes before replacing with super-node sizes
-        let original_sizes = self.graph.node_sizes.clone();
 
         // Step 1: Detect cycles and mark back-edges
         self.detect_cycles_and_mark_back_edges();
@@ -70,68 +56,8 @@ impl SugiyamaLayout {
         // Step 4: Reduce edge crossings
         self.reduce_crossings();
 
-        // Step 5: Assign coordinates (using original sizes for actual placement)
-        self.graph.node_sizes = original_sizes;
-        self.assign_coordinates_with_subgraphs(&subgraph_layouts)
-    }
-
-    /// Layout all subgraphs from innermost to outermost.
-    fn layout_subgraphs_inside_out(&mut self) -> HashMap<String, SubgraphInternalLayout> {
-        let mut layouts: HashMap<String, SubgraphInternalLayout> = HashMap::new();
-
-        if self.graph.subgraph_info.is_empty() {
-            return layouts;
-        }
-
-        let subgraph_order = self.get_subgraph_processing_order();
-
-        let engine = SubgraphLayoutEngine::new(
-            &self.graph,
-            &self.config,
-            self.direction,
-            self.available_width,
-        );
-
-        for subgraph_id in &subgraph_order {
-            if let Some(layout) = engine.layout_subgraph(subgraph_id, &layouts) {
-                layouts.insert(subgraph_id.clone(), layout);
-            }
-        }
-
-        layouts
-    }
-
-    /// Get subgraph IDs in processing order (children before parents).
-    fn get_subgraph_processing_order(&self) -> Vec<String> {
-        let mut result: Vec<String> = Vec::new();
-        let mut processed: std::collections::HashSet<String> = std::collections::HashSet::new();
-        let subgraph_ids: Vec<String> = self.graph.subgraph_info.keys().cloned().collect();
-
-        fn process_subgraph(
-            id: &str,
-            info: &HashMap<String, (Vec<usize>, Vec<String>)>,
-            result: &mut Vec<String>,
-            processed: &mut std::collections::HashSet<String>,
-        ) {
-            if processed.contains(id) {
-                return;
-            }
-
-            if let Some((_, child_ids)) = info.get(id) {
-                for child_id in child_ids {
-                    process_subgraph(child_id, info, result, processed);
-                }
-            }
-
-            result.push(id.to_string());
-            processed.insert(id.to_string());
-        }
-
-        for id in &subgraph_ids {
-            process_subgraph(id, &self.graph.subgraph_info, &mut result, &mut processed);
-        }
-
-        result
+        // Step 5: Assign coordinates
+        self.assign_coordinates()
     }
 
     /// Detect cycles using DFS and mark back-edges.
@@ -244,7 +170,7 @@ impl SugiyamaLayout {
         let subgraph_ids: Vec<String> = self.graph.subgraph_info.keys().cloned().collect();
 
         for subgraph_id in &subgraph_ids {
-            if let Some((node_indices, _)) = self.graph.subgraph_info.get(subgraph_id) {
+            if let Some(node_indices) = self.graph.subgraph_info.get(subgraph_id) {
                 if node_indices.is_empty() {
                     continue;
                 }
@@ -510,10 +436,7 @@ impl SugiyamaLayout {
     }
 
     /// Assign final coordinates to all nodes.
-    fn assign_coordinates_with_subgraphs(
-        self,
-        _subgraph_layouts: &HashMap<String, SubgraphInternalLayout>,
-    ) -> FlowchartLayout {
+    fn assign_coordinates(self) -> FlowchartLayout {
         let is_horizontal = matches!(
             self.direction,
             FlowDirection::LeftRight | FlowDirection::RightLeft

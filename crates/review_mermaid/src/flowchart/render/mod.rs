@@ -1,4 +1,4 @@
-//! Flowchart rendering using egui.
+//! Flowchart drawing onto the recording painter.
 //!
 //! Handles drawing of nodes, edges, subgraphs, and labels.
 
@@ -34,8 +34,7 @@ pub fn render_flowchart(
         return Vec2::ZERO;
     }
 
-    // Pre-compute edge label sizes before allocating painter
-    // This avoids borrow checker issues with text measurement during drawing
+    // Edge labels, truncated to their edge's length.
     let label_font_size = font_size - 2.0;
     let edge_labels: HashMap<usize, EdgeLabelInfo> = {
         flowchart

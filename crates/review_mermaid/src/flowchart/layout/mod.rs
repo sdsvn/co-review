@@ -4,12 +4,11 @@
 //! - Proper branching with side-by-side node placement
 //! - Cycle detection and back-edge handling
 //! - Edge crossing minimization using barycenter heuristic
-//! - Subgraph bounding boxes with padding
+//! - Subgraph bounding boxes around their laid-out nodes
 //! - All flow directions (TD, BT, LR, RL)
 
 pub(crate) mod config;
 pub(crate) mod graph;
-pub(crate) mod subgraph;
 pub(crate) mod sugiyama;
 
 use std::collections::HashMap;
@@ -24,9 +23,6 @@ use graph::FlowGraph;
 use sugiyama::SugiyamaLayout;
 
 /// Compute layout for a flowchart using a Sugiyama-style layered graph algorithm.
-///
-/// The `text_measurer` parameter enables accurate text sizing. Use `EguiTextMeasurer`
-/// when a UI context is available, or `EstimatedTextMeasurer` for testing.
 pub fn layout_flowchart(
     flowchart: &Flowchart,
     available_width: f32,
@@ -54,7 +50,7 @@ pub fn layout_flowchart(
     let graph = FlowGraph::from_flowchart(flowchart, font_size, text_measurer, &config);
 
     // Run the Sugiyama layout algorithm
-    let sugiyama = SugiyamaLayout::new(graph, flowchart.direction, config.clone(), available_width);
+    let sugiyama = SugiyamaLayout::new(graph, flowchart.direction, config.clone());
     let mut layout = sugiyama.compute();
 
     // Compute subgraph bounding boxes
@@ -74,7 +70,7 @@ fn compute_subgraph_layouts(
     let mut subgraph_bounds: HashMap<String, (Pos2, Pos2)> = HashMap::new();
 
     for subgraph in flowchart.subgraphs.iter().rev() {
-        // Check if we already have a pre-computed layout from SubgraphLayoutEngine
+        // A subgraph id declared again keeps the box laid out first, with the earlier block's title.
         if let Some(existing) = layout.subgraphs.get_mut(&subgraph.id) {
             existing.title = subgraph.title.clone();
 
@@ -100,7 +96,6 @@ fn compute_subgraph_layouts(
             continue;
         }
 
-        // No pre-computed layout, compute from node positions (fallback)
         let mut min_x = f32::MAX;
         let mut min_y = f32::MAX;
         let mut max_x = f32::MIN;

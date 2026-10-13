@@ -45,7 +45,7 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
     }
 
     // Parse body with subgraph support
-    let mut subgraph_stack: Vec<SubgraphBuilder> = Vec::new();
+    let mut subgraph_stack: Vec<FlowSubgraph> = Vec::new();
     let mut subgraph_counter = 0;
 
     while line_idx < lines.len() {
@@ -93,42 +93,23 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
         // Check for subgraph start
         if line_lower.starts_with("subgraph") {
             let (id, title) = parse_subgraph_header(line, &mut subgraph_counter);
-            subgraph_stack.push(SubgraphBuilder {
-                id: id.clone(),
+            subgraph_stack.push(FlowSubgraph {
+                id,
                 title,
                 node_ids: Vec::new(),
                 child_subgraph_ids: Vec::new(),
-                direction: None,
             });
             continue;
         }
 
         // Check for subgraph end
         if line_lower == "end" {
-            if let Some(builder) = subgraph_stack.pop() {
-                let subgraph = FlowSubgraph {
-                    id: builder.id.clone(),
-                    title: builder.title,
-                    node_ids: builder.node_ids,
-                    child_subgraph_ids: builder.child_subgraph_ids,
-                    direction: builder.direction,
-                };
-
-                // Register this subgraph as a child of the parent (if any)
-                if let Some(parent) = subgraph_stack.last_mut() {
-                    parent.child_subgraph_ids.push(builder.id.clone());
-                }
-
-                flowchart.subgraphs.push(subgraph);
-            }
+            close_subgraph(&mut subgraph_stack, &mut flowchart);
             continue;
         }
 
-        // Check for direction override inside subgraph
+        // A subgraph's own direction is not laid out.
         if !subgraph_stack.is_empty() && line_lower.starts_with("direction") {
-            if let Some(current) = subgraph_stack.last_mut() {
-                current.direction = Some(parse_direction(&line_lower));
-            }
             continue;
         }
 
@@ -171,7 +152,8 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
             for e in edges {
                 flowchart.edges.push(e);
             }
-        } else if let Some(node) = parse_node_definition(line) {
+        } else if let Some((id, label, shape)) = parse_node_from_text(line) {
+            let node = FlowNode { id, label, shape };
             // Standalone node definition
             if let Some(&idx) = node_map.get(&node.id) {
                 // Node exists - update if new definition has more info
@@ -200,33 +182,22 @@ pub fn parse_flowchart(source: &str) -> Result<Flowchart, String> {
         }
     }
 
-    // Handle any unclosed subgraphs (close them at end of diagram)
-    while let Some(builder) = subgraph_stack.pop() {
-        let subgraph = FlowSubgraph {
-            id: builder.id.clone(),
-            title: builder.title,
-            node_ids: builder.node_ids,
-            child_subgraph_ids: builder.child_subgraph_ids,
-            direction: builder.direction,
-        };
-
-        if let Some(parent) = subgraph_stack.last_mut() {
-            parent.child_subgraph_ids.push(builder.id.clone());
-        }
-
-        flowchart.subgraphs.push(subgraph);
+    // Unclosed subgraphs end with the diagram.
+    while !subgraph_stack.is_empty() {
+        close_subgraph(&mut subgraph_stack, &mut flowchart);
     }
 
     Ok(flowchart)
 }
 
-/// Helper struct for building subgraphs during parsing.
-struct SubgraphBuilder {
-    id: String,
-    title: Option<String>,
-    node_ids: Vec<String>,
-    child_subgraph_ids: Vec<String>,
-    direction: Option<FlowDirection>,
+/// Ends the innermost open subgraph: a child of the one around it, if any.
+fn close_subgraph(stack: &mut Vec<FlowSubgraph>, flowchart: &mut Flowchart) {
+    if let Some(subgraph) = stack.pop() {
+        if let Some(parent) = stack.last_mut() {
+            parent.child_subgraph_ids.push(subgraph.id.clone());
+        }
+        flowchart.subgraphs.push(subgraph);
+    }
 }
 
 /// Parse subgraph header line to extract id and title.
@@ -575,11 +546,6 @@ fn extract_dash_label(node_text: &str) -> (&str, Option<String>) {
             if after_closer.starts_with(pattern) {
                 let label = after_closer[pattern.len()..].trim();
                 let node_part = &text[..=closer_pos];
-                log::trace!(
-                    "extract_dash_label: found dash label, node='{}', label='{}'",
-                    node_part,
-                    label
-                );
                 return (node_part, Some(clean_label(label)));
             }
         }
@@ -590,11 +556,6 @@ fn extract_dash_label(node_text: &str) -> (&str, Option<String>) {
                 if rest.is_empty() || rest.starts_with(char::is_whitespace) {
                     let label = rest.trim();
                     let node_part = &text[..=closer_pos];
-                    log::trace!(
-                        "extract_dash_label: found dash label (variant), node='{}', label='{}'",
-                        node_part,
-                        label
-                    );
                     return (node_part, Some(clean_label(label)));
                 }
             }
@@ -752,7 +713,6 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
         return None;
     }
 
-    log::trace!("parse_node_from_text: input='{}'", text);
 
     // Stadium: ([text])
     if text.contains("([") && text.contains("])") {
@@ -934,12 +894,6 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
                 if start < end {
                     let id = text[..start].trim();
                     let label = text[start + 1..end].trim();
-                    log::debug!(
-                        "Asymmetric shape detected: id='{}', label='{}', text='{}'",
-                        id,
-                        label,
-                        text
-                    );
                     return Some((
                         extract_id(id, text),
                         clean_label(label),
@@ -952,11 +906,6 @@ pub(crate) fn parse_node_from_text(text: &str) -> Option<(String, String, NodeSh
 
     // Just an ID (no shape specified)
     let id = strip_trailing_semicolon(text.split_whitespace().next().unwrap_or(text));
-    log::trace!(
-        "parse_node_from_text: no shape matched, defaulting to Rectangle for id='{}', text='{}'",
-        id,
-        text
-    );
     Some((id.to_string(), id.to_string(), NodeShape::Rectangle))
 }
 
@@ -977,8 +926,4 @@ fn clean_label(label: &str) -> String {
         .replace("<br/>", "\n")
         .replace("<br>", "\n")
         .replace("<br />", "\n")
-}
-
-fn parse_node_definition(line: &str) -> Option<FlowNode> {
-    parse_node_from_text(line).map(|(id, label, shape)| FlowNode { id, label, shape })
 }

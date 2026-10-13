@@ -19,7 +19,7 @@ use floem::{
     context::{EventCx, LayoutCx, PaintCx, UpdateCx},
     event::{Event, EventPropagation},
     keyboard::{Key, NamedKey},
-    kurbo::{BezPath, Circle, Point, Rect, Size, Stroke},
+    kurbo::{BezPath, Circle, Point, Rect, Shape, Size, Stroke},
     peniko::Color,
     reactive::{Memo, ReadSignal, RwSignal, SignalGet, SignalTrack, SignalUpdate, SignalWith, create_effect, create_rw_signal},
     style::{CursorStyle, Style},
@@ -170,10 +170,6 @@ impl TextMeasurer for FloemMeasurer {
         TextSize::new(size.width as f32, size.height as f32)
     }
 
-    fn row_height(&self, font_size: f32) -> f32 {
-        self.layout("Ag", font_size, None).size().height as f32
-    }
-
     fn measure_wrapped(&self, text: &str, font_size: f32, max_width: f32) -> TextSize {
         if max_width <= 0.0 {
             return self.measure(text, font_size);
@@ -282,49 +278,24 @@ impl ScenePainter {
 
     fn paint_primitive(&self, cx: &mut PaintCx, primitive: &Primitive, at: Placement) {
         let point = |pos: Pos2| at.point(pos);
-        let stroke_width = |width: f32| f64::from(width) * at.scale;
         match primitive {
             Primitive::Line { from, to, stroke } => {
-                if !stroke.is_empty() {
-                    let line = floem::kurbo::Line::new(point(*from), point(*to));
-                    cx.stroke(&line, color(stroke.color), &Stroke::new(stroke_width(stroke.width)));
-                }
+                let line = floem::kurbo::Line::new(point(*from), point(*to));
+                fill_and_stroke(cx, &line, Color32::TRANSPARENT, *stroke, at.scale);
             }
             Primitive::Polygon { points, fill, stroke } => {
-                let mut path = BezPath::new();
-                for (index, pos) in points.iter().enumerate() {
-                    if index == 0 {
-                        path.move_to(point(*pos));
-                    } else {
-                        path.line_to(point(*pos));
-                    }
-                }
+                let mut path = polyline(points, at);
                 path.close_path();
-                if fill.a() > 0 {
-                    cx.fill(&path, color(*fill), 0.0);
-                }
-                if !stroke.is_empty() {
-                    cx.stroke(&path, color(stroke.color), &Stroke::new(stroke_width(stroke.width)));
-                }
+                fill_and_stroke(cx, &path, *fill, *stroke, at.scale);
             }
             Primitive::Rect { rect, radius, fill, stroke } => {
                 let shape = Rect::from_points(point(rect.min), point(rect.max))
                     .to_rounded_rect(f64::from(*radius) * at.scale);
-                if fill.a() > 0 {
-                    cx.fill(&shape, color(*fill), 0.0);
-                }
-                if !stroke.is_empty() {
-                    cx.stroke(&shape, color(stroke.color), &Stroke::new(stroke_width(stroke.width)));
-                }
+                fill_and_stroke(cx, &shape, *fill, *stroke, at.scale);
             }
             Primitive::Circle { center, radius, fill, stroke } => {
                 let circle = Circle::new(point(*center), f64::from(*radius) * at.scale);
-                if fill.a() > 0 {
-                    cx.fill(&circle, color(*fill), 0.0);
-                }
-                if !stroke.is_empty() {
-                    cx.stroke(&circle, color(stroke.color), &Stroke::new(stroke_width(stroke.width)));
-                }
+                fill_and_stroke(cx, &circle, *fill, *stroke, at.scale);
             }
             Primitive::Text { pos, align, text, size, color: text_color, max_width } => {
                 let scale = at.scale as f32;
@@ -475,7 +446,6 @@ impl DiagramCanvas {
         }
     }
 
-
     fn target_at(&self, point: Point) -> Option<HitTarget> {
         let Some(Drawing::Scene(scene)) = &self.drawing else {
             return None;
@@ -531,6 +501,28 @@ impl DiagramCanvas {
 
 fn color(color: Color32) -> Color {
     Color::from_rgba8(color.r(), color.g(), color.b(), color.a())
+}
+
+fn fill_and_stroke(cx: &mut PaintCx, shape: &impl Shape, fill: Color32, stroke: review_mermaid::Stroke, scale: f64) {
+    if fill.a() > 0 {
+        cx.fill(shape, color(fill), 0.0);
+    }
+    if !stroke.is_empty() {
+        cx.stroke(shape, color(stroke.color), &Stroke::new(f64::from(stroke.width) * scale));
+    }
+}
+
+/// The diagram points as a path where `at` places them.
+fn polyline(points: &[Pos2], at: Placement) -> BezPath {
+    let mut path = BezPath::new();
+    for (index, pos) in points.iter().enumerate() {
+        if index == 0 {
+            path.move_to(at.point(*pos));
+        } else {
+            path.line_to(at.point(*pos));
+        }
+    }
+    path
 }
 
 impl View for DiagramCanvas {
@@ -653,16 +645,7 @@ fn paint_area(cx: &mut PaintCx, area: &HitArea, at: Placement, color: Color, wid
             cx.stroke(&shape, color, &Stroke::new(width));
         }
         HitArea::Path { points, .. } => {
-            let mut path = BezPath::new();
-            for (index, pos) in points.iter().enumerate() {
-                let point = at.point(*pos);
-                if index == 0 {
-                    path.move_to(point);
-                } else {
-                    path.line_to(point);
-                }
-            }
-            cx.stroke(&path, color.multiply_alpha(0.7), &Stroke::new(width + 2.0));
+            cx.stroke(&polyline(points, at), color.multiply_alpha(0.7), &Stroke::new(width + 2.0));
         }
     }
 }

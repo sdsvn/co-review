@@ -6,7 +6,6 @@
 //! puts between block tags (`Renderer.renderToken`), which are text nodes in the DOM. Every inline then knows where
 //! its text starts on the page.
 
-use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::LazyLock;
 
@@ -79,24 +78,6 @@ pub enum Badge {
     Name,
 }
 
-impl Badge {
-    pub fn glyph(self) -> &'static str {
-        match self {
-            Badge::Question => "?",
-            Badge::Risk => "\u{26a0}",
-            Badge::Name => "\u{270e}",
-        }
-    }
-
-    pub fn hint(self) -> &'static str {
-        match self {
-            Badge::Question => "open question",
-            Badge::Risk => "risk",
-            Badge::Name => "naming / new artifact",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Image {
     pub url: String,
@@ -152,7 +133,7 @@ pub struct StepNode {
 }
 
 /// The title of a document: frontmatter `title`, else its first `# ` heading (without `Feature:`), else `fallback`.
-pub fn title(markdown: &str, fallback: &str) -> String {
+fn title(markdown: &str, fallback: &str) -> String {
     static HEADING: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"(?m)^#\s+([^\r\n]+?)\s*$").ok());
     static FEATURE: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"(?i)^Feature:\s*").ok());
     let frontmatter = split_frontmatter(markdown);
@@ -316,17 +297,12 @@ impl Inline {
         }
     }
 
-    /// The style at byte `index` of the text.
-    pub fn style_at(&self, index: usize) -> Option<&Style> {
+    /// The link at byte `index` of the text.
+    pub fn link_at(&self, index: usize) -> Option<&str> {
         self.spans
             .iter()
             .find(|span| span.range.contains(&index))
-            .map(|span| &span.style)
-    }
-
-    /// The link at byte `index` of the text.
-    pub fn link_at(&self, index: usize) -> Option<&str> {
-        self.style_at(index).and_then(|style| style.link.as_deref())
+            .and_then(|span| span.style.link.as_deref())
     }
 
     /// The end of the text on the page (UTF-16).
@@ -683,11 +659,7 @@ fn parse(markdown: &str, diagrams: &mut Vec<Diagram>) -> Vec<Block> {
                     Frame::Skipped => None,
                 };
                 if let Some(block) = block {
-                    match stack.last_mut() {
-                        None => root.push(block),
-                        Some(Frame::Quote(blocks) | Frame::Item { blocks, .. }) => blocks.push(block),
-                        Some(_) => {}
-                    }
+                    push_block(&mut root, &mut stack, block);
                 }
             }
             Event::Text(text) => match stack.last_mut() {
@@ -706,14 +678,7 @@ fn parse(markdown: &str, diagrams: &mut Vec<Diagram>) -> Vec<Block> {
             },
             Event::InlineHtml(html) => with_inline(&mut stack, |inline| inline.text(&html)),
             Event::SoftBreak | Event::HardBreak => with_inline(&mut stack, |inline| inline.text("\n")),
-            Event::Rule => {
-                let block = Block::Rule;
-                match stack.last_mut() {
-                    None => root.push(block),
-                    Some(Frame::Quote(blocks) | Frame::Item { blocks, .. }) => blocks.push(block),
-                    Some(_) => {}
-                }
-            }
+            Event::Rule => push_block(&mut root, &mut stack, Block::Rule),
             Event::InlineMath(text) | Event::DisplayMath(text) | Event::FootnoteReference(text) => {
                 with_inline(&mut stack, |inline| inline.text(&text));
             }
@@ -721,6 +686,15 @@ fn parse(markdown: &str, diagrams: &mut Vec<Diagram>) -> Vec<Block> {
         }
     }
     root
+}
+
+/// Adds a finished block to the quote or list item it is in, else to the page.
+fn push_block(root: &mut Vec<Block>, stack: &mut [Frame], block: Block) {
+    match stack.last_mut() {
+        None => root.push(block),
+        Some(Frame::Quote(blocks) | Frame::Item { blocks, .. }) => blocks.push(block),
+        Some(_) => {}
+    }
 }
 
 /// Runs `apply` on the inline text being written: a paragraph's, heading's or cell's, or a list item's own text.
@@ -918,76 +892,45 @@ fn assign_starts(block: &mut Block, starts: &mut impl Iterator<Item = usize>) {
     }
 }
 
-/// Every inline of the blocks, in page order, with the step it belongs to.
-pub(crate) fn inlines(blocks: &[Block]) -> Vec<&Inline> {
-    fn steps<'a>(nodes: &'a [StepNode], out: &mut Vec<&'a Inline>) {
-        for node in nodes {
-            out.push(&node.text);
-            steps(&node.children, out);
-        }
-    }
-    fn walk<'a>(blocks: &'a [Block], out: &mut Vec<&'a Inline>) {
-        for block in blocks {
-            match block {
-                Block::Meta(meta) => {
-                    out.push(&meta.kind);
-                    out.extend(meta.description.iter());
-                    out.extend(meta.resource.iter());
-                }
-                Block::Warnings { title, items } => {
-                    out.push(title);
-                    out.extend(items.iter());
-                }
-                Block::Paragraph(inline) | Block::Heading { text: inline, .. } | Block::Code { text: inline, .. } => {
-                    out.push(inline);
-                }
-                Block::Diagram { head, .. } => out.push(head),
-                Block::Quote(children) => walk(children, out),
-                Block::List { items, .. } => items.iter().for_each(|item| walk(item, out)),
-                Block::Table { head, rows, .. } => out.extend(head.iter().chain(rows.iter().flatten())),
-                Block::Section { heading, blocks, .. } => {
-                    out.push(heading);
-                    walk(blocks, out);
-                }
-                Block::Tree { steps: nodes, .. } => steps(nodes, out),
-                Block::Rule => {}
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(blocks, &mut out);
-    out
-}
-
 impl Page {
     /// Every inline of the page, in page order.
     pub fn inlines(&self) -> Vec<&Inline> {
-        inlines(&self.blocks)
-    }
-
-    /// The diagram with block id `id`.
-    pub fn diagram(&self, id: &str) -> Option<&Diagram> {
-        self.diagrams.iter().find(|diagram| diagram.id == id)
-    }
-
-    /// The design steps by id, for placing `tree-node` comments.
-    pub fn steps(&self) -> HashMap<String, &StepNode> {
-        fn walk<'a>(nodes: &'a [StepNode], out: &mut HashMap<String, &'a StepNode>) {
+        fn steps<'a>(nodes: &'a [StepNode], out: &mut Vec<&'a Inline>) {
             for node in nodes {
-                out.entry(node.id.clone()).or_insert(node);
-                walk(&node.children, out);
+                out.push(&node.text);
+                steps(&node.children, out);
             }
         }
-        let mut out = HashMap::new();
-        for block in &self.blocks {
-            if let Block::Section { blocks, .. } = block {
-                for block in blocks {
-                    if let Block::Tree { steps, .. } = block {
-                        walk(steps, &mut out);
+        fn walk<'a>(blocks: &'a [Block], out: &mut Vec<&'a Inline>) {
+            for block in blocks {
+                match block {
+                    Block::Meta(meta) => {
+                        out.push(&meta.kind);
+                        out.extend(meta.description.iter());
+                        out.extend(meta.resource.iter());
                     }
+                    Block::Warnings { title, items } => {
+                        out.push(title);
+                        out.extend(items.iter());
+                    }
+                    Block::Paragraph(inline) | Block::Heading { text: inline, .. } | Block::Code { text: inline, .. } => {
+                        out.push(inline);
+                    }
+                    Block::Diagram { head, .. } => out.push(head),
+                    Block::Quote(children) => walk(children, out),
+                    Block::List { items, .. } => items.iter().for_each(|item| walk(item, out)),
+                    Block::Table { head, rows, .. } => out.extend(head.iter().chain(rows.iter().flatten())),
+                    Block::Section { heading, blocks, .. } => {
+                        out.push(heading);
+                        walk(blocks, out);
+                    }
+                    Block::Tree { steps: nodes, .. } => steps(nodes, out),
+                    Block::Rule => {}
                 }
             }
         }
+        let mut out = Vec::new();
+        walk(&self.blocks, &mut out);
         out
     }
 }

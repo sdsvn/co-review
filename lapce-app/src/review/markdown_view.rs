@@ -24,11 +24,11 @@ use floem::{
     taffy::tree::NodeId,
     text::{Attrs, AttrsList, Cursor, FamilyOwned, LineHeightValue, Style as FontStyle, TextLayout, Weight},
     views::{
-        Decorators, container, dyn_container, empty, h_stack, h_stack_from_iter, img, label, svg,
+        Decorators, container, dyn_container, empty, h_stack, h_stack_from_iter, img, label, svg, v_stack,
         v_stack_from_iter,
     },
 };
-use review_markdown::{Alignment, Badge, Block, Image, Inline, Meta, Page, StepNode, Style as SpanStyle};
+use review_markdown::{Alignment, Badge, Block, Image, Inline, Meta, Page, Style as SpanStyle};
 use review_model::{DocAnchor, ThreadIntent};
 
 use crate::{
@@ -166,7 +166,7 @@ fn block_view(ctx: &PageContext, block: &Block) -> floem::AnyView {
             with_slot(ctx, inline.start, v_stack_from_iter(parts).style(|s| s.width_full().margin_vert(4.0)))
         }
         Block::Code { language, text } => {
-            let code = text_block_code(ctx, text, language.clone());
+            let code = text_block_with(ctx, text, TextKind::Code, Some(language.clone()));
             with_slot(
                 ctx,
                 text.start,
@@ -244,17 +244,14 @@ fn block_view(ctx: &PageContext, block: &Block) -> floem::AnyView {
             with_slot(ctx, head.start, diagram)
         }
         Block::Section { heading, altitude, blocks } => {
-            let title = text_block(ctx, heading, TextKind::Heading(2));
-            let switch = altitude.then(|| level_switch(ctx).into_any());
-            let mut row: Vec<floem::AnyView> = vec![title.into_any()];
-            row.extend(switch);
-            let mut parts: Vec<floem::AnyView> = vec![
-                h_stack_from_iter(row)
-                    .style(|s| s.width_full().items_center().margin_top(16.0).margin_bottom(6.0))
-                    .into_any(),
-            ];
-            parts.push(blocks_view(ctx, blocks).into_any());
-            v_stack_from_iter(parts).style(|s| s.width_full()).into_any()
+            let mut row: Vec<floem::AnyView> = vec![text_block(ctx, heading, TextKind::Heading(2)).into_any()];
+            row.extend(altitude.then(|| level_switch(ctx).into_any()));
+            v_stack((
+                h_stack_from_iter(row).style(|s| s.width_full().items_center().margin_top(16.0).margin_bottom(6.0)),
+                blocks_view(ctx, blocks),
+            ))
+            .style(|s| s.width_full())
+            .into_any()
         }
         Block::Tree { design, steps } => super::design_tree::tree_view(ctx, steps, *design).into_any(),
     }
@@ -391,22 +388,16 @@ fn image_view(ctx: &PageContext, image: &Image) -> floem::AnyView {
 
 /// A block of page text: drawn with its styles, the selection and the comment marks, and selectable.
 pub fn text_block(ctx: &PageContext, inline: &Inline, kind: TextKind) -> TextBlock {
-    let inline = Rc::new(inline.clone());
-    let config = ctx.config;
-    let build = {
-        let inline = inline.clone();
-        move || layout_of(&inline, kind, None, &config.get())
-    };
-    TextBlock::new(ctx, inline, build)
+    text_block_with(ctx, inline, kind, None)
 }
 
-/// A code block's text, highlighted as its language.
-fn text_block_code(ctx: &PageContext, inline: &Inline, language: String) -> TextBlock {
+/// A text block, highlighted as code in `language`.
+fn text_block_with(ctx: &PageContext, inline: &Inline, kind: TextKind, language: Option<String>) -> TextBlock {
     let inline = Rc::new(inline.clone());
     let config = ctx.config;
     let build = {
         let inline = inline.clone();
-        move || layout_of(&inline, TextKind::Code, Some(&language), &config.get())
+        move || layout_of(&inline, kind, language.as_deref(), &config.get())
     };
     TextBlock::new(ctx, inline, build)
 }
@@ -472,10 +463,7 @@ fn span_attrs<'a>(base: Attrs<'a>, style: &SpanStyle, code_family: &'a [FamilyOw
     if style.italic {
         attrs = attrs.style(FontStyle::Italic);
     }
-    if style.reason {
-        attrs = attrs.color(config.color(LapceColor::EDITOR_DIM));
-    }
-    if style.strike {
+    if style.reason || style.strike {
         attrs = attrs.color(config.color(LapceColor::EDITOR_DIM));
     }
     if style.link.is_some() {
@@ -943,11 +931,6 @@ pub fn comment_icon(
             .cursor(CursorStyle::Pointer)
             .hover(|s| s.background(config.color(LapceColor::PANEL_HOVERED_BACKGROUND)))
     })
-}
-
-/// Steps in a page's tree: each with its text and comment marks.
-pub fn step_text(ctx: &PageContext, step: &StepNode) -> TextBlock {
-    text_block(ctx, &step.text, TextKind::Body)
 }
 
 #[cfg(test)]

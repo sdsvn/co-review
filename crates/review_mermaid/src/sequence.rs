@@ -168,6 +168,23 @@ pub fn parse_sequence_diagram(source: &str) -> Result<SequenceDiagram, String> {
     let mut participant_map: HashMap<String, usize> = HashMap::new();
     let mut block_stack: Vec<SeqBlockBuilder> = Vec::new();
     let lines: Vec<&str> = source.lines().skip(1).collect();
+    // A participant first named in a message, a note or `activate`.
+    fn mention(diagram: &mut SequenceDiagram, participant_map: &mut HashMap<String, usize>, id: &str) {
+        if !participant_map.contains_key(id) {
+            participant_map.insert(id.to_string(), diagram.participants.len());
+            diagram.participants.push(Participant {
+                id: id.to_string(),
+                label: id.to_string(),
+                is_actor: false,
+            });
+        }
+    }
+    fn add(diagram: &mut SequenceDiagram, block_stack: &mut [SeqBlockBuilder], stmt: SeqStatement) {
+        match block_stack.last_mut() {
+            Some(builder) => builder.add_statement(stmt),
+            None => diagram.statements.push(stmt),
+        }
+    }
 
     for (line_num, line) in lines.iter().enumerate() {
         let line = line.trim();
@@ -210,66 +227,34 @@ pub fn parse_sequence_diagram(source: &str) -> Result<SequenceDiagram, String> {
             continue;
         }
 
-        if first_word == "else" {
-            if let Some(builder) = block_stack.last_mut() {
-                if builder.kind == SeqBlockKind::Alt {
-                    let label = line[4..].trim();
-                    let label = if label.is_empty() {
-                        None
-                    } else {
-                        Some(label.to_string())
-                    };
-                    builder.start_new_segment(label);
-                } else {
-                    return Err(format!(
-                        "Line {}: 'else' can only be used inside 'alt' blocks",
-                        line_num + 2
-                    ));
-                }
-            } else {
+        // `else` divides an `alt` block, `and` a `par` block.
+        let divided = match first_word {
+            "else" => Some(SeqBlockKind::Alt),
+            "and" => Some(SeqBlockKind::Par),
+            _ => None,
+        };
+        if let Some(kind) = divided {
+            let opener = kind.display_name();
+            let Some(builder) = block_stack.last_mut() else {
                 return Err(format!(
-                    "Line {}: 'else' without matching 'alt' block",
+                    "Line {}: '{first_word}' without matching '{opener}' block",
+                    line_num + 2
+                ));
+            };
+            if builder.kind != kind {
+                return Err(format!(
+                    "Line {}: '{first_word}' can only be used inside '{opener}' blocks",
                     line_num + 2
                 ));
             }
-            continue;
-        }
-
-        if first_word == "and" {
-            if let Some(builder) = block_stack.last_mut() {
-                if builder.kind == SeqBlockKind::Par {
-                    let label = line[3..].trim();
-                    let label = if label.is_empty() {
-                        None
-                    } else {
-                        Some(label.to_string())
-                    };
-                    builder.start_new_segment(label);
-                } else {
-                    return Err(format!(
-                        "Line {}: 'and' can only be used inside 'par' blocks",
-                        line_num + 2
-                    ));
-                }
-            } else {
-                return Err(format!(
-                    "Line {}: 'and' without matching 'par' block",
-                    line_num + 2
-                ));
-            }
+            let label = line[first_word.len()..].trim();
+            builder.start_new_segment((!label.is_empty()).then(|| label.to_string()));
             continue;
         }
 
         if first_word == "end" {
             if let Some(builder) = block_stack.pop() {
-                let block = builder.finalize();
-                let stmt = SeqStatement::Block(block);
-
-                if let Some(parent) = block_stack.last_mut() {
-                    parent.add_statement(stmt);
-                } else {
-                    diagram.statements.push(stmt);
-                }
+                add(&mut diagram, &mut block_stack, SeqStatement::Block(builder.finalize()));
             } else {
                 return Err(format!(
                     "Line {}: 'end' without matching block opener",
@@ -283,21 +268,8 @@ pub fn parse_sequence_diagram(source: &str) -> Result<SequenceDiagram, String> {
         if first_word == "activate" {
             let participant_id = line[8..].trim().to_string();
             if !participant_id.is_empty() {
-                if !participant_map.contains_key(&participant_id) {
-                    participant_map.insert(participant_id.clone(), diagram.participants.len());
-                    diagram.participants.push(Participant {
-                        id: participant_id.clone(),
-                        label: participant_id.clone(),
-                        is_actor: false,
-                    });
-                }
-
-                let stmt = SeqStatement::Activate(participant_id);
-                if let Some(builder) = block_stack.last_mut() {
-                    builder.add_statement(stmt);
-                } else {
-                    diagram.statements.push(stmt);
-                }
+                mention(&mut diagram, &mut participant_map, &participant_id);
+                add(&mut diagram, &mut block_stack, SeqStatement::Activate(participant_id));
             }
             continue;
         }
@@ -305,72 +277,29 @@ pub fn parse_sequence_diagram(source: &str) -> Result<SequenceDiagram, String> {
         if first_word == "deactivate" {
             let participant_id = line[10..].trim().to_string();
             if !participant_id.is_empty() {
-                let stmt = SeqStatement::Deactivate(participant_id);
-                if let Some(builder) = block_stack.last_mut() {
-                    builder.add_statement(stmt);
-                } else {
-                    diagram.statements.push(stmt);
-                }
+                add(&mut diagram, &mut block_stack, SeqStatement::Deactivate(participant_id));
             }
             continue;
         }
 
         // Parse Note syntax
         if let Some(note) = parse_sequence_note(line) {
-            match &note.position {
-                NotePosition::LeftOf(id) | NotePosition::RightOf(id) => {
-                    if !participant_map.contains_key(id) {
-                        participant_map.insert(id.clone(), diagram.participants.len());
-                        diagram.participants.push(Participant {
-                            id: id.clone(),
-                            label: id.clone(),
-                            is_actor: false,
-                        });
-                    }
-                }
-                NotePosition::Over(ids) => {
-                    for id in ids {
-                        if !participant_map.contains_key(id) {
-                            participant_map.insert(id.clone(), diagram.participants.len());
-                            diagram.participants.push(Participant {
-                                id: id.clone(),
-                                label: id.clone(),
-                                is_actor: false,
-                            });
-                        }
-                    }
-                }
+            let ids = match &note.position {
+                NotePosition::LeftOf(id) | NotePosition::RightOf(id) => std::slice::from_ref(id),
+                NotePosition::Over(ids) => ids.as_slice(),
+            };
+            for id in ids {
+                mention(&mut diagram, &mut participant_map, id);
             }
-
-            let stmt = SeqStatement::Note(note);
-            if let Some(builder) = block_stack.last_mut() {
-                builder.add_statement(stmt);
-            } else {
-                diagram.statements.push(stmt);
-            }
+            add(&mut diagram, &mut block_stack, SeqStatement::Note(note));
             continue;
         }
 
         // Parse message
         if let Some(msg) = parse_sequence_message(line) {
-            for id in [&msg.from, &msg.to] {
-                if !participant_map.contains_key(id) {
-                    participant_map.insert(id.clone(), diagram.participants.len());
-                    diagram.participants.push(Participant {
-                        id: id.clone(),
-                        label: id.clone(),
-                        is_actor: false,
-                    });
-                }
-            }
-
-            let stmt = SeqStatement::Message(msg);
-
-            if let Some(builder) = block_stack.last_mut() {
-                builder.add_statement(stmt);
-            } else {
-                diagram.statements.push(stmt);
-            }
+            mention(&mut diagram, &mut participant_map, &msg.from);
+            mention(&mut diagram, &mut participant_map, &msg.to);
+            add(&mut diagram, &mut block_stack, SeqStatement::Message(msg));
         }
     }
 
@@ -649,8 +578,6 @@ pub fn render_sequence_diagram(
         + total_slots as f32 * layout.message_height
         + layout.lifeline_extend;
 
-    let offset = Vec2::ZERO;
-
     let mut participant_x: HashMap<String, f32> = HashMap::new();
     let mut current_x = layout.margin;
 
@@ -687,8 +614,8 @@ pub fn render_sequence_diagram(
         if let Some(&x) = participant_x.get(&participant.id) {
             painter.line_segment(
                 [
-                    Pos2::new(x, lifeline_start_y) + offset,
-                    Pos2::new(x, lifeline_end_y) + offset,
+                    Pos2::new(x, lifeline_start_y),
+                    Pos2::new(x, lifeline_end_y),
                 ],
                 Stroke::new(1.0, colors.lifeline),
             );
@@ -703,7 +630,7 @@ pub fn render_sequence_diagram(
                 .copied()
                 .unwrap_or(layout.min_participant_width);
             let rect = Rect::from_center_size(
-                Pos2::new(center_x, layout.margin + layout.participant_height / 2.0) + offset,
+                Pos2::new(center_x, layout.margin + layout.participant_height / 2.0),
                 Vec2::new(width, layout.participant_height),
             );
             // co-review: the participant's hit area, for comments on it (its id as the Theia app named it).
@@ -720,7 +647,6 @@ pub fn render_sequence_diagram(
                     painter,
                     center_x,
                     &rect,
-                    offset,
                     &colors,
                     font_size,
                     &participant.label,
@@ -746,35 +672,34 @@ pub fn render_sequence_diagram(
 
     // Draw statements
     let mut current_y = layout.margin + layout.participant_height + layout.message_height / 2.0;
-    let mut activation_state: HashMap<String, ActivationState> = HashMap::new();
+    // Start y of each participant's open activations, innermost last.
+    let mut activations: HashMap<String, Vec<f32>> = HashMap::new();
 
     draw_statements(
         painter,
         &diagram.statements,
         &participant_x,
         &mut current_y,
-        offset,
         &layout,
         &colors,
         font_size,
         lifeline_left,
         lifeline_right,
         0,
-        &mut activation_state,
+        &mut activations,
     );
 
     // Draw remaining activations
     let diagram_end_y = current_y;
-    for (participant_id, state) in activation_state.iter() {
+    for (participant_id, starts) in &activations {
         if let Some(&x) = participant_x.get(participant_id) {
-            for (i, &start_y) in state.start_ys.iter().enumerate() {
+            for (i, &start_y) in starts.iter().enumerate() {
                 let depth_offset = i as f32 * layout.activation_offset;
                 draw_activation_box(
                     painter,
                     x + depth_offset,
                     start_y,
                     diagram_end_y,
-                    offset,
                     &layout,
                     &colors,
                 );
@@ -789,7 +714,6 @@ fn draw_actor(
     painter: &crate::egui::Painter,
     center_x: f32,
     rect: &Rect,
-    offset: Vec2,
     colors: &SeqColors,
     font_size: f32,
     label: &str,
@@ -798,41 +722,19 @@ fn draw_actor(
     let body_y = head_y + 15.0;
     let legs_y = body_y + 12.0;
 
-    painter.circle_stroke(
-        Pos2::new(center_x + offset.x, head_y),
-        6.0,
-        Stroke::new(2.0, colors.actor),
-    );
-    painter.line_segment(
-        [
-            Pos2::new(center_x + offset.x, head_y + 6.0),
-            Pos2::new(center_x + offset.x, body_y),
-        ],
-        Stroke::new(2.0, colors.actor),
-    );
-    painter.line_segment(
-        [
-            Pos2::new(center_x - 10.0 + offset.x, head_y + 12.0),
-            Pos2::new(center_x + 10.0 + offset.x, head_y + 12.0),
-        ],
-        Stroke::new(2.0, colors.actor),
-    );
-    painter.line_segment(
-        [
-            Pos2::new(center_x + offset.x, body_y),
-            Pos2::new(center_x - 8.0 + offset.x, legs_y),
-        ],
-        Stroke::new(2.0, colors.actor),
-    );
-    painter.line_segment(
-        [
-            Pos2::new(center_x + offset.x, body_y),
-            Pos2::new(center_x + 8.0 + offset.x, legs_y),
-        ],
-        Stroke::new(2.0, colors.actor),
-    );
+    let stroke = Stroke::new(2.0, colors.actor);
+    painter.circle_stroke(Pos2::new(center_x, head_y), 6.0, stroke);
+    // Body, arms, legs: (dx, y) to (dx, y) from the centre line.
+    for ((x0, y0), (x1, y1)) in [
+        ((0.0, head_y + 6.0), (0.0, body_y)),
+        ((-10.0, head_y + 12.0), (10.0, head_y + 12.0)),
+        ((0.0, body_y), (-8.0, legs_y)),
+        ((0.0, body_y), (8.0, legs_y)),
+    ] {
+        painter.line_segment([Pos2::new(center_x + x0, y0), Pos2::new(center_x + x1, y1)], stroke);
+    }
     painter.text(
-        Pos2::new(center_x + offset.x, rect.bottom() - 2.0),
+        Pos2::new(center_x, rect.bottom() - 2.0),
         crate::egui::Align2::CENTER_BOTTOM,
         label,
         FontId::proportional(font_size - 2.0),
@@ -845,7 +747,6 @@ fn draw_message(
     message: &Message,
     participant_x: &HashMap<String, f32>,
     y: f32,
-    offset: Vec2,
     colors: &SeqColors,
     font_size: f32,
 ) {
@@ -853,8 +754,8 @@ fn draw_message(
         participant_x.get(&message.from),
         participant_x.get(&message.to),
     ) {
-        let from_pos = Pos2::new(from_x + offset.x, y);
-        let to_pos = Pos2::new(to_x + offset.x, y);
+        let from_pos = Pos2::new(from_x, y);
+        let to_pos = Pos2::new(to_x, y);
         let index = painter.next_edge_index();
         // co-review: the message's hit area, for comments on it.
         painter.hit(
@@ -903,7 +804,7 @@ fn draw_message(
         }
 
         if !message.label.is_empty() {
-            let label_pos = Pos2::new((from_x + to_x) / 2.0 + offset.x, y - 8.0);
+            let label_pos = Pos2::new((from_x + to_x) / 2.0, y - 8.0);
             painter.text(
                 label_pos,
                 crate::egui::Align2::CENTER_BOTTOM,
@@ -915,10 +816,26 @@ fn draw_message(
     }
 }
 
-#[derive(Default)]
-struct ActivationState {
-    start_ys: Vec<f32>,
-    depth: usize,
+/// Ends a participant's innermost activation at `end_y`: its box, inset by the activations still open.
+fn end_activation(
+    painter: &crate::egui::Painter,
+    activations: &mut HashMap<String, Vec<f32>>,
+    participant_id: &str,
+    participant_x: &HashMap<String, f32>,
+    end_y: f32,
+    layout: &SeqLayout,
+    colors: &SeqColors,
+) {
+    let Some(starts) = activations.get_mut(participant_id) else {
+        return;
+    };
+    let Some(start_y) = starts.pop() else {
+        return;
+    };
+    if let Some(&x) = participant_x.get(participant_id) {
+        let depth_offset = starts.len() as f32 * layout.activation_offset;
+        draw_activation_box(painter, x + depth_offset, start_y, end_y, layout, colors);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -927,96 +844,35 @@ fn draw_statements(
     statements: &[SeqStatement],
     participant_x: &HashMap<String, f32>,
     current_y: &mut f32,
-    offset: Vec2,
     layout: &SeqLayout,
     colors: &SeqColors,
     font_size: f32,
     lifeline_left: f32,
     lifeline_right: f32,
     depth: usize,
-    activation_state: &mut HashMap<String, ActivationState>,
+    activations: &mut HashMap<String, Vec<f32>>,
 ) {
     for stmt in statements {
         match stmt {
             SeqStatement::Message(message) => {
-                let y = *current_y + offset.y;
-
                 if message.activate_target {
-                    let state = activation_state.entry(message.to.clone()).or_default();
-                    state.start_ys.push(*current_y);
-                    state.depth += 1;
+                    activations.entry(message.to.clone()).or_default().push(*current_y);
                 }
-
-                draw_message(
-                    painter,
-                    message,
-                    participant_x,
-                    y,
-                    offset,
-                    colors,
-                    font_size,
-                );
+                draw_message(painter, message, participant_x, *current_y, colors, font_size);
                 *current_y += layout.message_height;
-
                 if message.deactivate_target {
-                    if let Some(state) = activation_state.get_mut(&message.to) {
-                        if let Some(start_y) = state.start_ys.pop() {
-                            if let Some(&x) = participant_x.get(&message.to) {
-                                let depth_offset =
-                                    state.depth.saturating_sub(1) as f32 * layout.activation_offset;
-                                draw_activation_box(
-                                    painter,
-                                    x + depth_offset,
-                                    start_y,
-                                    *current_y,
-                                    offset,
-                                    layout,
-                                    colors,
-                                );
-                            }
-                            state.depth = state.depth.saturating_sub(1);
-                        }
-                    }
+                    end_activation(painter, activations, &message.to, participant_x, *current_y, layout, colors);
                 }
             }
             SeqStatement::Note(note) => {
-                let y = *current_y + offset.y;
-                draw_note(
-                    painter,
-                    note,
-                    participant_x,
-                    y,
-                    offset,
-                    layout,
-                    colors,
-                    font_size,
-                );
+                draw_note(painter, note, participant_x, *current_y, layout, colors, font_size);
                 *current_y += layout.message_height;
             }
             SeqStatement::Activate(participant_id) => {
-                let state = activation_state.entry(participant_id.clone()).or_default();
-                state.start_ys.push(*current_y);
-                state.depth += 1;
+                activations.entry(participant_id.clone()).or_default().push(*current_y);
             }
             SeqStatement::Deactivate(participant_id) => {
-                if let Some(state) = activation_state.get_mut(participant_id) {
-                    if let Some(start_y) = state.start_ys.pop() {
-                        if let Some(&x) = participant_x.get(participant_id) {
-                            let depth_offset =
-                                state.depth.saturating_sub(1) as f32 * layout.activation_offset;
-                            draw_activation_box(
-                                painter,
-                                x + depth_offset,
-                                start_y,
-                                *current_y,
-                                offset,
-                                layout,
-                                colors,
-                            );
-                        }
-                        state.depth = state.depth.saturating_sub(1);
-                    }
-                }
+                end_activation(painter, activations, participant_id, participant_x, *current_y, layout, colors);
             }
             SeqStatement::Block(block) => {
                 draw_block(
@@ -1024,14 +880,13 @@ fn draw_statements(
                     block,
                     participant_x,
                     current_y,
-                    offset,
                     layout,
                     colors,
                     font_size,
                     lifeline_left,
                     lifeline_right,
                     depth,
-                    activation_state,
+                    activations,
                 );
             }
         }
@@ -1043,13 +898,12 @@ fn draw_activation_box(
     x: f32,
     start_y: f32,
     end_y: f32,
-    offset: Vec2,
     layout: &SeqLayout,
     colors: &SeqColors,
 ) {
     let rect = Rect::from_min_max(
-        Pos2::new(x - layout.activation_width / 2.0, start_y) + offset,
-        Pos2::new(x + layout.activation_width / 2.0, end_y) + offset,
+        Pos2::new(x - layout.activation_width / 2.0, start_y),
+        Pos2::new(x + layout.activation_width / 2.0, end_y),
     );
 
     painter.rect(
@@ -1066,34 +920,24 @@ fn draw_note(
     note: &SeqNote,
     participant_x: &HashMap<String, f32>,
     y: f32,
-    offset: Vec2,
     layout: &SeqLayout,
     colors: &SeqColors,
     font_size: f32,
 ) {
     let (note_x, note_width) = match &note.position {
         NotePosition::LeftOf(participant) => {
-            if let Some(&x) = participant_x.get(participant) {
-                (
-                    x - layout.note_width - layout.participant_spacing / 2.0,
-                    layout.note_width,
-                )
-            } else {
+            let Some(&x) = participant_x.get(participant) else {
                 return;
-            }
+            };
+            (x - layout.note_width - layout.participant_spacing / 2.0, layout.note_width)
         }
         NotePosition::RightOf(participant) => {
-            if let Some(&x) = participant_x.get(participant) {
-                (x + layout.participant_spacing / 2.0, layout.note_width)
-            } else {
+            let Some(&x) = participant_x.get(participant) else {
                 return;
-            }
+            };
+            (x + layout.participant_spacing / 2.0, layout.note_width)
         }
         NotePosition::Over(participants) => {
-            if participants.is_empty() {
-                return;
-            }
-
             let xs: Vec<f32> = participants
                 .iter()
                 .filter_map(|id| participant_x.get(id).copied())
@@ -1114,7 +958,7 @@ fn draw_note(
 
     let note_height = layout.message_height - layout.note_padding;
     let note_rect = Rect::from_min_size(
-        Pos2::new(note_x, y - note_height / 2.0) + offset,
+        Pos2::new(note_x, y - note_height / 2.0),
         Vec2::new(note_width, note_height),
     );
 
@@ -1163,14 +1007,13 @@ fn draw_block(
     block: &SeqBlock,
     participant_x: &HashMap<String, f32>,
     current_y: &mut f32,
-    offset: Vec2,
     layout: &SeqLayout,
     colors: &SeqColors,
     font_size: f32,
     lifeline_left: f32,
     lifeline_right: f32,
     depth: usize,
-    activation_state: &mut HashMap<String, ActivationState>,
+    activations: &mut HashMap<String, Vec<f32>>,
 ) {
     let mut block_height = layout.block_label_height;
     for (i, segment) in block.segments.iter().enumerate() {
@@ -1190,7 +1033,7 @@ fn draw_block(
     let block_top_y = *current_y - layout.message_height / 2.0 + layout.block_padding;
 
     let block_rect = Rect::from_min_size(
-        Pos2::new(block_left, block_top_y) + offset,
+        Pos2::new(block_left, block_top_y),
         Vec2::new(block_width, block_height),
     );
 
@@ -1211,7 +1054,7 @@ fn draw_block(
     };
 
     let label_rect = Rect::from_min_size(
-        Pos2::new(block_left, block_top_y) + offset,
+        Pos2::new(block_left, block_top_y),
         Vec2::new(
             label_with_bracket.len() as f32 * 7.0 + 12.0,
             layout.block_label_height,
@@ -1232,11 +1075,11 @@ fn draw_block(
 
     for (i, segment) in block.segments.iter().enumerate() {
         if i > 0 {
-            let sep_y = *current_y - layout.message_height / 2.0 + offset.y;
+            let sep_y = *current_y - layout.message_height / 2.0;
             painter.line_segment(
                 [
-                    Pos2::new(block_left + offset.x, sep_y),
-                    Pos2::new(block_right + offset.x, sep_y),
+                    Pos2::new(block_left, sep_y),
+                    Pos2::new(block_right, sep_y),
                 ],
                 Stroke::new(1.0, colors.block_stroke),
             );
@@ -1253,7 +1096,7 @@ fn draw_block(
 
             if let Some(text) = segment_label_text {
                 painter.text(
-                    Pos2::new(block_left + 10.0 + offset.x, sep_y + 2.0),
+                    Pos2::new(block_left + 10.0, sep_y + 2.0),
                     crate::egui::Align2::LEFT_TOP,
                     &text,
                     FontId::proportional(font_size - 3.0),
@@ -1269,14 +1112,13 @@ fn draw_block(
             &segment.statements,
             participant_x,
             current_y,
-            offset,
             layout,
             colors,
             font_size,
             lifeline_left,
             lifeline_right,
             depth + 1,
-            activation_state,
+            activations,
         );
     }
 

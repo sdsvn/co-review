@@ -1,8 +1,4 @@
-//! Text measurement utilities for Mermaid diagram rendering.
-//!
-//! This module provides backend-agnostic text measurement capabilities,
-//! supporting the app's text layout (Co-Review: a measurer the app supplies) and estimation for tests.
-
+//! Text measurement for the layout: the app supplies a measurer; tests estimate.
 
 /// Result of measuring text dimensions.
 #[derive(Debug, Clone, Copy)]
@@ -17,16 +13,9 @@ impl TextSize {
     }
 }
 
-/// Trait for measuring text dimensions.
-///
-/// This enables backend-agnostic text measurement, supporting future
-/// SVG/PNG backends when extracting to a standalone crate.
 pub trait TextMeasurer {
     /// Measure the dimensions of text with the given font size.
     fn measure(&self, text: &str, font_size: f32) -> TextSize;
-
-    /// Get the row height for a font at the given size.
-    fn row_height(&self, font_size: f32) -> f32;
 
     /// Measure text with wrapping at max_width. Returns size of wrapped text.
     fn measure_wrapped(&self, text: &str, font_size: f32, max_width: f32) -> TextSize {
@@ -81,29 +70,12 @@ pub trait TextMeasurer {
     }
 }
 
-/// Fallback text measurer using character-based estimation.
-/// Used when egui context is not available (e.g., in tests).
+/// Text measured by its length in bytes: each byte 0.55 of the font size wide.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct EstimatedTextMeasurer {
-    /// Approximate width per character as a fraction of font size.
-    char_width_factor: f32,
-}
-
-impl EstimatedTextMeasurer {
-    pub fn new() -> Self {
-        Self {
-            char_width_factor: 0.55, // Slightly better than the old 0.6
-        }
-    }
-}
+pub struct EstimatedTextMeasurer;
 
 impl TextMeasurer for EstimatedTextMeasurer {
     fn measure(&self, text: &str, font_size: f32) -> TextSize {
-        let width = text.len() as f32 * font_size * self.char_width_factor;
-        TextSize::new(width, font_size)
-    }
-
-    fn row_height(&self, font_size: f32) -> f32 {
-        font_size * 1.2 // Standard line height
+        TextSize::new(text.len() as f32 * font_size * 0.55, font_size)
     }
 }

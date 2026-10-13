@@ -88,13 +88,10 @@ pub struct FlowSubgraph {
     pub node_ids: Vec<String>,
     /// IDs of nested subgraphs
     pub child_subgraph_ids: Vec<String>,
-    /// Optional direction override for this subgraph (for future use)
-    #[allow(dead_code)]
-    pub direction: Option<FlowDirection>,
 }
 
 /// Custom style for a node defined via classDef.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NodeStyle {
     /// Fill color (background)
     pub fill: Option<Color32>,
@@ -104,17 +101,6 @@ pub struct NodeStyle {
     pub stroke_width: Option<f32>,
     /// Label text color (`color:` in classDef / style)
     pub color: Option<Color32>,
-}
-
-impl Default for NodeStyle {
-    fn default() -> Self {
-        Self {
-            fill: None,
-            stroke: None,
-            stroke_width: None,
-            color: None,
-        }
-    }
 }
 
 impl NodeStyle {

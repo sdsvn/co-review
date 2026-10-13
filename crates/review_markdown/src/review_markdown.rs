@@ -17,7 +17,5 @@ mod text;
 pub use anchor::{locate, text_anchor};
 pub use links::{LinkTarget, parse_link, resolve_link};
 pub use openspec::{OpenSpecCard, openspec_cards};
-pub use page::{
-    Alignment, Badge, Block, Diagram, Image, Inline, Meta, Page, Span, StepNode, Style, render, title,
-};
+pub use page::{Alignment, Badge, Block, Diagram, Image, Inline, Meta, Page, Span, StepNode, Style, render};
 pub use text::{utf16_len, utf16_to_byte, byte_to_utf16};

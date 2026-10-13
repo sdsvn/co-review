@@ -352,13 +352,8 @@ fn openspec_view(ctx: &PageContext, loaded: &Loaded) -> impl View + use<> {
         slot: Rc::new(|_| empty().into_any()),
         ..ctx.clone()
     };
-    let name = loaded
-        .cards
-        .first()
-        .map(|_| "OpenSpec change".to_string())
-        .unwrap_or_default();
     let mut rows: Vec<floem::AnyView> = vec![
-        label(move || name.clone())
+        label(|| "OpenSpec change")
             .style(|s| s.font_size(18.0).font_bold().margin_top(24.0).margin_bottom(8.0))
             .into_any(),
     ];
@@ -424,15 +419,7 @@ fn header(
     let comment = text_button(
         "Comment on the document".to_string(),
         false,
-        move || {
-            on_comment(
-                DocAnchor {
-                    anchor_type: DocAnchorType::Document,
-                    ..anchor_base()
-                },
-                Action::Comment,
-            )
-        },
+        move || on_comment(anchor_base(), Action::Comment),
         config,
     );
     let source = {
@@ -832,20 +819,12 @@ fn open_link(window_tab: &Rc<WindowTabData>, review_id: &str, page_path: &Path, 
                 tracing::warn!("no file {path} for the link on {}", page_path.display());
                 return;
             };
-            let markdown = target
-                .extension()
-                .is_some_and(|extension| matches!(extension.to_str(), Some("md" | "markdown")));
-            let patch = target
-                .extension()
-                .is_some_and(|extension| matches!(extension.to_str(), Some("patch" | "diff")));
-            let html = target
-                .extension()
-                .is_some_and(|extension| matches!(extension.to_str(), Some("html" | "htm")));
+            let extension = target.extension().and_then(|extension| extension.to_str());
             if target.is_dir() {
                 tracing::info!("{} is a folder", target.display());
-            } else if (markdown || html) && line.is_none() {
+            } else if matches!(extension, Some("md" | "markdown" | "html" | "htm")) && line.is_none() {
                 super::reveal_page(window_tab, ReviewPage::document(review_id, &target));
-            } else if patch && line.is_none() {
+            } else if matches!(extension, Some("patch" | "diff")) && line.is_none() {
                 super::reveal_page(window_tab, ReviewPage::pull_request(review_id));
             } else {
                 super::thread::open_location(window_tab, target, line.map(|line| line.saturating_sub(1) as usize));
@@ -1041,7 +1020,7 @@ mod tests {
                 node_id: Some("Back off".into()),
                 ..anchor_base()
             }),
-            thread("doc", DocAnchor { anchor_type: DocAnchorType::Document, ..anchor_base() }),
+            thread("doc", anchor_base()),
             thread("gone", DocAnchor {
                 anchor_type: DocAnchorType::TreeNode,
                 node_id: Some("Removed step".into()),

@@ -5,8 +5,9 @@ use std::collections::HashMap;
 use crate::egui::{CornerRadius, FontId, Pos2, Rect, Stroke, Vec2};
 
 use super::super::types::*;
+use crate::utils::draw_dashed_line;
 use super::super::utils::{
-    collect_node_obstacles, draw_arrow_head, draw_dashed_line, find_node_subgraph,
+    collect_node_obstacles, draw_arrow_head, find_node_subgraph,
     line_rect_intersection, path_intersects_any, segment_intersects_rect, union_rect_bounds,
     BACK_EDGE_LANE_SPACING, BACK_EDGE_LOOP_MARGIN, NODE_OBSTACLE_PADDING,
 };
@@ -119,19 +120,15 @@ pub(crate) fn back_edge_horizontal_padding(
 }
 
 fn back_edge_loop_padding(layout: &FlowchartLayout, direction: FlowDirection) -> f32 {
-    let max_lanes = max_back_edge_lane_count(layout, direction, Vec2::ZERO);
+    let max_lanes = max_back_edge_lane_count(layout, direction);
     BACK_EDGE_LOOP_MARGIN
         + NODE_OBSTACLE_PADDING
         + (max_lanes.saturating_sub(1)) as f32 * BACK_EDGE_LANE_SPACING
 }
 
 /// Maximum parallel back-edge lane count (same target, same side).
-pub(crate) fn max_back_edge_lane_count(
-    layout: &FlowchartLayout,
-    direction: FlowDirection,
-    offset: Vec2,
-) -> u32 {
-    let lanes = compute_back_edge_lanes(layout, direction, offset);
+fn max_back_edge_lane_count(layout: &FlowchartLayout, direction: FlowDirection) -> u32 {
+    let lanes = compute_back_edge_lanes(layout, direction, Vec2::ZERO);
     let mut per_group: HashMap<(String, i8), u32> = HashMap::new();
     for ((_, to), lane) in &lanes {
         let side = if lane.side_sign < 0.0 { -1 } else { 1 };
@@ -321,13 +318,7 @@ fn draw_back_edge(
     // co-review: the edge's hit area, for comments on it.
     record_edge_hit(painter, edge, edge_index, &path_segments);
 
-    for (seg_start, seg_end) in &path_segments {
-        if matches!(edge.style, EdgeStyle::Dotted) {
-            draw_dashed_line(painter, *seg_start, *seg_end, stroke, 5.0, 3.0);
-        } else {
-            painter.line_segment([*seg_start, *seg_end], stroke);
-        }
-    }
+    draw_segments(painter, edge, &path_segments, stroke);
 
     if !matches!(edge.arrow_end, ArrowHead::None) {
         let last = path_segments.last().expect("back-edge path is non-empty");
@@ -352,16 +343,30 @@ fn draw_back_edge(
             .unwrap_or(to_rect.center());
         let mid = path_midpoint(&path_segments, start, end);
         let label_pos = Pos2::new(mid.x - info.size.x / 2.0 - 8.0, mid.y);
-        let label_rect = Rect::from_center_size(label_pos, info.size);
-        painter.rect_filled(label_rect, CornerRadius::same(3), colors.edge_label_bg);
-        painter.text(
-            label_pos,
-            crate::egui::Align2::CENTER_CENTER,
-            &info.display_text,
-            FontId::proportional(label_font_size),
-            colors.edge_label_text,
-        );
+        draw_label(painter, info, label_pos, colors, label_font_size);
     }
+}
+
+fn draw_segments(painter: &crate::egui::Painter, edge: &FlowEdge, segments: &[(Pos2, Pos2)], stroke: Stroke) {
+    for &(start, end) in segments {
+        if matches!(edge.style, EdgeStyle::Dotted) {
+            draw_dashed_line(painter, start, end, stroke, 5.0, 3.0);
+        } else {
+            painter.line_segment([start, end], stroke);
+        }
+    }
+}
+
+/// An edge's label on its background, centred at `center`.
+fn draw_label(painter: &crate::egui::Painter, info: &EdgeLabelInfo, center: Pos2, colors: &FlowchartColors, font_size: f32) {
+    painter.rect_filled(Rect::from_center_size(center, info.size), CornerRadius::same(3), colors.edge_label_bg);
+    painter.text(
+        center,
+        crate::egui::Align2::CENTER_CENTER,
+        &info.display_text,
+        FontId::proportional(font_size),
+        colors.edge_label_text,
+    );
 }
 
 /// Draw a normal (non-back) edge with optional subgraph boundary routing.
@@ -400,7 +405,7 @@ fn draw_normal_edge(
 
     // Determine the path segments to draw (subgraph routing + obstacle avoidance)
     let (path_segments, label_mid) = if let Some(info) = &crossing_info {
-        let (segments, _) = compute_routed_path(start, end, info, direction);
+        let segments = compute_routed_path(start, end, info, direction);
         let segments = route_around_obstacles(segments, direction, obstacles);
         let mid = path_midpoint(&segments, start, end);
         (segments, mid)
@@ -411,14 +416,7 @@ fn draw_normal_edge(
     // co-review: the edge's hit area, for comments on it.
     record_edge_hit(painter, edge, edge_index, &path_segments);
 
-    // Draw all path segments
-    for (seg_start, seg_end) in &path_segments {
-        if matches!(edge.style, EdgeStyle::Dotted) {
-            draw_dashed_line(painter, *seg_start, *seg_end, stroke, 5.0, 3.0);
-        } else {
-            painter.line_segment([*seg_start, *seg_end], stroke);
-        }
-    }
+    draw_segments(painter, edge, &path_segments, stroke);
 
     // Draw arrow head at end (use last segment for direction)
     if !matches!(edge.arrow_end, ArrowHead::None) {
@@ -450,16 +448,7 @@ fn draw_normal_edge(
 
     // Draw edge label using pre-computed sizes
     if let Some(info) = label_info {
-        let label_rect = Rect::from_center_size(label_mid, info.size);
-
-        painter.rect_filled(label_rect, CornerRadius::same(3), colors.edge_label_bg);
-        painter.text(
-            label_mid,
-            crate::egui::Align2::CENTER_CENTER,
-            &info.display_text,
-            FontId::proportional(label_font_size),
-            colors.edge_label_text,
-        );
+        draw_label(painter, info, label_mid, colors, label_font_size);
     }
 }
 
@@ -469,92 +458,43 @@ fn compute_edge_endpoints(
     to_rect: &Rect,
     direction: FlowDirection,
 ) -> (Pos2, Pos2) {
+    let (from_center, to_center) = (from_rect.center(), to_rect.center());
+    // Leaves the source a quarter of its extent off-centre, toward a target off to that side.
+    let start = |from: f32, to: f32, extent: f32| {
+        if (to - from).abs() < 10.0 {
+            from
+        } else if to < from {
+            from - extent * 0.25
+        } else {
+            from + extent * 0.25
+        }
+    };
     match direction {
-        FlowDirection::TopDown => {
-            let from_center_x = from_rect.center().x;
-            let to_center_x = to_rect.center().x;
-            let vertically_forward = to_rect.top() >= from_rect.bottom() - 1.0;
-
+        FlowDirection::TopDown | FlowDirection::BottomUp => {
+            let top_down = direction == FlowDirection::TopDown;
+            let vertically_forward = if top_down {
+                to_rect.top() >= from_rect.bottom() - 1.0
+            } else {
+                to_rect.bottom() <= from_rect.top() + 1.0
+            };
             let start_x = if vertically_forward {
-                from_center_x
-            } else if (to_center_x - from_center_x).abs() < 10.0 {
-                from_center_x
-            } else if to_center_x < from_center_x {
-                from_rect.center().x - from_rect.width() * 0.25
+                from_center.x
             } else {
-                from_rect.center().x + from_rect.width() * 0.25
+                start(from_center.x, to_center.x, from_rect.width())
             };
-
-            let end_x = if vertically_forward {
-                to_center_x
+            if top_down {
+                (Pos2::new(start_x, from_rect.bottom()), Pos2::new(to_center.x, to_rect.top()))
             } else {
-                to_center_x
-            };
-
-            (
-                Pos2::new(start_x, from_rect.bottom()),
-                Pos2::new(end_x, to_rect.top()),
-            )
+                (Pos2::new(start_x, from_rect.top()), Pos2::new(to_center.x, to_rect.bottom()))
+            }
         }
-        FlowDirection::BottomUp => {
-            let from_center_x = from_rect.center().x;
-            let to_center_x = to_rect.center().x;
-            let vertically_forward = to_rect.bottom() <= from_rect.top() + 1.0;
-
-            let start_x = if vertically_forward {
-                from_center_x
-            } else if (to_center_x - from_center_x).abs() < 10.0 {
-                from_center_x
-            } else if to_center_x < from_center_x {
-                from_rect.center().x - from_rect.width() * 0.25
+        FlowDirection::LeftRight | FlowDirection::RightLeft => {
+            let start_y = start(from_center.y, to_center.y, from_rect.height());
+            if direction == FlowDirection::LeftRight {
+                (Pos2::new(from_rect.right(), start_y), Pos2::new(to_rect.left(), to_center.y))
             } else {
-                from_rect.center().x + from_rect.width() * 0.25
-            };
-
-            let end_x = if vertically_forward {
-                to_center_x
-            } else {
-                to_center_x
-            };
-
-            (
-                Pos2::new(start_x, from_rect.top()),
-                Pos2::new(end_x, to_rect.bottom()),
-            )
-        }
-        FlowDirection::LeftRight => {
-            let from_center_y = from_rect.center().y;
-            let to_center_y = to_rect.center().y;
-
-            let start_y = if (to_center_y - from_center_y).abs() < 10.0 {
-                from_center_y
-            } else if to_center_y < from_center_y {
-                from_rect.center().y - from_rect.height() * 0.25
-            } else {
-                from_rect.center().y + from_rect.height() * 0.25
-            };
-
-            (
-                Pos2::new(from_rect.right(), start_y),
-                Pos2::new(to_rect.left(), to_rect.center().y),
-            )
-        }
-        FlowDirection::RightLeft => {
-            let from_center_y = from_rect.center().y;
-            let to_center_y = to_rect.center().y;
-
-            let start_y = if (to_center_y - from_center_y).abs() < 10.0 {
-                from_center_y
-            } else if to_center_y < from_center_y {
-                from_rect.center().y - from_rect.height() * 0.25
-            } else {
-                from_rect.center().y + from_rect.height() * 0.25
-            };
-
-            (
-                Pos2::new(from_rect.left(), start_y),
-                Pos2::new(to_rect.right(), to_rect.center().y),
-            )
+                (Pos2::new(from_rect.left(), start_y), Pos2::new(to_rect.right(), to_center.y))
+            }
         }
     }
 }
@@ -565,8 +505,7 @@ fn compute_routed_path(
     end: Pos2,
     info: &SubgraphCrossingInfo,
     direction: FlowDirection,
-) -> (Vec<(Pos2, Pos2)>, Pos2) {
-    let mut segments: Vec<(Pos2, Pos2)> = Vec::new();
+) -> Vec<(Pos2, Pos2)> {
     let mut waypoints: Vec<Pos2> = vec![start];
 
     // Add exit point from source subgraph
@@ -613,29 +552,7 @@ fn compute_routed_path(
     }
 
     waypoints.push(end);
-
-    // Build segments from waypoints
-    for i in 0..waypoints.len() - 1 {
-        segments.push((waypoints[i], waypoints[i + 1]));
-    }
-
-    // Calculate label position (midpoint of the path)
-    let total_len: f32 = segments.iter().map(|(a, b)| (*b - *a).length()).sum();
-    let mut accumulated = 0.0;
-    let target_len = total_len / 2.0;
-    let mut mid = Pos2::new((start.x + end.x) / 2.0, (start.y + end.y) / 2.0);
-
-    for (a, b) in &segments {
-        let seg_len = (*b - *a).length();
-        if accumulated + seg_len >= target_len {
-            let t = (target_len - accumulated) / seg_len;
-            mid = *a + (*b - *a) * t;
-            break;
-        }
-        accumulated += seg_len;
-    }
-
-    (segments, mid)
+    waypoints.windows(2).map(|w| (w[0], w[1])).collect()
 }
 
 /// Side-channel back-edge path: exit source → run along graph margin → enter target.
@@ -1127,10 +1044,8 @@ fn route_forward_edge(
 
     // Last resort: route via graph-side corridor matching back-edge side preference
     let side_segments = route_via_side_corridor(start, end, direction, obstacles);
-    (
-        side_segments.clone(),
-        path_midpoint(&side_segments, start, end),
-    )
+    let mid = path_midpoint(&side_segments, start, end);
+    (side_segments, mid)
 }
 
 fn segment_intersects_any_obstacle(from: Pos2, to: Pos2, obstacles: &[Rect]) -> bool {
@@ -1311,81 +1226,30 @@ fn get_subgraph_crossing_info(
     subgraph_layouts: &HashMap<String, SubgraphLayout>,
     offset: Vec2,
 ) -> Option<SubgraphCrossingInfo> {
-    let from_sg = find_node_subgraph(from_id, flowchart);
-    let to_sg = find_node_subgraph(to_id, flowchart);
-
-    // Check if nodes are in different subgraphs
-    let from_sg_id = from_sg.map(|sg| sg.id.as_str());
-    let to_sg_id = to_sg.map(|sg| sg.id.as_str());
-
-    if from_sg_id == to_sg_id {
-        // Same subgraph (or both not in any) - no crossing needed
+    let from_sg = find_node_subgraph(from_id, flowchart).map(|sg| sg.id.as_str());
+    let to_sg = find_node_subgraph(to_id, flowchart).map(|sg| sg.id.as_str());
+    if from_sg == to_sg {
         return None;
     }
-
-    // Case 1: From outside to inside a subgraph
-    if from_sg_id.is_none() && to_sg_id.is_some() {
-        if let Some(sg_layout) = to_sg_id.and_then(|id| subgraph_layouts.get(id)) {
-            let sg_rect = Rect::from_min_size(sg_layout.pos + offset, sg_layout.size);
-            if let Some(entry) = line_rect_intersection(from_pos, to_pos, sg_rect) {
-                return Some(SubgraphCrossingInfo {
-                    entry_point: Some(entry),
-                    exit_point: None,
-                });
-            }
-        }
-    }
-
-    // Case 2: From inside to outside a subgraph
-    if from_sg_id.is_some() && to_sg_id.is_none() {
-        if let Some(sg_layout) = from_sg_id.and_then(|id| subgraph_layouts.get(id)) {
-            let sg_rect = Rect::from_min_size(sg_layout.pos + offset, sg_layout.size);
-            if let Some(exit) = line_rect_intersection(from_pos, to_pos, sg_rect) {
-                return Some(SubgraphCrossingInfo {
-                    entry_point: None,
-                    exit_point: Some(exit),
-                });
-            }
-        }
-    }
-
-    // Case 3: From one subgraph to a different subgraph
-    if from_sg_id.is_some() && to_sg_id.is_some() && from_sg_id != to_sg_id {
-        let mut exit_point = None;
-        let mut entry_point = None;
-
-        // Find exit from source subgraph
-        if let Some(sg_layout) = from_sg_id.and_then(|id| subgraph_layouts.get(id)) {
-            let sg_rect = Rect::from_min_size(sg_layout.pos + offset, sg_layout.size);
-            exit_point = line_rect_intersection(from_pos, to_pos, sg_rect);
-        }
-
-        // Find entry to target subgraph (using exit point as starting position if available)
-        if let Some(sg_layout) = to_sg_id.and_then(|id| subgraph_layouts.get(id)) {
-            let sg_rect = Rect::from_min_size(sg_layout.pos + offset, sg_layout.size);
-            let start = exit_point.unwrap_or(from_pos);
-            entry_point = line_rect_intersection(start, to_pos, sg_rect);
-        }
-
-        if exit_point.is_some() || entry_point.is_some() {
-            return Some(SubgraphCrossingInfo {
-                entry_point,
-                exit_point,
-            });
-        }
-    }
-
-    None
+    let rect_of = |id: Option<&str>| {
+        let layout = subgraph_layouts.get(id?)?;
+        Some(Rect::from_min_size(layout.pos + offset, layout.size))
+    };
+    let exit_point = rect_of(from_sg).and_then(|rect| line_rect_intersection(from_pos, to_pos, rect));
+    // Into the target's subgraph from where the edge left the source's.
+    let entry_point =
+        rect_of(to_sg).and_then(|rect| line_rect_intersection(exit_point.unwrap_or(from_pos), to_pos, rect));
+    (exit_point.is_some() || entry_point.is_some()).then_some(SubgraphCrossingInfo {
+        entry_point,
+        exit_point,
+    })
 }
 
 #[cfg(test)]
 mod back_edge_tests {
     use super::*;
-    use crate::egui::{Pos2, Rect, Vec2};
-
     use crate::flowchart::{layout_flowchart, parse_flowchart};
     use crate::text::EstimatedTextMeasurer;
-    use crate::flowchart::utils::expand_rect;
 
     #[test]
     fn fc_83a_inner_e_to_b_goes_up_first() {
@@ -1399,7 +1263,7 @@ mod back_edge_tests {
     F --> B"#;
 
         let flowchart = parse_flowchart(source).unwrap();
-        let text_measurer = EstimatedTextMeasurer::new();
+        let text_measurer = EstimatedTextMeasurer;
         let layout = layout_flowchart(&flowchart, 800.0, 14.0, &text_measurer);
 
         let e = layout.nodes.get("E").unwrap();
@@ -1407,13 +1271,13 @@ mod back_edge_tests {
         let c = layout.nodes.get("C").unwrap();
         let e_rect = Rect::from_min_size(e.pos, e.size);
         let b_rect = Rect::from_min_size(b.pos, b.size);
-        let c_obstacle = expand_rect(Rect::from_min_size(c.pos, c.size), NODE_OBSTACLE_PADDING);
+        let c_obstacle = Rect::from_min_size(c.pos, c.size).expand(NODE_OBSTACLE_PADDING);
 
         let obstacles: Vec<Rect> = layout
             .nodes
             .iter()
             .filter(|(id, _)| id.as_str() != "E" && id.as_str() != "B")
-            .map(|(_, nl)| expand_rect(Rect::from_min_size(nl.pos, nl.size), NODE_OBSTACLE_PADDING))
+            .map(|(_, nl)| Rect::from_min_size(nl.pos, nl.size).expand(NODE_OBSTACLE_PADDING))
             .collect();
 
         let path = try_inner_back_edge_direct_path(
@@ -1458,7 +1322,7 @@ mod back_edge_tests {
     F --> B"#;
 
         let flowchart = parse_flowchart(source).unwrap();
-        let text_measurer = EstimatedTextMeasurer::new();
+        let text_measurer = EstimatedTextMeasurer;
         let layout = layout_flowchart(&flowchart, 800.0, 14.0, &text_measurer);
 
         let (left, right) = back_edge_horizontal_padding(&layout, FlowDirection::TopDown);

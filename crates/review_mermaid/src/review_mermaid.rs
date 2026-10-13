@@ -7,21 +7,22 @@
 //! page shows their source.
 
 // Ported code keeps Ferrite's shape; Co-Review's lint settings are relaxed for it.
-#[allow(clippy::unwrap_used, clippy::expect_used, dead_code, clippy::all)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::all)]
 mod egui;
-#[allow(clippy::unwrap_used, clippy::expect_used, dead_code, unused, clippy::all)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::all)]
 mod flowchart;
-#[allow(clippy::unwrap_used, clippy::expect_used, dead_code, unused, clippy::all)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::all)]
 mod sequence;
-#[allow(clippy::unwrap_used, clippy::expect_used, dead_code, unused, clippy::all)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::all)]
 mod text;
-#[allow(clippy::unwrap_used, clippy::expect_used, dead_code, unused, clippy::all)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::all)]
 mod utils;
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-pub use egui::{Align, Align2, Color32, Hit, HitArea, HitTarget, Painter, Pos2, Primitive, Rect, Stroke, Vec2};
-pub use sequence::participant_node_id;
+use egui::Painter;
+
+pub use egui::{Align, Align2, Color32, Hit, HitArea, HitTarget, Pos2, Primitive, Rect, Stroke, Vec2};
 pub use text::{EstimatedTextMeasurer, TextMeasurer, TextSize};
 
 /// A diagram, drawn: what to paint, in the diagram's coordinates from (0, 0), and where its commentable parts are.
@@ -77,7 +78,7 @@ pub fn render(
         .unwrap_or(0);
     let source = code.lines().skip(start).collect::<Vec<_>>().join("\n");
     let kind = diagram_type(&source);
-    let painter = Painter::new();
+    let painter = Painter::default();
     let drawn = catch_unwind(AssertUnwindSafe(|| match kind.to_lowercase().as_str() {
         "flowchart" | "graph" => {
             let chart = flowchart::parse_flowchart(&source).map_err(Error::Invalid)?;
@@ -239,7 +240,7 @@ mod tests {
     use super::*;
 
     fn scene(code: &str) -> Scene {
-        render(code, false, 14.0, 800.0, &EstimatedTextMeasurer::new()).unwrap_or_else(|error| panic!("{error}"))
+        render(code, false, 14.0, 800.0, &EstimatedTextMeasurer).unwrap_or_else(|error| panic!("{error}"))
     }
 
     #[test]
@@ -315,7 +316,7 @@ mod tests {
 
     #[test]
     fn other_types_are_unsupported_and_bad_sources_invalid() {
-        let measurer = EstimatedTextMeasurer::new();
+        let measurer = EstimatedTextMeasurer;
         assert_eq!(
             render("%% c\npie title Pets\n  \"Dogs\" : 3\n", false, 14.0, 800.0, &measurer),
             Err(Error::Unsupported("pie".into()))

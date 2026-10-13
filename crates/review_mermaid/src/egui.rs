@@ -4,7 +4,7 @@
 //! Not from Ferrite: written for Co-Review (EPL-2.0).
 
 use std::cell::{Cell, RefCell};
-use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
+use std::ops::{Add, Div, Mul, Sub};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Pos2 {
@@ -15,10 +15,6 @@ pub struct Pos2 {
 impl Pos2 {
     pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
-    }
-
-    pub fn to_vec2(self) -> Vec2 {
-        Vec2::new(self.x, self.y)
     }
 
     pub fn distance(self, other: Pos2) -> f32 {
@@ -60,10 +56,6 @@ impl Vec2 {
     pub fn max(self, other: Vec2) -> Vec2 {
         Vec2::new(self.x.max(other.x), self.y.max(other.y))
     }
-
-    pub fn to_pos2(self) -> Pos2 {
-        Pos2::new(self.x, self.y)
-    }
 }
 
 impl Sub for Pos2 {
@@ -87,38 +79,6 @@ impl Sub<Vec2> for Pos2 {
     }
 }
 
-impl AddAssign<Vec2> for Pos2 {
-    fn add_assign(&mut self, other: Vec2) {
-        *self = *self + other;
-    }
-}
-
-impl SubAssign<Vec2> for Pos2 {
-    fn sub_assign(&mut self, other: Vec2) {
-        *self = *self - other;
-    }
-}
-
-impl Add for Vec2 {
-    type Output = Vec2;
-    fn add(self, other: Vec2) -> Vec2 {
-        Vec2::new(self.x + other.x, self.y + other.y)
-    }
-}
-
-impl Sub for Vec2 {
-    type Output = Vec2;
-    fn sub(self, other: Vec2) -> Vec2 {
-        Vec2::new(self.x - other.x, self.y - other.y)
-    }
-}
-
-impl AddAssign for Vec2 {
-    fn add_assign(&mut self, other: Vec2) {
-        *self = *self + other;
-    }
-}
-
 impl Mul<f32> for Vec2 {
     type Output = Vec2;
     fn mul(self, factor: f32) -> Vec2 {
@@ -126,24 +86,10 @@ impl Mul<f32> for Vec2 {
     }
 }
 
-impl Mul<Vec2> for f32 {
-    type Output = Vec2;
-    fn mul(self, vector: Vec2) -> Vec2 {
-        vector * self
-    }
-}
-
 impl Div<f32> for Vec2 {
     type Output = Vec2;
     fn div(self, divisor: f32) -> Vec2 {
         Vec2::new(self.x / divisor, self.y / divisor)
-    }
-}
-
-impl Neg for Vec2 {
-    type Output = Vec2;
-    fn neg(self) -> Vec2 {
-        Vec2::new(-self.x, -self.y)
     }
 }
 
@@ -210,10 +156,6 @@ impl Rect {
         self.max.y - self.min.y
     }
 
-    pub fn size(&self) -> Vec2 {
-        self.max - self.min
-    }
-
     pub fn left_top(&self) -> Pos2 {
         self.min
     }
@@ -226,20 +168,12 @@ impl Rect {
         Pos2::new(self.min.x, self.max.y)
     }
 
-    pub fn right_top(&self) -> Pos2 {
-        Pos2::new(self.max.x, self.min.y)
-    }
-
     pub fn left_center(&self) -> Pos2 {
         Pos2::new(self.min.x, self.center().y)
     }
 
     pub fn contains(&self, point: Pos2) -> bool {
         self.min.x <= point.x && point.x <= self.max.x && self.min.y <= point.y && point.y <= self.max.y
-    }
-
-    pub fn intersects(&self, other: Rect) -> bool {
-        self.min.x <= other.max.x && other.min.x <= self.max.x && self.min.y <= other.max.y && other.min.y <= self.max.y
     }
 
     pub fn expand(&self, amount: f32) -> Rect {
@@ -252,13 +186,6 @@ impl Rect {
     pub fn shrink(&self, amount: f32) -> Rect {
         self.expand(-amount)
     }
-
-    pub fn translate(&self, by: Vec2) -> Rect {
-        Rect {
-            min: self.min + by,
-            max: self.max + by,
-        }
-    }
 }
 
 /// An sRGB colour with straight (not premultiplied) alpha.
@@ -268,8 +195,6 @@ pub struct Color32(pub [u8; 4]);
 impl Color32 {
     pub const TRANSPARENT: Color32 = Color32([0, 0, 0, 0]);
     pub const WHITE: Color32 = Color32([255, 255, 255, 255]);
-    pub const BLACK: Color32 = Color32([0, 0, 0, 255]);
-    pub const PLACEHOLDER: Color32 = Color32([64, 254, 0, 128]);
 
     pub const fn from_rgb(r: u8, g: u8, b: u8) -> Self {
         Color32([r, g, b, 255])
@@ -340,8 +265,6 @@ impl CornerRadius {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StrokeKind {
     Inside,
-    Middle,
-    Outside,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -371,8 +294,6 @@ impl Align2 {
     pub const LEFT_CENTER: Align2 = Align2([Align::Min, Align::Center]);
     pub const CENTER_CENTER: Align2 = Align2([Align::Center, Align::Center]);
     pub const CENTER_BOTTOM: Align2 = Align2([Align::Center, Align::Max]);
-    pub const CENTER_TOP: Align2 = Align2([Align::Center, Align::Min]);
-    pub const RIGHT_CENTER: Align2 = Align2([Align::Max, Align::Center]);
 }
 
 /// A shape egui's `Painter::add` takes.
@@ -461,18 +382,9 @@ pub struct Painter {
     primitives: RefCell<Vec<Primitive>>,
     hits: RefCell<Vec<Hit>>,
     edges: Cell<usize>,
-    /// Measures text for `text`'s returned rect; `None`: estimated.
-    char_width: f32,
 }
 
 impl Painter {
-    pub fn new() -> Self {
-        Self {
-            char_width: 0.55,
-            ..Self::default()
-        }
-    }
-
     fn push(&self, primitive: Primitive) {
         self.primitives.borrow_mut().push(primitive);
     }
@@ -511,10 +423,6 @@ impl Painter {
         self.rect(rect, radius, fill, Stroke::NONE, StrokeKind::Inside);
     }
 
-    pub fn rect_stroke(&self, rect: Rect, radius: impl Into<CornerRadius>, stroke: impl Into<Stroke>, kind: StrokeKind) {
-        self.rect(rect, radius, Color32::TRANSPARENT, stroke, kind);
-    }
-
     pub fn circle(&self, center: Pos2, radius: f32, fill: impl Into<Color32>, stroke: impl Into<Stroke>) {
         self.push(Primitive::Circle {
             center,
@@ -532,9 +440,8 @@ impl Painter {
         self.circle(center, radius, Color32::TRANSPARENT, stroke);
     }
 
-    /// Records text; returns its (estimated) rect, as egui returns the laid-out rect.
-    pub fn text(&self, pos: Pos2, align: Align2, text: impl ToString, font: FontId, color: impl Into<Color32>) -> Rect {
-        self.text_inner(pos, align, text.to_string(), font, color.into(), None)
+    pub fn text(&self, pos: Pos2, align: Align2, text: impl ToString, font: FontId, color: impl Into<Color32>) {
+        self.text_inner(pos, align, text.to_string(), font, color.into(), None);
     }
 
     /// Text wrapped at `max_width`.
@@ -546,22 +453,11 @@ impl Painter {
         font: FontId,
         color: impl Into<Color32>,
         max_width: f32,
-    ) -> Rect {
-        self.text_inner(pos, align, text.to_string(), font, color.into(), Some(max_width))
+    ) {
+        self.text_inner(pos, align, text.to_string(), font, color.into(), Some(max_width));
     }
 
-    fn text_inner(&self, pos: Pos2, align: Align2, text: String, font: FontId, color: Color32, max_width: Option<f32>) -> Rect {
-        let size = Vec2::new(text.chars().count() as f32 * font.size * self.char_width, font.size * 1.2);
-        let x = match align.0[0] {
-            Align::Min => pos.x,
-            Align::Center => pos.x - size.x / 2.0,
-            Align::Max => pos.x - size.x,
-        };
-        let y = match align.0[1] {
-            Align::Min => pos.y,
-            Align::Center => pos.y - size.y / 2.0,
-            Align::Max => pos.y - size.y,
-        };
+    fn text_inner(&self, pos: Pos2, align: Align2, text: String, font: FontId, color: Color32, max_width: Option<f32>) {
         self.push(Primitive::Text {
             pos,
             align,
@@ -570,7 +466,6 @@ impl Painter {
             color,
             max_width,
         });
-        Rect::from_min_size(Pos2::new(x, y), size)
     }
 
     /// Marks where a commentable part of the diagram is (Co-Review's addition to the drawing code).
@@ -587,23 +482,5 @@ impl Painter {
 
     pub fn finish(self) -> (Vec<Primitive>, Vec<Hit>) {
         (self.primitives.into_inner(), self.hits.into_inner())
-    }
-}
-
-impl From<u8> for CornerRadius {
-    fn from(radius: u8) -> Self {
-        CornerRadius(f32::from(radius))
-    }
-}
-
-impl From<f32> for CornerRadius {
-    fn from(radius: f32) -> Self {
-        CornerRadius(radius)
-    }
-}
-
-impl From<(f32, Color32)> for Stroke {
-    fn from((width, color): (f32, Color32)) -> Self {
-        Stroke { width, color }
     }
 }

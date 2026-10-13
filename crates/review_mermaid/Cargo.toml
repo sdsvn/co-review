@@ -10,11 +10,5 @@ license = "EPL-2.0 AND MIT"
 [lib]
 path = "src/review_mermaid.rs"
 
-[dependencies]
-log.workspace = true
-
-[dev-dependencies]
-pretty_assertions.workspace = true
-
 [lints]
 workspace = true
