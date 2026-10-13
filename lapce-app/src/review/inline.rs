@@ -657,7 +657,9 @@ pub fn editor_threads(window_tab: Rc<WindowTabData>, e_data: RwSignal<EditorData
     )
     .on_move(move |point| origin.set(point))
     .on_resize(move |rect| size.set(rect))
-    .style(|s| s.absolute().size_full())
+    // The overlay covers the editor and its gutter: it must let scrolling and clicks through to them. Floem
+    // inherits pointer-events, so the threads on it turn them back on.
+    .style(|s| s.absolute().size_full().pointer_events_none())
     .debug_name("Review Threads")
 }
 
@@ -747,6 +749,7 @@ fn doc_overlay(
                 })
                 .on_event_stop(EventListener::PointerDown, |_| {})
                 .style(move |s| {
+                    let s = s.pointer_events_auto();
                     let config = config.get();
                     let line_height = config.editor.line_height() as f64;
                     let viewport = viewport.get();
