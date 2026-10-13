@@ -918,6 +918,9 @@ pub fn reply_box(
         .key_focus(keys)
         .build_editor(editor)
         .placeholder(move || placeholder.to_string())
+        // Floem moves keyboard focus to a clicked view only if it is keyboard-navigable; without this a click
+        // placed the caret here but typing kept going to the code editor.
+        .keyboard_navigable()
         .on_cleanup(move || {
             editors.remove(id);
         })
