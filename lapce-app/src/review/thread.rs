@@ -67,9 +67,13 @@ pub fn thread_view(
 ) -> impl View {
     let config = window_tab_data.common.config;
     let reviews = window_tab_data.review.reviews;
+    let listening = ReviewCore::get().map(|core| core.listening);
     let found = {
         let (review_id, thread_id) = (review_id.clone(), thread_id.clone());
         create_memo(move |_| {
+            let listening = listening.is_some_and(|listening| {
+                listening.with(|listening| listening.get(&review_id).copied().unwrap_or(false))
+            });
             reviews.with(|reviews| {
                 let review = reviews.iter().find(|review| review.id == review_id)?;
                 let thread = review
@@ -79,6 +83,8 @@ pub fn thread_view(
                     .clone();
                 Some(ThreadContext {
                     agent_name: review.agent.as_ref().map(|agent| agent.name.clone()),
+                    link: review.agent.as_ref().map(|agent| agent_link(agent, listening)),
+                    stand_in: review.agent.as_ref().and_then(acp_stand_in),
                     has_agent: review.agent.is_some(),
                     agent_ids: review
                         .agent
@@ -142,6 +148,10 @@ pub fn thread_view(
 struct ThreadContext {
     thread: ReviewThread,
     agent_name: Option<String>,
+    /// How the review's agent answers.
+    link: Option<AgentLink>,
+    /// The ACP agent that can answer here instead of the review's MCP agent.
+    stand_in: Option<review_model::AgentConfig>,
     has_agent: bool,
     /// The ids the review's agent writes as (`<id>` over MCP, `agent:<id>` over ACP).
     agent_ids: Vec<String>,
@@ -228,7 +238,7 @@ fn thread_header(
         config,
     );
     let status = badge(
-        move || get(&|f| status_line(&f.thread, f.agent_name.as_deref())),
+        move || get(&|f| status_line(&f.thread, f.agent_name.as_deref(), f.link)),
         LapceColor::EDITOR_LINK,
         config,
     );
@@ -260,10 +270,17 @@ fn thread_header(
                             f.agent_ids.contains(&message.author.id)
                         });
                         let resolved = f.thread.status == ThreadStatus::Resolved;
+                        // Already asked: it waits for the agent (asking again would do nothing).
+                        let queued = f.thread.agent_state == Some(AgentState::Queued);
                         HeaderActions {
                             status: f.thread.status,
-                            can_ask: f.has_agent && !resolved && !busy && !engaged,
+                            can_ask: f.has_agent && !resolved && !busy && !engaged && !queued,
                             agent_name: f.agent_name.clone().unwrap_or_default(),
+                            link: f.link,
+                            stand_in: f
+                                .stand_in
+                                .clone()
+                                .filter(|_| !resolved && queued && f.link == Some(AgentLink::Away)),
                         }
                     })
                 })
@@ -273,14 +290,40 @@ fn thread_header(
                     return empty().into_any();
                 };
                 let mut buttons: Vec<Box<dyn View>> = Vec::new();
+                if let Some(stand_in) = actions.stand_in.clone() {
+                    let ids = ids.clone();
+                    let window_tab_data = window_tab_data.clone();
+                    let tip = format!(
+                        "Start {} here over ACP and ask it now. It becomes the review's agent; {} can rejoin from its session with open_review.",
+                        stand_in.name, actions.agent_name
+                    );
+                    buttons.push(Box::new(crate::app::tooltip_label(
+                        config,
+                        text_button(
+                            format!("Ask now with {} (ACP)", stand_in.name),
+                            true,
+                            move || {
+                                answer_here(&window_tab_data, &ids.0, stand_in.clone(), Some(ids.1.clone()))
+                            },
+                            config,
+                        ),
+                        move || tip.clone(),
+                    )));
+                }
                 if actions.can_ask {
                     let ids = ids.clone();
                     let window_tab_data = window_tab_data.clone();
-                    buttons.push(Box::new(text_button(
-                        format!("Ask {}", actions.agent_name),
-                        false,
-                        move || ask_agent(&window_tab_data, &ids.0, &ids.1),
+                    let link = actions.link.unwrap_or(AgentLink::Here);
+                    let tip = ask_tooltip(&actions.agent_name, link, actions.stand_in.is_some());
+                    buttons.push(Box::new(crate::app::tooltip_label(
                         config,
+                        text_button(
+                            ask_label(&actions.agent_name, link),
+                            false,
+                            move || ask_agent(&window_tab_data, &ids.0, &ids.1),
+                            config,
+                        ),
+                        move || tip.clone(),
                     )));
                 }
                 let set_status = |status: ThreadStatus, text: &str, primary: bool| {
@@ -345,6 +388,9 @@ struct HeaderActions {
     status: ThreadStatus,
     can_ask: bool,
     agent_name: String,
+    link: Option<AgentLink>,
+    /// Offered while the review's MCP agent is away.
+    stand_in: Option<review_model::AgentConfig>,
 }
 
 /// The first message, one line, for a folded thread.
@@ -1077,19 +1123,132 @@ fn anchor_state(thread: &ReviewThread) -> Option<String> {
     }
 }
 
-/// Where the reviewer's latest message is: "waiting for <agent>" until the agent picks it up, then "<agent> is on
-/// it", or "needs your decision" while the agent waits on a permission.
-pub fn status_line(thread: &ReviewThread, agent_name: Option<&str>) -> Option<String> {
+/// Where the reviewer's latest message is: waiting for the agent until it picks it up (an MCP agent that isn't
+/// listening picks it up when it checks in from its session), then "<agent> is on it", or "needs your decision" while
+/// the agent waits on a permission.
+pub fn status_line(thread: &ReviewThread, agent_name: Option<&str>, link: Option<AgentLink>) -> Option<String> {
     if thread.status == ThreadStatus::Resolved {
         return None;
     }
     let agent = agent_name.unwrap_or("the agent");
     match thread.agent_state? {
-        AgentState::Queued => Some(format!("waiting for {agent}")),
+        AgentState::Queued => Some(match link {
+            Some(AgentLink::Away) => format!("waiting for {agent} to check in and pick it up"),
+            Some(AgentLink::Listening) => format!("waiting for {agent} to pick it up"),
+            Some(AgentLink::Here) | None => format!("waiting for {agent}"),
+        }),
         AgentState::Working => Some(format!("{agent} is on it")),
         AgentState::WaitingForHuman => Some("needs your decision".to_string()),
         AgentState::Idle => None,
     }
+}
+
+/// How the review's agent answers questions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgentLink {
+    /// Started here over ACP: answers now.
+    Here,
+    /// Connected from its own session over MCP and waiting for the reviewer: picks questions up now.
+    Listening,
+    /// Connected from its own session over MCP and busy elsewhere: questions wait until it checks in.
+    Away,
+}
+
+pub fn agent_link(agent: &review_model::AgentConfig, listening: bool) -> AgentLink {
+    match agent.transport {
+        Some(review_model::AgentTransport::Mcp) if listening => AgentLink::Listening,
+        Some(review_model::AgentTransport::Mcp) => AgentLink::Away,
+        _ => AgentLink::Here,
+    }
+}
+
+/// The ask button's text: what asking does.
+pub fn ask_label(agent: &str, link: AgentLink) -> String {
+    match link {
+        AgentLink::Away => format!("Ask {agent} — waits until it checks in"),
+        AgentLink::Here | AgentLink::Listening => format!("Ask {agent}"),
+    }
+}
+
+pub fn ask_tooltip(agent: &str, link: AgentLink, can_answer_here: bool) -> String {
+    match link {
+        AgentLink::Here => format!("{agent} runs here (ACP) and answers now"),
+        AgentLink::Listening => format!("{agent} is connected from its own session (MCP) and listening: it picks the question up now"),
+        AgentLink::Away if can_answer_here => format!(
+            "{agent} is connected from its own session (MCP) and isn't listening: the question waits until it checks in. \
+             Ask now with {agent} (ACP) answers here instead."
+        ),
+        AgentLink::Away => format!(
+            "{agent} is connected from its own session (MCP) and isn't listening: the question waits until it checks in"
+        ),
+    }
+}
+
+/// The installed ACP agent that is the same agent as the review's MCP agent (connected from a harness), to answer
+/// here instead: Oh My Pi for "Oh My Pi" or "omp-coding-agent", Claude Code for "claude-code", ….
+pub fn acp_stand_in(agent: &review_model::AgentConfig) -> Option<review_model::AgentConfig> {
+    if agent.transport != Some(review_model::AgentTransport::Mcp) {
+        return None;
+    }
+    static INSTALLED: std::sync::OnceLock<Vec<review_model::AgentConfig>> = std::sync::OnceLock::new();
+    INSTALLED
+        .get_or_init(review_agents::detect_agents)
+        .iter()
+        .find(|preset| same_agent(&agent.name, preset))
+        .cloned()
+}
+
+/// Whether an MCP client's name names the agent of an ACP preset: the same name or id, ignoring case and
+/// punctuation, or the preset's id as its first word.
+fn same_agent(client_name: &str, preset: &review_model::AgentConfig) -> bool {
+    let plain = |text: &str| -> String {
+        text.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+    };
+    let name = plain(client_name);
+    let first_word = client_name
+        .split(|c: char| !c.is_alphanumeric())
+        .find(|word| !word.is_empty())
+        .map(str::to_lowercase);
+    !name.is_empty()
+        && (name == plain(&preset.name)
+            || name == plain(&preset.id)
+            || first_word.as_deref() == Some(preset.id.as_str()))
+}
+
+/// **Ask now with <agent> (ACP)** / **Answer here instead**: `agent` (an ACP agent) becomes the review's agent and
+/// answers every question waiting for the agent it replaces, and `thread_id` (asked by the reviewer just now). A
+/// review has one agent, so the MCP agent's seat goes to it; that agent rejoins from its session with `open_review`.
+pub fn answer_here(
+    window_tab_data: &WindowTabData,
+    review_id: &str,
+    agent: review_model::AgentConfig,
+    thread_id: Option<String>,
+) {
+    let review_id = review_id.to_string();
+    run(window_tab_data, "starting the agent here", move |backend| {
+        let review = backend.agents.connect(&review_id, agent)?;
+        let mut asked: Vec<String> = review
+            .threads
+            .iter()
+            .filter(|thread| {
+                thread.status != ThreadStatus::Resolved && thread.agent_state == Some(AgentState::Queued)
+            })
+            .map(|thread| thread.id.clone())
+            .collect();
+        if let Some(thread_id) = thread_id
+            && !asked.contains(&thread_id)
+        {
+            backend
+                .services
+                .store
+                .set_thread_intent(&review_id, &thread_id, ThreadIntent::Question)?;
+            asked.push(thread_id);
+        }
+        for thread_id in asked {
+            backend.agents.ask(&review_id, &thread_id);
+        }
+        Ok(())
+    });
 }
 
 fn format_time(millis: u64) -> String {
@@ -1403,11 +1562,70 @@ mod tests {
         if name == "Fake Agent" {
             assert!(answer.activity.as_ref().is_some_and(|activity| !activity.is_empty()));
         }
-        assert_eq!(status_line(&first, Some(name)), None);
+        assert_eq!(status_line(&first, Some(name), Some(AgentLink::Here)), None);
         backend.reply(&review.id, &thread.id, "And then?".into()).unwrap();
         let second = answered(4);
         assert_eq!(second.messages[2].body, "And then?");
         backend.agents.shutdown();
+    }
+
+    fn agent(id: &str, name: &str, transport: review_model::AgentTransport) -> review_model::AgentConfig {
+        review_model::AgentConfig {
+            id: id.into(),
+            name: name.into(),
+            transport: Some(transport),
+            command: None,
+            args: None,
+            settings: None,
+            settings_label: None,
+            extra: Default::default(),
+        }
+    }
+
+    /// A question waiting for an MCP agent says what it waits for; one for an ACP agent reads as before.
+    #[test]
+    fn a_queued_question_says_it_waits_for_the_agent_to_pick_it_up() {
+        let mut thread: ReviewThread = serde_json::from_value(serde_json::json!({
+            "id": "t", "number": 1, "location": { "kind": "line" }, "messages": [],
+            "status": "open", "intent": "question", "agentState": "queued", "createdAt": 0, "updatedAt": 0,
+        }))
+        .unwrap();
+        let mcp = agent("agent:mcp:Oh My Pi", "Oh My Pi", review_model::AgentTransport::Mcp);
+        let away = agent_link(&mcp, false);
+        assert_eq!(away, AgentLink::Away);
+        assert_eq!(
+            status_line(&thread, Some("Oh My Pi"), Some(away)).as_deref(),
+            Some("waiting for Oh My Pi to check in and pick it up")
+        );
+        assert_eq!(
+            status_line(&thread, Some("Oh My Pi"), Some(agent_link(&mcp, true))).as_deref(),
+            Some("waiting for Oh My Pi to pick it up")
+        );
+        let acp = agent("omp", "Oh My Pi", review_model::AgentTransport::Acp);
+        assert_eq!(agent_link(&acp, false), AgentLink::Here);
+        assert_eq!(status_line(&thread, Some("Oh My Pi"), Some(AgentLink::Here)).as_deref(), Some("waiting for Oh My Pi"));
+        assert_eq!(ask_label("Oh My Pi", AgentLink::Here), "Ask Oh My Pi");
+        assert_eq!(ask_label("Oh My Pi", AgentLink::Away), "Ask Oh My Pi — waits until it checks in");
+        thread.agent_state = Some(AgentState::Working);
+        assert_eq!(status_line(&thread, Some("Oh My Pi"), Some(away)).as_deref(), Some("Oh My Pi is on it"));
+    }
+
+    /// An MCP client's name finds the ACP preset of the same agent.
+    #[test]
+    fn harness_agents_find_their_acp_preset() {
+        let preset = |id: &str| {
+            review_agents::AGENT_PRESETS
+                .iter()
+                .find(|preset| preset.id == id)
+                .map(|preset| preset.config())
+                .unwrap()
+        };
+        assert!(same_agent("Oh My Pi", &preset("omp")));
+        assert!(same_agent("omp-coding-agent", &preset("omp")));
+        assert!(same_agent("claude-code", &preset("claude")));
+        assert!(same_agent("gemini-cli-mcp-client", &preset("gemini")));
+        assert!(!same_agent("Oh My Pi", &preset("pi")));
+        assert!(!same_agent("agent", &preset("omp")));
     }
 
     #[test]

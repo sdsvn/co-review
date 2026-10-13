@@ -25,7 +25,10 @@ use super::{
     ReviewCore,
     commands::{self, ReviewTab},
     submit::{link, submit_section},
-    thread::{ThreadViewOptions, reply_box, text_button, thread_view},
+    thread::{
+        AgentLink, ThreadViewOptions, acp_stand_in, agent_link, answer_here, reply_box, text_button,
+        thread_view,
+    },
     workspace::ReviewDraft,
 };
 use crate::{
@@ -301,7 +304,8 @@ fn review_view(window_tab_data: Rc<WindowTabData>) -> impl View {
     .style(|s| s.width_full().flex_col())
 }
 
-/// One quiet line: the scope, Overview, and the agent (with its model; an MCP agent's listening status on hover).
+/// One quiet line: the scope, Overview, and the agent: its model, or how it is connected and whether it listens, with
+/// **Answer here instead (ACP)** while an MCP agent is away and the same agent can run here.
 fn summary(window_tab_data: Rc<WindowTabData>, active: Memo<Option<Arc<Review>>>) -> impl View {
     let config = window_tab_data.common.config;
     let tab = ReviewTab::of(&window_tab_data);
@@ -337,12 +341,24 @@ fn summary(window_tab_data: Rc<WindowTabData>, active: Memo<Option<Arc<Review>>>
         }
     };
     let agent_text = move || {
-        active
-            .get()
-            .and_then(|review| review.agent.clone())
-            .map(|agent| commands::agent_label(&agent))
-            .unwrap_or_else(|| "Connect agent".to_string())
+        let Some(agent) = active.get().and_then(|review| review.agent.clone()) else {
+            return "Connect agent".to_string();
+        };
+        match agent_link(&agent, is_listening()) {
+            AgentLink::Here => format!("{} · answers here", commands::agent_label(&agent)),
+            AgentLink::Listening => format!("{} · from its own session · listening", agent.name),
+            AgentLink::Away => format!("{} · from its own session · not listening — questions wait", agent.name),
+        }
     };
+    // While the review's MCP agent is away: the same agent over ACP, to answer here.
+    let stand_in = create_memo(move |_| {
+        let review = active.get()?;
+        let agent = review.agent.as_ref()?;
+        (agent_link(agent, is_listening()) == AgentLink::Away)
+            .then(|| acp_stand_in(agent))
+            .flatten()
+            .map(|stand_in| (review.id.clone(), stand_in))
+    });
     let is_mcp = move || {
         active.get().is_some_and(|review| {
             review.agent.as_ref().is_some_and(|agent| agent.transport == Some(AgentTransport::Mcp))
@@ -379,14 +395,41 @@ fn summary(window_tab_data: Rc<WindowTabData>, active: Memo<Option<Arc<Review>>>
                                 config.color(LapceColor::PANEL_FOREGROUND_DIM)
                             })
                     }),
-                    label(agent_text),
+                    label(agent_text).style(|s| s.text_ellipsis().min_width(0.0)),
                 ))
                 .on_click_stop(move |_| commands::connect_agent(&agent_tab))
-                .style(|s| s.cursor(CursorStyle::Pointer).items_center()),
+                .style(|s| s.cursor(CursorStyle::Pointer).items_center().min_width(0.0)),
                 agent_title,
-            ),
+            )
+            .style(|s| s.min_width(0.0).margin_left(8.0)),
         ))
         .style(|s| s.width_full().items_center().margin_top(2.0)),
+        {
+            let window_tab_data = window_tab_data.clone();
+            tooltip_label(
+                config,
+                link("Answer here instead (ACP)", config, move || {
+                    if let Some((review_id, stand_in)) = stand_in.get_untracked() {
+                        answer_here(&window_tab_data, &review_id, stand_in, None);
+                    }
+                })
+                .style(|s| s.margin_left(0.0)),
+                move || {
+                    stand_in
+                        .get()
+                        .map(|(_, stand_in)| {
+                            format!(
+                                "Start {} here over ACP: it becomes the review's agent and answers the questions waiting now",
+                                stand_in.name
+                            )
+                        })
+                        .unwrap_or_default()
+                },
+            )
+            .style(move |s| {
+                s.margin_top(2.0).apply_if(stand_in.with(|stand_in| stand_in.is_none()), |s| s.hide())
+            })
+        },
     ))
     .style(move |s| {
         s.width_full()

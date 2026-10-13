@@ -52,8 +52,8 @@ use review_model::{
 use super::{
     ReviewCore, drafts,
     thread::{
-        ThreadViewOptions, location_label, open_location, reply_box, text_button,
-        thread_view,
+        ThreadViewOptions, acp_stand_in, agent_link, ask_label, ask_tooltip,
+        location_label, open_location, reply_box, text_button, thread_view,
     },
 };
 use crate::{
@@ -893,19 +893,20 @@ pub fn draft_view(window_tab: Rc<WindowTabData>, draft_id: String) -> impl View 
     };
     let initial = draft.with_untracked(|draft| draft.as_ref().map(|d| d.body.clone()).unwrap_or_default());
     let asking = move || draft.with(|d| d.as_ref().is_some_and(|d| d.intent == ThreadIntent::Question));
-    let has_agent = {
+    // The review's agent: its name, how it answers, and whether an ACP agent could answer here instead.
+    let agent = {
         let review = window_tab.review.clone();
-        move || {
-            draft.with(|d| {
-                d.as_ref().is_some_and(|d| {
-                    review.reviews.with(|reviews| {
-                        reviews
-                            .iter()
-                            .any(|review| review.id == d.review_id && review.agent.is_some())
-                    })
-                })
-            })
-        }
+        let listening = ReviewCore::get().map(|core| core.listening);
+        create_memo(move |_| {
+            let review_id = draft.with(|d| d.as_ref().map(|d| d.review_id.clone()))?;
+            let agent = review.reviews.with(|reviews| {
+                reviews.iter().find(|review| review.id == review_id).and_then(|review| review.agent.clone())
+            })?;
+            let listening = listening.is_some_and(|listening| {
+                listening.with(|listening| listening.get(&review_id).copied().unwrap_or(false))
+            });
+            Some((agent.name.clone(), agent_link(&agent, listening), acp_stand_in(&agent).is_some()))
+        })
     };
     let title = label(move || {
         let place = draft
@@ -957,14 +958,37 @@ pub fn draft_view(window_tab: Rc<WindowTabData>, draft_id: String) -> impl View 
         text_button(text.to_string(), primary, move || drafts::submit(&window_tab, &draft_id, intent), config)
     };
     let comment = send(ThreadIntent::Comment, "Comment", true);
-    let ask = send(ThreadIntent::Question, "Ask Agent", false);
-    let has_agent_for_style = has_agent;
+    let ask = {
+        let window_tab = window_tab.clone();
+        let draft_id = draft_id.clone();
+        dyn_container(
+            move || agent.get(),
+            move |agent| {
+                let Some((name, link, can_answer_here)) = agent else {
+                    return empty().into_any();
+                };
+                let (window_tab, draft_id) = (window_tab.clone(), draft_id.clone());
+                let tip = ask_tooltip(&name, link, can_answer_here);
+                crate::app::tooltip_label(
+                    config,
+                    text_button(
+                        ask_label(&name, link),
+                        false,
+                        move || drafts::submit(&window_tab, &draft_id, ThreadIntent::Question),
+                        config,
+                    ),
+                    move || tip.clone(),
+                )
+                .into_any()
+            },
+        )
+    };
     floem::views::v_stack((
         h_stack((title, empty().style(|s| s.flex_grow(1.0_f32)), discard)).style(|s| s.width_full().items_center()),
         input.style(|s| s.margin_top(6.0)),
         h_stack((
             empty().style(|s| s.flex_grow(1.0_f32)),
-            ask.style(move |s| s.apply_if(!has_agent_for_style(), |s| s.hide())),
+            ask,
             comment,
         ))
         .style(|s| s.width_full().margin_top(6.0)),
