@@ -85,6 +85,9 @@ pub struct PreviewComment {
 pub struct GitHubPreview {
     pub event: String,
     pub body: String,
+    /// Why the event isn't the reviewer's decision (on your own pull request GitHub only takes a comment).
+    #[serde(default)]
+    pub note: Option<String>,
     pub comments: Vec<PreviewComment>,
 }
 
@@ -309,17 +312,44 @@ pub fn compose(
     }
 }
 
-/// Build a preview of what would be posted. Pure function.
+/// GitHub takes only a comment on your own pull request: the review's body says the decision instead.
+fn as_comment(decision: ReviewDecision, body: &str) -> String {
+    format!("**{}.** {body}", decision_label(decision)).trim().to_string()
+}
+
+fn own_note(decision: ReviewDecision) -> String {
+    format!(
+        "GitHub doesn't allow \"{}\" on your own pull request, so it is posted as a comment that says so.",
+        decision_label(decision)
+    )
+}
+
+/// Whether the pull request is the signed-in GitHub user's own: GitHub refuses "Approve" and "Request changes" on it.
+/// `None` when `gh` can't tell (the post then finds out from GitHub's refusal). Runs `gh`, so call it off the UI thread.
+pub fn own_pull_request(runner: &dyn GhRunner, target: &GitHubTarget) -> Option<bool> {
+    let pull = format!("repos/{}/pulls/{}", target.repo, target.number);
+    let author = runner.run(&["api", &pull, "--jq", ".user.login"], "");
+    let me = runner.run(&["api", "user", "--jq", ".login"], "");
+    let (author_login, my_login) = (author.stdout.trim(), me.stdout.trim());
+    (author.ok && me.ok && !author_login.is_empty()).then(|| author_login == my_login)
+}
+
+/// Build a preview of what would be posted: exactly what `publish` sends first. Pure function; `own` is whether the
+/// pull request is the reviewer's own (`own_pull_request`), where an Approve or Request changes goes as a comment that
+/// says so.
 pub fn preview(
     review: &Review,
     decision: ReviewDecision,
     summary: &str,
     reworded: &HashMap<String, String>,
+    own: bool,
 ) -> GitHubPreview {
     let composed = compose(review, decision, summary, reworded);
+    let own = own && decision != ReviewDecision::Comment;
     GitHubPreview {
-        event: review_event(decision).to_string(),
-        body: composed.body,
+        event: if own { "COMMENT" } else { review_event(decision) }.to_string(),
+        body: if own { as_comment(decision, &composed.body) } else { composed.body },
+        note: own.then(|| own_note(decision)),
         comments: composed
             .comments
             .into_iter()
@@ -356,6 +386,10 @@ pub fn preview_markdown(preview: &GitHubPreview) -> String {
         ));
     }
 
+    if let Some(note) = preview.note.as_deref() {
+        parts.push(format!("_{note}_"));
+    }
+
     for c in &preview.comments {
         let line_label = if let Some(start) = c.start_line {
             format!("{start}-")
@@ -374,7 +408,9 @@ pub fn preview_markdown(preview: &GitHubPreview) -> String {
     parts.join("\n\n")
 }
 
-/// Post the review to GitHub. Handles retries for own-PR and diff-line errors.
+/// Post the review to GitHub. Checks first whether the pull request is the reviewer's own (then an Approve or Request
+/// changes goes as a comment that says so); GitHub's refusals that have a fallback (your own pull request, a line
+/// outside the diff) are retried, each once. `edits` are the reviewer's changes to its preview, posted as they wrote them.
 pub fn publish(
     runner: &dyn GhRunner,
     review: &Review,
@@ -404,7 +440,20 @@ pub fn publish(
 
     let posted = comments.len();
     let mut notes: Vec<String> = Vec::new();
+    // The reviewer's edits are of the preview, which already reads as a comment on their own pull request.
+    let as_own = |notes: &mut Vec<String>, body: &mut String, event: &mut String| {
+        notes.push(own_note(decision));
+        if edits.is_none() {
+            *body = as_comment(decision, body);
+        }
+        *event = "COMMENT".to_string();
+    };
+    if event != "COMMENT" && own_pull_request(runner, target) == Some(true) {
+        as_own(&mut notes, &mut body, &mut event);
+    }
 
+    // Each fallback once: your own pull request, then lines no longer in the diff.
+    let mut last = String::new();
     for _attempt in 0..3 {
         let payload = serde_json::json!({ "event": event, "body": body, "comments": comments });
         let input = serde_json::to_string(&payload).context("serializing review payload")?;
@@ -428,11 +477,20 @@ pub fn publish(
             });
         }
 
-        let message = if result.stderr.is_empty() {
-            &result.stdout
-        } else {
-            &result.stderr
-        };
+        // `gh api` puts GitHub's reason on stderr (`gh: <reason>`) and the response itself on stdout.
+        let (stderr, stdout) = (result.stderr.trim(), result.stdout.trim());
+        let message = [stderr, stdout]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        last = if stderr.is_empty() { stdout } else { stderr }.to_string();
+        log::error!(
+            "GitHub refused the review of {}#{} ({event}, {} line comments): {message}",
+            target.repo,
+            target.number,
+            comments.len()
+        );
         let message_lower = message.to_lowercase();
 
         if message_lower.contains("enoent")
@@ -452,12 +510,8 @@ pub fn publish(
         }
 
         if event != "COMMENT" && message_lower.contains("own pull request") {
-            let label = decision_label(decision);
-            notes.push(format!(
-                "GitHub doesn't allow \"{label}\" on your own pull request, so it was posted as a comment."
-            ));
-            body = format!("**{label}.** {body}").trim_end().to_string();
-            event = "COMMENT".to_string();
+            // GitHub doesn't let you approve (or request changes on) your own pull request.
+            as_own(&mut notes, &mut body, &mut event);
             continue;
         }
 
@@ -491,20 +545,24 @@ pub fn publish(
             continue;
         }
 
-        // The first 400 UTF-16 code units, as JavaScript's `.slice(0, 400)`.
-        let mut units = 0;
-        let truncated: String = message
-            .trim()
-            .chars()
-            .take_while(|c| {
-                units += c.len_utf16();
-                units <= 400
-            })
-            .collect();
-        bail!("GitHub refused the review: {truncated}");
+        bail!("GitHub refused the review: {}", refusal(&last));
     }
 
-    bail!("GitHub refused the review.")
+    bail!("GitHub refused the review: {}", refusal(&last))
+}
+
+/// GitHub's reason for a refusal, as the error names it: without `gh`'s prefix, the first 400 UTF-16 code units (as
+/// JavaScript's `.slice(0, 400)`).
+fn refusal(last: &str) -> String {
+    let reason = last.strip_prefix("gh: ").unwrap_or(last);
+    let mut units = 0;
+    reason
+        .chars()
+        .take_while(|c| {
+            units += c.len_utf16();
+            units <= 400
+        })
+        .collect()
 }
 
 /// Read the PR metadata from a review directory's `PR.md` or `<patch>.md`.
@@ -578,7 +636,7 @@ mod tests {
         let decision = review.verdict.as_ref().map(|v| v.decision).unwrap_or(ReviewDecision::Comment);
         let summary = review.verdict.as_ref().map(|v| v.summary.as_str()).unwrap_or("");
         let reworded = HashMap::new();
-        let actual = preview(&review, decision, summary, &reworded);
+        let actual = preview(&review, decision, summary, &reworded, false);
         let expected = load_expected_preview(name);
         assert_eq!(actual, expected, "preview mismatch for fixture {name}");
     }
@@ -616,7 +674,7 @@ mod tests {
         let reworded_path = fixtures_dir().join("reworded.reworded.json");
         let reworded: HashMap<String, String> =
             serde_json::from_str(&std::fs::read_to_string(reworded_path).unwrap()).unwrap();
-        let actual = preview(&review, decision, summary, &reworded);
+        let actual = preview(&review, decision, summary, &reworded, false);
         let expected = load_expected_preview("reworded");
         assert_eq!(actual, expected);
     }
@@ -641,64 +699,160 @@ mod tests {
         assert_preview_matches("approve_default");
     }
 
-    /// A `gh` that fails the first post with `error` (when given) and accepts the next one.
+    /// A `gh` whose `n`th post fails with `errors[n - 1]` (when there is one) and is accepted otherwise. Asked who
+    /// wrote the pull request and who is signed in, it answers `logins` (author, user), or fails when there are none.
     struct FakeGh {
-        error: Option<&'static str>,
+        logins: Option<(&'static str, &'static str)>,
+        errors: Vec<&'static str>,
         payloads: std::sync::Mutex<Vec<serde_json::Value>>,
     }
 
-    impl GhRunner for FakeGh {
-        fn run(&self, _args: &[&str], input: &str) -> GhOutput {
-            let mut payloads = self.payloads.lock().unwrap();
-            payloads.push(serde_json::from_str(input).unwrap());
-            match self.error.filter(|_| payloads.len() == 1) {
-                Some(error) => GhOutput {
-                    ok: false,
-                    stdout: String::new(),
-                    stderr: error.to_string(),
-                },
-                None => GhOutput {
-                    ok: true,
-                    stdout: r#"{"html_url":"https://github.com/owner/repo/pull/42#pullrequestreview-1"}"#.to_string(),
-                    stderr: String::new(),
-                },
+    impl FakeGh {
+        fn new(logins: Option<(&'static str, &'static str)>, errors: Vec<&'static str>) -> Self {
+            FakeGh {
+                logins,
+                errors,
+                payloads: std::sync::Mutex::new(Vec::new()),
             }
         }
     }
 
-    /// Publishes a fixture's review through a fake `gh`; the payloads sent must be the ones the TypeScript sent.
-    fn publish_fixture(name: &str, error: Option<&'static str>, edits: Option<&GitHubEdits>) -> GitHubPost {
-        let review = load_review(name);
-        let target = GitHubTarget {
+    impl GhRunner for FakeGh {
+        fn run(&self, args: &[&str], input: &str) -> GhOutput {
+            let answer = |ok: bool, stdout: &str, stderr: &str| GhOutput {
+                ok,
+                stdout: stdout.to_string(),
+                stderr: stderr.to_string(),
+            };
+            if args.get(1) != Some(&"--method") {
+                let login = match (self.logins, args.get(1)) {
+                    (Some((_, me)), Some(&"user")) => me,
+                    (Some((author, _)), Some(&"repos/owner/repo/pulls/42")) => author,
+                    _ => return answer(false, "", "gh: Not Found (HTTP 404)"),
+                };
+                return answer(true, &format!("{login}\n"), "");
+            }
+            let mut payloads = self.payloads.lock().unwrap();
+            payloads.push(serde_json::from_str(input).unwrap());
+            match self.errors.get(payloads.len() - 1) {
+                Some(error) => answer(false, "", error),
+                None => answer(true, r#"{"html_url":"https://github.com/owner/repo/pull/42#pullrequestreview-1"}"#, ""),
+            }
+        }
+    }
+
+    fn target() -> GitHubTarget {
+        GitHubTarget {
             repo: "owner/repo".to_string(),
             number: 42,
             url: "https://github.com/owner/repo/pull/42".to_string(),
             posted_round: None,
             posted_url: None,
-        };
+        }
+    }
+
+    /// Publishes a fixture's review through a fake `gh`.
+    fn publish_with(name: &str, runner: &FakeGh, edits: Option<&GitHubEdits>) -> anyhow::Result<GitHubPost> {
+        let review = load_review(name);
         let verdict = review.verdict.as_ref().unwrap();
-        let runner = FakeGh {
-            error,
-            payloads: std::sync::Mutex::new(Vec::new()),
-        };
-        let result = publish(&runner, &review, &target, verdict.decision, &verdict.summary, &HashMap::new(), edits).unwrap();
+        publish(runner, &review, &target(), verdict.decision, &verdict.summary, &HashMap::new(), edits)
+    }
+
+    /// Publishes a fixture's review through a fake `gh`; the payloads sent must be the ones the TypeScript sent.
+    fn publish_fixture(name: &str, runner: FakeGh, edits: Option<&GitHubEdits>) -> GitHubPost {
+        let result = publish_with(name, &runner, edits).unwrap();
         let path = fixtures_dir().join(format!("{name}.payloads.json"));
         let expected: Vec<serde_json::Value> = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         assert_eq!(runner.payloads.into_inner().unwrap(), expected, "payloads mismatch for fixture {name}");
         result
     }
 
+    const OWN_NOTE: &str = "GitHub doesn't allow \"Approve\" on your own pull request, so it is posted as a comment that says so.";
+
     #[test]
     fn test_own_pr_fallback() {
-        let result = publish_fixture("own_pr", Some("You can't approve your own pull request"), None);
+        // `gh` can't tell whose pull request it is: GitHub's refusal is what turns it into a comment.
+        let runner = FakeGh::new(None, vec!["gh: Can not approve your own pull request (HTTP 422)"]);
+        let result = publish_fixture("own_pr", runner, None);
         assert_eq!(result.event, "COMMENT");
-        assert!(result.notes[0].contains("your own pull request"));
+        assert_eq!(result.notes, vec![OWN_NOTE.to_string()]);
+    }
+
+    #[test]
+    fn test_own_pr_checked_first() {
+        // The reviewer's own pull request: posted as a comment that says so, without being refused first.
+        let result = publish_fixture("own_pr_checked", FakeGh::new(Some(("me", "me")), vec![]), None);
+        assert_eq!(result.event, "COMMENT");
+        assert_eq!(result.notes, vec![OWN_NOTE.to_string()]);
+    }
+
+    #[test]
+    fn test_someone_elses_pr_keeps_decision() {
+        let runner = FakeGh::new(Some(("someone", "me")), vec![]);
+        let result = publish_with("own_pr", &runner, None).unwrap();
+        assert_eq!(result.event, "APPROVE");
+        assert!(result.notes.is_empty());
+        assert_eq!(runner.payloads.into_inner().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_own_pr_preview() {
+        let review = load_review("own_pr_checked");
+        let verdict = review.verdict.as_ref().unwrap();
+        let actual = preview(&review, verdict.decision, &verdict.summary, &HashMap::new(), true);
+        assert_eq!(actual, load_expected_preview("own_pr_checked"));
+        assert_markdown_matches("own_pr_checked");
+        // A comment is a comment on any pull request.
+        let comment = preview(&review, ReviewDecision::Comment, &verdict.summary, &HashMap::new(), true);
+        assert_eq!((comment.event.as_str(), comment.note), ("COMMENT", None));
+    }
+
+    #[test]
+    fn test_own_pr_edits_posted_as_written() {
+        // The edited preview already reads as a comment: the edits go out as the reviewer wrote them.
+        let path = fixtures_dir().join("edits.edits.json");
+        let edits: GitHubEdits = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let runner = FakeGh::new(Some(("me", "me")), vec![]);
+        let result = publish_with("edits", &runner, Some(&edits)).unwrap();
+        assert_eq!(result.event, "COMMENT");
+        let payloads = runner.payloads.into_inner().unwrap();
+        assert_eq!(payloads.len(), 1);
+        assert_eq!(payloads[0]["event"], "COMMENT");
+        assert_eq!(payloads[0]["body"], "Edited summary by reviewer.");
+    }
+
+    #[test]
+    fn test_each_fallback_once_and_github_reason() {
+        // Own pull request, then a line outside the diff, then a refusal without a fallback: the error is GitHub's reason.
+        let runner = FakeGh::new(
+            None,
+            vec![
+                "gh: Can not approve your own pull request (HTTP 422)",
+                "gh: Pull request review thread line must be part of the diff (HTTP 422)",
+                "gh: Validation Failed (HTTP 422)",
+            ],
+        );
+        let error = publish_with("own_pr", &runner, None).unwrap_err().to_string();
+        assert_eq!(error, "GitHub refused the review: Validation Failed (HTTP 422)");
+        let payloads = runner.payloads.into_inner().unwrap();
+        assert_eq!(payloads.len(), 3);
+        assert_eq!(payloads[1]["event"], "COMMENT");
+        assert_eq!(payloads[2]["comments"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn test_own_pr_refused_again_is_not_retried() {
+        // Already a comment: a second "own pull request" refusal has no fallback left.
+        let runner = FakeGh::new(None, vec!["gh: Can not approve your own pull request", "gh: Can not approve your own pull request"]);
+        let error = publish_with("approve_default", &runner, None).unwrap_err().to_string();
+        assert_eq!(error, "GitHub refused the review: Can not approve your own pull request");
+        assert_eq!(runner.payloads.into_inner().unwrap().len(), 2);
     }
 
     #[test]
     fn test_diff_line_fallback() {
         let error = "HTTP 422: Unprocessable Entity - line must be part of the diff";
-        let result = publish_fixture("diff_fallback", Some(error), None);
+        let result = publish_fixture("diff_fallback", FakeGh::new(None, vec![error]), None);
         assert_eq!(result.comments, 0);
         assert!(result.in_body > 0);
         assert!(result.notes[0].contains("no longer in the pull request's diff"));
@@ -709,7 +863,7 @@ mod tests {
         // The reviewer changes the summary, rewrites one comment and empties another.
         let path = fixtures_dir().join("edits.edits.json");
         let edits: GitHubEdits = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        let result = publish_fixture("edits", None, Some(&edits));
+        let result = publish_fixture("edits", FakeGh::new(Some(("someone", "me")), vec![]), Some(&edits));
         // The emptied comment is left out: 3 threads composed, 2 posted.
         assert_eq!(result.comments, 2);
         assert_eq!(result.event, "REQUEST_CHANGES");

@@ -5236,6 +5236,7 @@ name = "review_github"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "log",
  "pretty_assertions",
  "review_bundle",
  "review_model",

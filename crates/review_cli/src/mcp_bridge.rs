@@ -332,19 +332,26 @@ impl Bridge {
             .and_then(Value::as_str)
             .map(str::to_string);
         let id = message.get("id").cloned();
-        // Newer clients (Claude Code 2.1) first probe for the stateless protocol with `server/discover`, and fall
-        // back to `initialize` on "method not found". This bridge speaks the classic protocol: say so here, so the
-        // probe neither starts Co-Review nor reaches it (it would refuse the probe, and the bridge take that for
-        // Co-Review being gone).
-        if method.as_deref() == Some("server/discover") {
-            if let Some(id) = id {
-                self.send(&json!({ "jsonrpc": "2.0", "id": id,
-                    "error": { "code": -32601, "message": "Method not found: server/discover" } }));
+        let handshake = method.as_deref() == Some("initialize");
+        let mut state = self.state();
+        // Before `initialize` there is no session to forward to: Co-Review would refuse it, which looked like Co-Review
+        // going away (and, with Co-Review not running, started it). Clients probe first (Claude Code 2.1 sends
+        // `server/discover` for the stateless protocol) and fall back to `initialize` when the method is not found.
+        // Notifications before `initialize` are dropped.
+        if state.initialize.is_none() && !handshake {
+            drop(state);
+            match (method.as_deref(), id) {
+                (Some("ping"), Some(id)) => {
+                    self.send(&json!({ "jsonrpc": "2.0", "id": id, "result": {} }));
+                }
+                (Some(method), Some(id)) => {
+                    self.send(&json!({ "jsonrpc": "2.0", "id": id,
+                        "error": { "code": -32601, "message": format!("Method not found: {method}") } }));
+                }
+                _ => {}
             }
             return;
         }
-        let handshake = method.as_deref() == Some("initialize");
-        let mut state = self.state();
         if handshake {
             state.initialize = Some(message.clone());
         }
@@ -376,8 +383,8 @@ impl Bridge {
             }
         }
         if state.connection.is_none() {
-            let replay = state.initialize.is_some() && !handshake;
-            self.start_connection(&mut state, replay);
+            // Past `initialize`: anything but the handshake itself replays it on the new session.
+            self.start_connection(&mut state, !handshake);
         }
         let is_request = id.is_some() && method.is_some();
         let watch = match method.as_deref() {

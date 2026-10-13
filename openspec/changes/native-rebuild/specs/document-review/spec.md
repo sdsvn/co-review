@@ -17,6 +17,12 @@ node ids).
 - **WHEN** the reviewer comments on a node
 - **THEN** the thread is anchored with `mermaid-node`, its `blockId` and `nodeId`
 
+#### Scenario: Full size
+- **WHEN** the reviewer clicks a diagram away from its nodes and edges, or its full-size button
+- **THEN** it opens in a window-sized view: the wheel, a trackpad pinch, the buttons or + / - / 0 zoom toward the
+  pointer, dragging pans, double-click zooms in (shift: out), Esc closes, and a click on a node or edge there starts a
+  comment on it as on the page
+
 ### Requirement: Design tree
 A `## Design` section (or a `*.pseudocode.md` file) SHALL render as an L1 · L2 · L3 tree with level switching,
 `?` `⚠` `✎` badges, the reason after ` — ` muted, and a comment action per step.

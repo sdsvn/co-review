@@ -80,6 +80,8 @@ pub struct PageContext {
     pub images: Rc<HashMap<String, Vec<u8>>>,
     /// The page's Mermaid blocks.
     pub diagrams: Rc<Vec<review_markdown::Diagram>>,
+    /// The window's size in layout units, for a diagram's full-size view.
+    pub window_size: Memo<floem::kurbo::Size>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

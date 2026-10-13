@@ -8,7 +8,8 @@ questions to an agent, unaccepted findings, resolved threads and the agent's own
 
 #### Scenario: Own pull request
 - **WHEN** the reviewer approves their own pull request
-- **THEN** it is posted as a comment, and the reviewer is told why
+- **THEN** Co-Review checks whose pull request it is before posting and posts a comment that starts with the
+  decision; the preview says so, and when GitHub still refuses, its reason is in the error
 
 #### Scenario: Line left the diff
 - **WHEN** a commented line is no longer in the diff

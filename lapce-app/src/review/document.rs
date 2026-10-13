@@ -263,6 +263,14 @@ pub fn document_page(window_tab: Rc<WindowTabData>, page: ReviewPage) -> impl Vi
         Rc::new(move |key: LeafKey| slot_view(window_tab.clone(), review_id.clone(), key, placement, hidden, edits, uri))
     };
 
+    // The window's size as laid out (Lapce's UI scale applied), for a diagram's full-size view.
+    let window_size = {
+        let window = window_tab.common.window_common.clone();
+        create_memo(move |_| {
+            let (size, scale) = (window.size.get(), window.window_scale.get().max(0.1));
+            floem::kurbo::Size::new(size.width / scale, size.height / scale)
+        })
+    };
     let header = header(window_tab.clone(), page.clone(), loaded, review, on_comment.clone());
     let body = {
         let window_tab = window_tab.clone();
@@ -294,6 +302,7 @@ pub fn document_page(window_tab: Rc<WindowTabData>, page: ReviewPage) -> impl Vi
                     slot: slot.clone(),
                     images: loaded.images.clone(),
                     diagrams: Rc::new(loaded.page.diagrams.clone()),
+                    window_size,
                 };
                 page_body(&ctx, &loaded, page_text, has_agent).into_any()
             },

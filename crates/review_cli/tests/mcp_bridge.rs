@@ -676,6 +676,74 @@ fn a_stateless_discovery_probe_is_refused_as_unknown_without_starting_co_review(
 }
 
 #[test]
+fn a_probe_before_initialize_is_not_found_and_does_not_cost_the_session() {
+    let home = home();
+    let server = FakeCoReview::start(0);
+    let port = server.port.to_string();
+    let mut agent = Agent::start(home.path(), &["--port", &port, &here()], &[]);
+    assert_eq!(
+        agent.request("server/discover", json!({}))["error"]["code"],
+        json!(-32601)
+    );
+    // Anything else before `initialize` too; a ping is answered, a notification dropped.
+    let unknown = agent.request("tools/list", json!({}));
+    assert_eq!(unknown["error"]["code"], json!(-32601), "{unknown}");
+    assert_eq!(
+        unknown["error"]["message"],
+        json!("Method not found: tools/list")
+    );
+    assert_eq!(agent.request("ping", json!({}))["result"], json!({}));
+    agent.notify("notifications/cancelled");
+    agent.initialize();
+    assert_eq!(agent.call("one"), "echo:one");
+    assert_eq!(
+        (server.stats().initializes, server.stats().calls),
+        (1, 1)
+    );
+}
+
+#[test]
+fn a_probe_before_initialize_does_not_start_co_review_and_the_handshake_comes_from_the_cache() {
+    let home = home();
+    let cached_tools = json!({ "tools": [] });
+    fs::write(
+        home.path().join("mcp-handshake.json"),
+        json!({
+            "initialize": { "protocolVersion": "2025-06-18", "capabilities": { "tools": {} },
+                "serverInfo": { "name": "co-review", "version": "0.1.0" } },
+            "tools": cached_tools
+        })
+        .to_string(),
+    )
+    .expect("handshake");
+    // Nothing listens on this port: the bridge would start Co-Review there.
+    let port = {
+        let server = FakeCoReview::start(0);
+        server.port.to_string()
+    };
+    let mut agent = Agent::start(home.path(), &["--port", &port, &here()], &[]);
+    assert_eq!(
+        agent.request("server/discover", json!({}))["error"]["code"],
+        json!(-32601)
+    );
+    let initialized = agent.request(
+        "initialize",
+        json!({ "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": { "name": "test", "version": "0" } }),
+    );
+    assert_eq!(initialized["result"]["serverInfo"]["name"], json!("co-review"));
+    agent.notify("notifications/initialized");
+    assert_eq!(
+        agent.request("tools/list", json!({}))["result"],
+        cached_tools
+    );
+    let log = fs::read_to_string(home.path().join("logs").join("cli.log")).unwrap_or_default();
+    assert!(
+        !log.contains("starting the Co-Review") && !log.contains("lost Co-Review"),
+        "{log}"
+    );
+}
+
+#[test]
 fn without_a_cached_handshake_or_any_co_review_the_agent_is_told_it_is_not_reachable() {
     let home = home();
     let mut agent = Agent::start(home.path(), &["--port", "1", &here()], &[]);

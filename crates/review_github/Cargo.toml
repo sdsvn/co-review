@@ -10,6 +10,7 @@ path = "src/review_github.rs"
 
 [dependencies]
 anyhow.workspace = true
+log.workspace = true
 review_model.workspace = true
 review_bundle.workspace = true
 serde.workspace = true

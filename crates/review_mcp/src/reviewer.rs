@@ -1315,7 +1315,16 @@ impl CoReviewer {
             })
             .unwrap_or_default();
         let composed = review_github::compose(&review, decision, &summary, &reworded);
-        let preview = review_github::preview(&review, decision, &summary, &reworded);
+        // GitHub takes only a comment on your own pull request: the preview says so, as the post will.
+        let own = decision != ReviewDecision::Comment && {
+            let (runner, checked) = (Arc::clone(&self.services.github), target.clone());
+            tokio::task::spawn_blocking(move || review_github::own_pull_request(runner.as_ref(), &checked))
+                .await
+                .ok()
+                .flatten()
+                == Some(true)
+        };
+        let preview = review_github::preview(&review, decision, &summary, &reworded, own);
         let round = review.verdict.as_ref().map_or(0, |verdict| verdict.count);
         let again = match target.posted_round {
             Some(posted) if posted == round => format!(

@@ -1,0 +1,14 @@
+{
+  "event": "COMMENT",
+  "body": "**Approve.** Looks good overall.",
+  "note": "GitHub doesn't allow \"Approve\" on your own pull request, so it is posted as a comment that says so.",
+  "comments": [
+    {
+      "threadId": "own-pr-1",
+      "path": "src/main.rs",
+      "line": 5,
+      "side": "RIGHT",
+      "body": "I noticed this issue."
+    }
+  ]
+}

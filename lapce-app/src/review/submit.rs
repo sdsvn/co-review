@@ -193,17 +193,33 @@ fn submit_form(
             match (post.get_untracked(), target.get_untracked()) {
                 (true, Some(github)) => {
                     // Posting too: show exactly what goes to GitHub first; nothing is submitted until it is confirmed.
-                    let built = review_github::preview(&review, decision, &summary_text, &HashMap::new());
-                    preview.set(Some(PostPreview {
-                        body: create_rw_signal(built.body.clone()),
-                        comments: built
-                            .comments
-                            .iter()
-                            .map(|comment| (comment.thread_id.clone(), create_rw_signal(comment.body.clone())))
-                            .collect(),
-                        target: github,
-                        preview: built,
-                    }));
+                    // Whose pull request it is takes `gh`, so the preview is built off the UI thread.
+                    let Some(core) = ReviewCore::get() else {
+                        return;
+                    };
+                    let runner = Arc::clone(&core.services.github);
+                    busy.set(true);
+                    tab.later(
+                        move || {
+                            let own = decision != ReviewDecision::Comment
+                                && review_github::own_pull_request(runner.as_ref(), &github) == Some(true);
+                            let built = review_github::preview(&review, decision, &summary_text, &HashMap::new(), own);
+                            (github, built)
+                        },
+                        move |(github, built)| {
+                            busy.set(false);
+                            preview.set(Some(PostPreview {
+                                body: create_rw_signal(built.body.clone()),
+                                comments: built
+                                    .comments
+                                    .iter()
+                                    .map(|comment| (comment.thread_id.clone(), create_rw_signal(comment.body.clone())))
+                                    .collect(),
+                                target: github,
+                                preview: built,
+                            }));
+                        },
+                    );
                 }
                 _ => {
                     busy.set(true);
@@ -330,11 +346,13 @@ fn preview_view(
     busy: RwSignal<bool>,
 ) -> impl View {
     let config = window_tab_data.common.config;
+    // As GitHub will take it: on your own pull request, a comment that says the decision (the note says why).
+    let event = if shown.preview.event == "COMMENT" { ReviewDecision::Comment } else { decision };
     let heading = format!(
         "Post to {}#{} as \"{}\"{}",
         shown.target.repo,
         shown.target.number,
-        decision_label(decision),
+        decision_label(event),
         if shown.preview.comments.is_empty() {
             String::new()
         } else {
@@ -388,8 +406,12 @@ fn preview_view(
         );
     };
     let dim = move || config.get().color(LapceColor::PANEL_FOREGROUND_DIM);
+    let own_note = shown.preview.note.clone();
+    let has_note = own_note.is_some();
     v_stack((
         label(move || heading.clone()).style(|s| s.font_bold().margin_bottom(6.0)),
+        label(move || own_note.clone().unwrap_or_default())
+            .style(move |s| s.color(dim()).margin_bottom(6.0).apply_if(!has_note, |s| s.hide())),
         label(|| "The review's message").style(move |s| s.color(dim())),
         reply_box(
             window_tab_data.clone(),
