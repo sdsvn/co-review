@@ -9,6 +9,7 @@ on:
     paths:
       - crates/**
       - lapce-**
+      - integrations/**
       - Cargo.toml
       - Cargo.lock
       - rust-toolchain.toml
@@ -17,6 +18,7 @@ on:
     paths:
       - crates/**
       - lapce-**
+      - integrations/**
       - Cargo.toml
       - Cargo.lock
       - rust-toolchain.toml
@@ -60,6 +62,13 @@ jobs:
         run: cargo clippy --profile ci -p lapce -p lapce-app -p lapce-core -p lapce-proxy -p lapce-rpc
       - name: Test (review crates)
         run: cargo test --workspace --exclude lapce --exclude lapce-app --exclude lapce-core --exclude lapce-proxy --exclude lapce-rpc
+      - name: Test (the app's review code)
+        run: cargo test -p lapce-app --lib review::
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Test (Pi / Oh My Pi extension)
+        run: node --experimental-transform-types --test integrations/shared/co-review.test.ts
       - name: Build the app
         run: cargo build --profile ci --bin lapce
       - name: Build the co-review command
