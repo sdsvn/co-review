@@ -78,6 +78,9 @@ pub struct MessagePatch {
     pub activity: Option<Vec<review_model::AgentActivity>>,
     pub permission: Option<review_model::PermissionRequest>,
     pub choice: Option<String>,
+    /// The thread's agent state, written together with the message (so an answer and its
+    /// turn's end are seen at once).
+    pub agent_state: Option<review_model::AgentState>,
 }
 
 #[derive(Default)]
@@ -390,6 +393,9 @@ impl ReviewStore {
             message.activity = patch.activity.or(message.activity.take());
             message.permission = patch.permission.or(message.permission.take());
             message.choice = patch.choice.or(message.choice.take());
+            if patch.agent_state.is_some() {
+                thread.agent_state = patch.agent_state;
+            }
         })
     }
 

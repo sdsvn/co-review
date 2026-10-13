@@ -432,6 +432,9 @@ impl AgentService {
             status: Some(status),
             activity: Some(turn.activity),
             permission: turn.permission,
+            // The turn ends with its answer: no reader sees a finished answer while the
+            // thread still says the agent is on it.
+            agent_state: Some(AgentState::Idle),
             ..MessagePatch::default()
         };
         match self.core.store.update_message(
@@ -441,10 +444,12 @@ impl AgentService {
             patch,
         ) {
             Ok(thread) => self.core.thread_changed(review_id, thread),
-            Err(error) => log::error!("agent answer not saved: {error}"),
+            Err(error) => {
+                log::error!("agent answer not saved: {error}");
+                self.core
+                    .set_agent_state(review_id, thread_id, AgentState::Idle);
+            }
         }
-        self.core
-            .set_agent_state(review_id, thread_id, AgentState::Idle);
     }
 
     /// Sends the turn's prompt in the thread's session (opened, with the review's settings, on its first question)
