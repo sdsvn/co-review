@@ -1,0 +1,26 @@
+[
+  {
+    "event": "APPROVE",
+    "body": "Looks good overall.",
+    "comments": [
+      {
+        "path": "src/main.rs",
+        "line": 5,
+        "side": "RIGHT",
+        "body": "I noticed this issue."
+      }
+    ]
+  },
+  {
+    "event": "COMMENT",
+    "body": "**Approve.** Looks good overall.",
+    "comments": [
+      {
+        "path": "src/main.rs",
+        "line": 5,
+        "side": "RIGHT",
+        "body": "I noticed this issue."
+      }
+    ]
+  }
+]

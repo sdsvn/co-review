@@ -1,0 +1,48 @@
+{
+  "name": "diagrams_section",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Step one\n## Diagrams\n```mermaid\n%% id: flow\ngraph LR\n  A --> B\n```\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Step one\n## Diagrams\n```mermaid\n%% id: flow\ngraph LR\n  A --> B\n```\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n"
+        },
+        {
+          "heading": "Diagrams",
+          "key": "diagrams",
+          "body": "```mermaid\n%% id: flow\ngraph LR\n  A --> B\n```\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

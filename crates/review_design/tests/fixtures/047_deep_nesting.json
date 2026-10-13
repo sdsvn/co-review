@@ -1,0 +1,75 @@
+{
+  "name": "deep_nesting",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Level 1\n  - Level 2\n    - Level 3\n      - Level 4\n        - Level 5\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Level 1",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Level 2",
+              "indent": 2,
+              "depth": 2,
+              "children": [
+                {
+                  "text": "Level 3",
+                  "indent": 4,
+                  "depth": 3,
+                  "children": [
+                    {
+                      "text": "Level 4",
+                      "indent": 6,
+                      "depth": 4,
+                      "children": [
+                        {
+                          "text": "Level 5",
+                          "indent": 8,
+                          "depth": 5,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "stepIds": [
+      "Level 1",
+      "Level 2",
+      "Level 3",
+      "Level 4",
+      "Level 5"
+    ]
+  }
+}

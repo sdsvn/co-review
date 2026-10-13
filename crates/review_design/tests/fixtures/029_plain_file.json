@@ -1,0 +1,30 @@
+{
+  "name": "plain_file",
+  "input": {
+    "markdown": "# Title\n## Introduction\nJust text.\n",
+    "fileName": "readme.md"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {},
+      "body": "# Title\n## Introduction\nJust text.\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Introduction",
+          "key": "introduction",
+          "body": "Just text.\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "plain",
+      "declared": false,
+      "warnings": []
+    },
+    "stepTrees": {},
+    "stepIds": []
+  }
+}

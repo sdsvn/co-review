@@ -1,0 +1,24 @@
+{
+  "name": "empty_document",
+  "input": {
+    "markdown": "",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {},
+      "body": ""
+    },
+    "sections": {
+      "preamble": "",
+      "sections": []
+    },
+    "format": {
+      "mode": "plain",
+      "declared": false,
+      "warnings": []
+    },
+    "stepTrees": {},
+    "stepIds": []
+  }
+}

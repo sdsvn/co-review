@@ -1,0 +1,30 @@
+[package]
+name = "review_pages"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "EPL-2.0"
+
+[lib]
+path = "src/review_pages.rs"
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+review_bundle.workspace = true
+review_graph.workspace = true
+review_index.workspace = true
+review_model.workspace = true
+review_store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+smol.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

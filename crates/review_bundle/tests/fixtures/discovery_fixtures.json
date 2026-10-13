@@ -1,0 +1,113 @@
+[
+  {
+    "name": "index-markdown",
+    "files": [
+      "index.markdown",
+      "README.md",
+      "change.patch"
+    ],
+    "expectedDocument": "index.markdown",
+    "expectedPatches": [
+      "change.patch"
+    ]
+  },
+  {
+    "name": "index-md",
+    "files": [
+      "foo.txt",
+      "index.md"
+    ],
+    "expectedDocument": "index.md",
+    "expectedPatches": []
+  },
+  {
+    "name": "INDEX-md",
+    "files": [
+      "INDEX.md",
+      "bar.diff"
+    ],
+    "expectedDocument": "INDEX.md",
+    "expectedPatches": [
+      "bar.diff"
+    ]
+  },
+  {
+    "name": "readme-md",
+    "files": [
+      "README.md"
+    ],
+    "expectedDocument": "README.md",
+    "expectedPatches": []
+  },
+  {
+    "name": "readme-lower",
+    "files": [
+      "readme.md"
+    ],
+    "expectedDocument": "readme.md",
+    "expectedPatches": []
+  },
+  {
+    "name": "pseudocode-fallback",
+    "files": [
+      "alpha.pseudocode.md",
+      "beta.pseudocode.md"
+    ],
+    "expectedDocument": "alpha.pseudocode.md",
+    "expectedPatches": []
+  },
+  {
+    "name": "no-document",
+    "files": [
+      "foo.rs",
+      "bar.go"
+    ],
+    "expectedDocument": null,
+    "expectedPatches": []
+  },
+  {
+    "name": "patches-sorted",
+    "files": [
+      "z.patch",
+      "a.diff",
+      "b.patch",
+      "m.diff"
+    ],
+    "expectedDocument": null,
+    "expectedPatches": [
+      "a.diff",
+      "b.patch",
+      "m.diff",
+      "z.patch"
+    ]
+  },
+  {
+    "name": "mixed",
+    "files": [
+      "readme.md",
+      "change.patch",
+      "other.diff",
+      "notes.md"
+    ],
+    "expectedDocument": "readme.md",
+    "expectedPatches": [
+      "change.patch",
+      "other.diff"
+    ]
+  },
+  {
+    "name": "priority-over-pseudo",
+    "files": [
+      "README.md",
+      "design.pseudocode.md"
+    ],
+    "expectedDocument": "README.md",
+    "expectedPatches": []
+  },
+  {
+    "name": "empty",
+    "files": [],
+    "expectedDocument": null,
+    "expectedPatches": []
+  }
+]

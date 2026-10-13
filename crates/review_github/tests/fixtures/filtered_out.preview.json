@@ -1,0 +1,13 @@
+{
+  "event": "COMMENT",
+  "body": "Filtering test.",
+  "comments": [
+    {
+      "threadId": "filtered-valid",
+      "path": "src/main.rs",
+      "line": 20,
+      "side": "RIGHT",
+      "body": "Good point, keeping this."
+    }
+  ]
+}

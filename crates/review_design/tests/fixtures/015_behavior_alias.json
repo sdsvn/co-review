@@ -1,0 +1,48 @@
+{
+  "name": "behavior_alias",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Step one\n## Behavior\nSome behavior.\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Step one\n## Behavior\nSome behavior.\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n"
+        },
+        {
+          "heading": "Behavior",
+          "key": "behavior",
+          "body": "Some behavior.\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

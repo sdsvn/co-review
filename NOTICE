@@ -1,0 +1,13 @@
+Co-Review
+https://github.com/sdsvn/co-review
+
+Co-Review is built on Lapce (https://github.com/lapce/lapce), Copyright (c) Lapce contributors, licensed under the
+Apache License, Version 2.0 (see LICENSE). Co-Review changes Lapce's own files only where marked "co-review:";
+docs/co-review/fork-surface.md lists those changes.
+
+Co-Review's own code (crates/review_*, lapce-app/src/review.rs and lapce-app/src/review/) is licensed under the
+Eclipse Public License 2.0, as each crate's Cargo.toml declares.
+
+Bundled third-party material:
+- Codicons (icons/codicons), Copyright (c) Microsoft Corporation, CC-BY-4.0 (icons/codicons/LICENSE).
+- DejaVu fonts (extra/fonts/DejaVu), see extra/fonts/DejaVu/LICENSE.

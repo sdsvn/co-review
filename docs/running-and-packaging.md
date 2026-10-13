@@ -1,220 +1,174 @@
-# Running and packaging
+# Building and running
 
-This page is for running Co-Review from a clone of the repository, and for building the desktop app and its
-installers. To just use Co-Review, the [install script](../README.md#install) is quicker.
+This page is for building Co-Review from a clone of the repository, packaging it, and configuring it. To just use
+Co-Review, the [install script](../README.md#install) is quicker.
 
 ## Requirements
 
-- Node.js 20 or later (tested with 24), npm and Git.
-- A C/C++ toolchain for native modules: the Xcode command-line tools on macOS, `build-essential` on Linux.
-- Network access to npm, Open VSX (plugins) and GitHub (Electron) for the first install.
+- Rust: `rustup` installs the version in `rust-toolchain.toml` on the first build.
+- Git.
+- Node.js 20 or later, only for `make prompts`, the version check and the website.
+- macOS: the Command Line Tools (`xcode-select --install`). No Xcode, no cmake.
+- Linux: the libraries Lapce needs. On Ubuntu, `sudo make -f Makefile.lapce ubuntu-deps`; for other distributions,
+  see [Lapce's build guide](lapce/building-from-source.md).
+- Windows: MSVC (the Visual Studio Build Tools), and Inno Setup 6 to build the installer.
 
-Then install the dependencies:
+## Build and run
 
 ```bash
-# npm install, plus the VS Code built-in plugins (Git, languages) into plugins/
-make install
+# the app and the `co-review` command (debug build, in target/debug)
+make build
+
+# run the app on a repository (default: this checkout)
+make run REPO=/path/to/repo
+
+# the `co-review` command built here, linked into PATH
+make install-cli
 
 # list every target
 make help
 ```
 
-## Browser app
+`make run` opens the repository through the `co-review` command, as an agent or the installed app would. A debug
+build keeps its own config folder, so it never shares settings with an installed Co-Review.
 
-Build Co-Review and open a repository in your browser:
+**Tests.** `make test` checks that every version matches and that the prompt copies are current, then runs the review
+crates' tests (`cargo test`). `make lint` runs Clippy. CI (`.github/workflows/rust.yml`) does the same on macOS,
+Linux and Windows.
 
-```bash
-# builds, starts on http://127.0.0.1:3000 in the background, opens the browser
-make start REPO=/path/to/repo
-
-# the same, on another port
-make start REPO=/path/to/repo PORT=4000
-```
-
-`make start` runs `bin/co-review.mjs`. It starts the server in the background, or reuses one that is already
-running, and opens `http://127.0.0.1:<port>/#<repo>`. The server log is `~/.co-review/server.log`.
-
-One server serves any number of repositories. To open another one:
+## Package
 
 ```bash
-node bin/co-review.mjs /other/repo
-```
-
-To stop the server:
-
-```bash
-kill $(jq .pid ~/.co-review/server.json)
-```
-
-(or `pkill -f applications/browser/lib/backend/main.js`).
-
-**Development.** `make dev` recompiles the extension and rebundles the frontend whenever a file changes. Reload
-the browser to see frontend changes; restart the server for backend changes.
-
-## Desktop app
-
-```bash
-# build and run the Electron app
-make desktop REPO=/path/to/repo
-
-# installers for this OS, in applications/electron/dist
+# this OS's release asset, in target/package
 make package
 
-# the unpacked app only (faster)
-make package-dir
+# package it and install it, as install.sh does
+make install-app
 ```
 
-What `make package` produces (configured in `applications/electron/electron-builder.yml`):
+`make package` runs [`packaging/package.sh`](../packaging/package.sh):
 
-| OS | Output |
-|---|---|
-| macOS | `dmg` and `zip` |
-| Linux | `AppImage` and `deb` |
-| Windows | `nsis` installer |
+| OS | Asset | What's in it |
+|---|---|---|
+| macOS (Apple silicon) | `Co-Review-mac-arm64.zip` | `Co-Review.app` |
+| Linux (x64, arm64) | `Co-Review-linux-x64.tar.gz`, `Co-Review-linux-arm64.tar.gz` | a `Co-Review/` folder |
+| Windows (x64) | `Co-Review-win-x64.exe` | an installer (Inno Setup) for your user only, no admin rights |
 
-**Signing.** Builds are unsigned, so on macOS open an unsigned build with right-click → Open the first time. To
-sign on macOS, set `CSC_LINK` and `CSC_KEY_PASSWORD` and remove `identity: null`. To notarize, also set `APPLE_ID`,
-`APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`.
+Inside, the app's own files sit in `resources/app` (`Co-Review.app/Contents/Resources/app` on macOS):
 
-**What's in the package:**
+- `version`: the app's version.
+- `bin/co-review`: the `co-review` command. `bin/install-cli.sh` links it into PATH.
+- `plugin/` and `.claude-plugin/`: the Claude Code plugin and its marketplace.
+- `integrations/`: the Pi and Oh My Pi packages (`co-review setup pi|omp`).
 
-- The built frontend and backend (`lib/`, `src-gen/`) and the production `node_modules`.
-- The VS Code built-in plugins (`plugins/`, loaded by `scripts/electron-main.js`). Built-ins that aren't needed
-  (debugger, notebooks, Emmet, extra themes, …) are listed under `theiaPluginsExcludeIds` in the root
-  `package.json`.
-- The agent integrations the app installs for you: the Claude Code plugin (`plugin/`, `.claude-plugin/`), the Pi
-  and Oh My Pi packages (`integrations/pi`, `integrations/omp`, sharing `integrations/shared`) and the `co-review` command (`bin/`).
+The app itself is `Co-Review.app/Contents/MacOS/Co-Review` on macOS, `Co-Review/co-review-app` on Linux, and
+`Co-Review.exe` on Windows.
+
+**Signing.** Builds are not notarized. They are signed ad hoc, and `install.sh` signs the macOS app again when it
+installs it, so it opens without a warning. If you unzip a release yourself, right-click the app and choose **Open**
+the first time.
 
 ### Releases
 
-`.github/workflows/release.yml` builds the app for macOS (arm64), Linux (x64, arm64) and Windows (x64). For a `v*`
-tag, it also publishes a GitHub release.
+`.github/workflows/release.yml` builds the four assets. For a `v*` tag, it also publishes them as a GitHub release.
+`install.sh` downloads from that release, and the app checks it for updates.
 
-To release, bump the version everywhere it is recorded (the app, the review extension, the Claude Code plugin
-manifests and the Pi/omp packages), then tag and push. `make check-versions` (part of `make test`) fails when any of
-them differs from `extensions/review/package.json`, and the workflow fails when the tag differs too:
+To release, bump the version where it is recorded:
+
+- the app: `[workspace.package]` in `Cargo.toml`;
+- the Claude Code plugin manifests;
+- the Pi and Oh My Pi packages.
+
+Then tag and push. `make check-versions` (part of `make test`) fails when any of them differs from `Cargo.toml`. The
+workflow also fails when the tag differs.
 
 ```bash
-git tag v0.2.0 && git push origin v0.2.0
+git tag v0.7.0 && git push origin v0.7.0
 ```
 
 To get the builds as artifacts without releasing, run the workflow by hand: **Actions → Release → Run workflow**.
 
-Asset names carry no version (`Co-Review-mac-arm64.zip`, `Co-Review-linux-x64.tar.gz`, `Co-Review-win-x64.exe`,
-…). That way `install.sh` can always download `releases/latest/download/<name>`:
+Asset names carry no version, so `install.sh` can always download `releases/latest/download/<name>`:
 
 ```bash
 curl -fsSL https://sdsvn.github.io/co-review/install.sh | bash
 ```
 
 After installing (or finding that version already installed), `install.sh` brings the agent integrations that are
-already installed to the app's version: the Claude Code plugin (`claude plugin marketplace update co-review`, then
-`claude plugin update co-review@co-review`), and the Oh My Pi and Pi packages when they come from this app
-(`omp install` / `pi install` of its `integrations/` path, which refreshes the version they recorded). It skips a
-harness or plugin that isn't installed and never fails the install over them.
+already installed to the app's version:
 
-An update stops the Co-Review that is running, three ways, so an old version never keeps serving the new
-command and agents (its files replaced under it, macOS kills its helper processes but not the app, which then
-holds the single-instance lock: nothing can start). `install.sh` and `make install-app` quit it before replacing
-its files; the running app quits itself once the version on disk is not its own, or once its backend is gone;
-and the `co-review` command stops a running app of another version, or one without a backend, before starting
-one (`co-review logs` shows each as "stopping Co-Review (process …)"). Reviews are saved; the next
-`co-review` call starts the new version.
+- the Claude Code plugin: `claude plugin marketplace update co-review`, then `claude plugin update co-review@co-review`;
+- the Oh My Pi and Pi packages, when they come from this app: `omp install` / `pi install` of its `integrations/`
+  path, which refreshes the version they recorded.
 
-### Installing on macOS
+It skips a harness or plugin that isn't installed, and never fails the install over them.
 
-```bash
-# package, copy Co-Review.app to /Applications (or ~/Applications),
-# and install the co-review command
-make install-app
-```
+An update never leaves an old Co-Review running, so an old version never serves the new command and agents. It is
+stopped in three ways:
 
-**The `co-review` command** is a small shim that `bin/install-cli.sh` writes to `/usr/local/bin` when it is
-writable, otherwise to `~/.local/bin`. Set `PREFIX=…` to choose another place.
+- `install.sh` quits the running app before replacing it.
+- The running app quits itself once the version on disk is not its own.
+- The `co-review` command stops a running app of another version, or one without a working backend, before starting
+  one.
 
-- `co-review [dir]` opens `dir` in the desktop app, or focuses its window if it is already open.
-- `co-review mcp [dir]` connects an agent (stdio MCP) to the app's backend, found through `~/.co-review/server.json`.
-  It starts the app on the agent's first tool call, not when the agent session starts, and in the background: no
-  window until the agent shows a review (`open_review`), or you open the app. A window the agent showed closes when
-  the agent is done with the review (you approve it, or its session ends): it says why and closes after 10 seconds
-  unless you keep it open; with no window left the app quits. Closing a window yourself is told to the agent. If
-  Co-Review goes away mid-session, the agent's call fails instead of waiting, and its next call starts Co-Review again.
+Reviews are saved; the next `co-review` call starts the new version.
+
+## The `co-review` command
+
+`install.sh` links the command into `/usr/local/bin` when it is writable, otherwise into `~/.local/bin` (set
+`PREFIX=…` to choose). The Windows installer puts its folder on your `PATH`. Inside the app, **Review: Install the
+co-review Command** in the command palette does the same as `install.sh` (macOS and Linux); on macOS, **Install the
+co-review Command in PATH** links it into `/usr/local/bin` with administrator rights.
+
+- `co-review [dir]` opens `dir` in Co-Review, or focuses its window if it is already open.
+- `co-review mcp [dir]` connects an agent (stdio MCP) to Co-Review, found through `~/.co-review/server.json`.
+  - It starts Co-Review in the background on the agent's first tool call, not when the agent session starts. No window
+    opens until the agent shows a review (`open_review`), or you open the app.
+  - A window the agent showed closes when the agent is done with the review (you approve it, or its session ends). It
+    says why and closes after 10 seconds unless you keep it open. With no window left, the app quits.
+  - When you close a window yourself, the agent is told.
+  - If Co-Review goes away mid-session, the agent's call fails instead of waiting, and its next call starts Co-Review
+    again.
 - `co-review status [dir]` prints this Co-Review's version and each installed agent integration's (the Claude Code
-  plugin, the Oh My Pi and Pi packages), flags any that differ with the command that updates it, then lists the open
-  reviews of `dir` in a running Co-Review (it never starts one).
+  plugin, the Oh My Pi and Pi packages). It flags any that differ with the command that updates it, then lists the open
+  reviews of `dir`. It never starts Co-Review.
 - `co-review setup <pi|omp>` installs the Pi or Oh My Pi package that ships with the app.
-- `co-review logs` is for when something hangs or fails: whether Co-Review answers (and how fast), then the recent
-  debug log of every Co-Review process merged by time (`--lines <n>`, default 80). The logs are in
-  `~/.co-review/logs`: `main.log` (the desktop app's windows: not responding, page crashes, errors in a window's
-  console), `backend.log` (the backend, including when it was blocked for over a second) and `cli.log` (the
+- `co-review logs` is for when something hangs or fails. It says whether Co-Review answers (and how fast), then prints
+  the recent debug log of every Co-Review process, merged by time (`--lines <n>`, default 80). The logs are in
+  `~/.co-review/logs`: `main.log` (the app and its windows), `backend.log` (the review core) and `cli.log` (the
   `co-review` command and each agent's `co-review mcp` bridge).
 - `co-review version` (`-v`) prints the version; `co-review help` (`-h`) lists the commands and options.
 
-Installed from the app, the shim runs `bin/co-review.mjs` inside the app bundle, on the app's own Electron
-(`ELECTRON_RUN_AS_NODE=1`). Installed from a checkout (`make install-cli`), it runs on `node` and starts the
-browser app instead.
+**Security.** The MCP endpoint (`/mcp`) only accepts local connections, and refuses browser requests from other
+origins.
 
-**Security.** The desktop backend only accepts its own windows (Theia's per-launch token). Two endpoints are
-exempt, `/mcp` and the phone view (`src/electron-node`), and they only accept local connections. `/mcp` also
-refuses browser requests from other origins.
+## Environment and language servers
 
-### Environment and language servers
+**Environment.** An app opened from Finder, the Dock or a desktop menu gets a minimal environment, without your shell's
+`PATH`. So at startup Co-Review reads your login shell's environment. That way language servers and ACP agents are
+found just as in a terminal.
 
-**Environment.** An app opened from Finder or the Dock gets a minimal environment on macOS, without your shell's
-`PATH`. So at startup, `scripts/electron-main.js` reads your login shell's environment (`$SHELL -ilc env`). That
-way `gopls`, other language servers and ACP agents are found just as in a terminal.
-
-- Launched from a terminal (`co-review`, `make desktop`), the app keeps that terminal's environment.
+- Launched from a terminal (`co-review`, `make run`), the app keeps that terminal's environment.
 - Set `CO_REVIEW_NO_SHELL_ENV=1` to skip reading the shell environment.
 
-**Language servers.** Go to definition, find references and the like come from VS Code extensions. They are listed
-in `theiaPlugins` in the root `package.json` and downloaded into `plugins/` by `make plugins`.
+Agents launched over ACP inherit the environment of the Co-Review process. So start Co-Review from a shell where the
+agent is logged in and configured.
 
-- Included: the built-ins (TypeScript/JavaScript, JSON, PHP; Markdown renders in Co-Review's own view, VS Code's Markdown preview is excluded) and `golang.Go`, which needs `gopls`.
-- For other languages, add an [Open VSX](https://open-vsx.org) extension to that list.
-- Language servers only start in trusted workspaces.
-
-### Native modules
-
-`node-pty`, `drivelist`, `keytar` and `native-keymap` are compiled against Node for the browser app, and against
-Electron for the desktop app. `make browser` and `make desktop-build` switch between the two (`theia
-rebuild:browser|electron`, with the originals cached in `.browser_modules/`). So build the target you run last.
+**Language servers.** Go to definition, find references, hover and the like come from Lapce plugins: open **Plugins**
+in the side bar and install the one for your language (for example Rust, Go or TypeScript). A plugin may need its
+language server on your `PATH` (`gopls` for Go, for instance). Tree-sitter syntax highlighting needs no plugin.
 
 ## Configuration
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `CO_REVIEW_HOME` | `~/.co-review` | Review storage, server registry (`server.json`), server log |
-| `CO_REVIEW_PORT` | `3000` | Port for `co-review` / `co-review mcp` when starting the browser app |
-| `CO_REVIEW_ALLOWED_HOSTS` | — | Comma-separated extra host names allowed to open the phone view (`/m/`) |
+| `CO_REVIEW_HOME` | `~/.co-review` | Review storage, server registry (`server.json`), logs, worktrees |
+| `CO_REVIEW_PORT` | a running Co-Review's, else `3000` | Port of the MCP server for `co-review` / `co-review mcp` when they start Co-Review |
+| `CO_REVIEW_NO_SHELL_ENV` | — | Set to skip reading the login shell's environment at startup |
 
-Agents launched over ACP inherit the environment of the Co-Review process. So start Co-Review from a shell where
-the agent is logged in and configured.
-
-Co-Review ships **Co-Review Dark** and **Co-Review Light** themes and follows the OS setting. Switch with
-**Preferences: Color Theme**.
-
-## Phone view
-
-`/m/` on the running app (browser app or desktop backend) is a small page for reviewing away from your desk. You
-can install it on your phone's home screen. It has:
-
-- the review list, and the threads with their replies;
-- Resolve, and Accept / Dismiss for findings and suggestions;
-- Submit review.
-
-It updates live (long polling). Only local connections are allowed, so to reach it from a phone:
-
-1. Expose the port on your [Tailscale](https://tailscale.com) network:
-
-   ```bash
-   tailscale serve --bg 3000
-   ```
-
-2. Start Co-Review with that host name allowed:
-
-   ```bash
-   CO_REVIEW_ALLOWED_HOSTS=my-mac.tailnet-name.ts.net make start
-   ```
-
-3. On the phone, open `https://my-mac.tailnet-name.ts.net/m/` and choose *Add to Home Screen*.
+Co-Review ships **Co-Review Dark** and **Co-Review Light** themes and follows the OS setting: with `follow-os-theme`
+on (**Open Settings** → **Follow Os Theme**, the default), a theme with a Dark and a Light version shows the one
+matching the OS. Choosing a theme that doesn't match the OS with **Change Color Theme** turns following off; turn it
+back on in the settings.
+Themes, fonts and keybindings are Lapce's settings: **Open Settings**, **Change Color Theme** and **Open Keyboard
+Shortcuts** in the command palette.

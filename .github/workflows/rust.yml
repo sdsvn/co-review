@@ -1,0 +1,82 @@
+# Builds the app (Lapce with Co-Review's crates) on macOS, Linux and Windows, lints and tests the review crates,
+# and builds the `co-review` command for each platform. The toolchain comes from rust-toolchain.toml. This replaces
+# Lapce's own ci.yml; Lapce's crates are linted as upstream does (warnings allowed), ours with warnings as errors.
+name: Rust
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - crates/**
+      - lapce-**
+      - integrations/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - .github/workflows/rust.yml
+  pull_request:
+    paths:
+      - crates/**
+      - lapce-**
+      - integrations/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - .github/workflows/rust.yml
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: check (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: mac-arm64, os: macos-latest }
+          - { name: linux-x64, os: ubuntu-latest }
+          - { name: linux-arm64, os: ubuntu-24.04-arm }
+          - { name: win-x64, os: windows-latest }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: System libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo make -f Makefile.lapce ubuntu-deps
+      - uses: Swatinem/rust-cache@v2
+      - name: Git identity
+        # Tests commit to temporary repositories.
+        run: |
+          git config --global user.name "Co-Review CI"
+          git config --global user.email "ci@co-review.invalid"
+      - name: Clippy (review crates)
+        run: cargo clippy --workspace --exclude lapce --exclude lapce-app --exclude lapce-core --exclude lapce-proxy --exclude lapce-rpc --all-targets -- -D warnings
+      - name: Clippy (Lapce)
+        run: cargo clippy --profile ci -p lapce -p lapce-app -p lapce-core -p lapce-proxy -p lapce-rpc
+      - name: Test (review crates)
+        run: cargo test --workspace --exclude lapce --exclude lapce-app --exclude lapce-core --exclude lapce-proxy --exclude lapce-rpc
+      - name: Test (the app's review code)
+        run: 'cargo test -p lapce-app --lib review::'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Test (Pi / Oh My Pi extension)
+        run: node --experimental-transform-types --test integrations/shared/co-review.test.ts
+      - name: Build the app
+        run: cargo build --profile ci --bin lapce
+      - name: Build the co-review command
+        run: cargo build --release -p review_cli
+      - uses: actions/upload-artifact@v7
+        with:
+          name: co-review-cli-${{ matrix.name }}
+          path: |
+            target/release/co-review
+            target/release/co-review.exe
+          if-no-files-found: error

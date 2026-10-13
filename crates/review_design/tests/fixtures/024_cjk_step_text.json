@@ -1,0 +1,43 @@
+{
+  "name": "cjk_step_text",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- 这是一个中文步骤，测试Unicode处理\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- 这是一个中文步骤，测试Unicode处理\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- 这是一个中文步骤，测试Unicode处理\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "这是一个中文步骤，测试Unicode处理",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "这是一个中文步骤，测试Unicode处理"
+    ]
+  }
+}

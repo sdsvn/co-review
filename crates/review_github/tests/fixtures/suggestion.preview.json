@@ -1,0 +1,20 @@
+{
+  "event": "COMMENT",
+  "body": "",
+  "comments": [
+    {
+      "threadId": "suggest-accepted",
+      "path": "src/config.rs",
+      "line": 8,
+      "side": "RIGHT",
+      "body": "Use a constant here.\n\n```suggestion\nconst X: i32 = 42;\n```"
+    },
+    {
+      "threadId": "suggest-old",
+      "path": "src/config.rs",
+      "line": 5,
+      "side": "LEFT",
+      "body": "This was wrong before."
+    }
+  ]
+}

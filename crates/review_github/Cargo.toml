@@ -1,0 +1,23 @@
+[package]
+name = "review_github"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "EPL-2.0"
+
+[lib]
+path = "src/review_github.rs"
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+review_model.workspace = true
+review_bundle.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,166 @@
+{
+  "nodes": [
+    {
+      "id": "n1",
+      "label": "alpha",
+      "source_file": "src/naïve dir/a#b [1].rs",
+      "source_location": "XL L5",
+      "community": -1,
+      "community_name": "Negative"
+    },
+    {
+      "id": "n2",
+      "label": "beta",
+      "source_file": "src/x.rs",
+      "source_location": "L01",
+      "community": -1,
+      "community_name": "Negative"
+    },
+    {
+      "id": "n3",
+      "label": "gamma",
+      "source_file": "src/y.rs",
+      "source_location": "L1",
+      "community": -1,
+      "community_name": "Negative"
+    },
+    {
+      "id": "n4",
+      "label": "delta",
+      "source_file": "src/two.rs",
+      "source_location": "L10",
+      "community": 2,
+      "community_name": "Two"
+    },
+    {
+      "id": "n5",
+      "label": "epsilon",
+      "source_file": "src/two.rs",
+      "source_location": "L20",
+      "community": 2,
+      "community_name": "Two"
+    },
+    {
+      "id": "n6",
+      "label": "zeta",
+      "source_file": "src/two.rs",
+      "source_location": "L30",
+      "community": 2,
+      "community_name": "Two"
+    },
+    {
+      "id": "n7",
+      "label": "eta",
+      "source_file": "src/zero.rs",
+      "source_location": "L3",
+      "community": 0,
+      "community_name": "Zero"
+    },
+    {
+      "id": "n8",
+      "label": "theta",
+      "source_file": "src/zero.rs",
+      "source_location": "L4",
+      "community": 0,
+      "community_name": "Zero"
+    },
+    {
+      "id": "n9",
+      "label": "iota",
+      "source_file": "src/zero.rs",
+      "source_location": "L5",
+      "community": 0,
+      "community_name": "Zero"
+    },
+    {
+      "id": "n10",
+      "label": "kappa",
+      "source_file": "src/one.rs",
+      "source_location": "L6",
+      "community": 1,
+      "community_name": "One"
+    },
+    {
+      "id": "n11",
+      "label": "lambda",
+      "source_file": "src/one.rs",
+      "source_location": "L7",
+      "community": 1,
+      "community_name": "One"
+    },
+    {
+      "id": "n12",
+      "label": "mu",
+      "source_file": "src/one.rs",
+      "source_location": "L8",
+      "community": 1,
+      "community_name": "One"
+    },
+    {
+      "id": "n13",
+      "label": "nu",
+      "source_file": "src/minus.rs",
+      "source_location": "L9",
+      "community": -3,
+      "community_name": "Minus three"
+    },
+    {
+      "id": "n14",
+      "label": "xi",
+      "source_file": "src/minus.rs",
+      "source_location": "L10",
+      "community": -3,
+      "community_name": "Minus three"
+    },
+    {
+      "id": "n15",
+      "label": "omicron",
+      "source_file": "src/minus.rs",
+      "source_location": "L11",
+      "community": -3,
+      "community_name": "Minus three"
+    }
+  ],
+  "links": [
+    {
+      "source": "n1",
+      "target": "n4",
+      "relation": "calls"
+    },
+    {
+      "source": "n2",
+      "target": "n5",
+      "relation": "calls"
+    },
+    {
+      "source": "n7",
+      "target": "n10",
+      "relation": "calls"
+    },
+    {
+      "source": "n8",
+      "target": "n11",
+      "relation": "calls"
+    },
+    {
+      "source": "n13",
+      "target": "n3",
+      "relation": "calls"
+    },
+    {
+      "source": "n14",
+      "target": "n2",
+      "relation": "calls"
+    },
+    {
+      "source": "n15",
+      "target": "n1",
+      "relation": "calls"
+    },
+    {
+      "source": "n4",
+      "target": "n7",
+      "relation": "calls"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "name": "many_warnings",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n## Implementation\nSome text.\n## Design\n* Wrong marker\n## Context\nLate context.\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "## Implementation\nSome text.\n## Design\n* Wrong marker\n## Context\nLate context.\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Implementation",
+          "key": "implementation",
+          "body": "Some text.\n"
+        },
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "* Wrong marker\n"
+        },
+        {
+          "heading": "Context",
+          "key": "context",
+          "body": "Late context.\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "No `# ` title (or `title:` in the frontmatter).",
+        "`## Design` uses `*`, `+` or numbered items; steps must be `- ` bullets.",
+        "Sections outside the contract (shown as plain Markdown): `## Implementation`.",
+        "Sections are out of order (Context, Design, Alternatives, Behaviour, Diagrams, Open Questions)."
+      ]
+    },
+    "stepTrees": {
+      "design": []
+    },
+    "stepIds": []
+  }
+}

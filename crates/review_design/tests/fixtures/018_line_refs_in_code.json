@@ -1,0 +1,50 @@
+{
+  "name": "line_refs_in_code",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Step one\n## Context\n```mermaid\n%% id: flow\ngraph LR\n  A[file.go:42] --> B\n```\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Step one\n## Context\n```mermaid\n%% id: flow\ngraph LR\n  A[file.go:42] --> B\n```\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n"
+        },
+        {
+          "heading": "Context",
+          "key": "context",
+          "body": "```mermaid\n%% id: flow\ngraph LR\n  A[file.go:42] --> B\n```\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "Sections are out of order (Context, Design, Alternatives, Behaviour, Diagrams, Open Questions)."
+      ]
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

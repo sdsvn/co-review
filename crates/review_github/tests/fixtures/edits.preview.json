@@ -1,0 +1,27 @@
+{
+  "event": "REQUEST_CHANGES",
+  "body": "Original summary.",
+  "comments": [
+    {
+      "threadId": "edits-kept",
+      "path": "src/api.rs",
+      "line": 10,
+      "side": "RIGHT",
+      "body": "Original comment kept."
+    },
+    {
+      "threadId": "edits-changed",
+      "path": "src/api.rs",
+      "line": 25,
+      "side": "RIGHT",
+      "body": "Original comment to edit."
+    },
+    {
+      "threadId": "edits-emptied",
+      "path": "src/api.rs",
+      "line": 40,
+      "side": "RIGHT",
+      "body": "This comment will be emptied."
+    }
+  ]
+}

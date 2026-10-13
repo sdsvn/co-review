@@ -1,0 +1,13 @@
+{
+  "event": "COMMENT",
+  "body": "Found a bug.",
+  "comments": [
+    {
+      "threadId": "diff-fb-1",
+      "path": "src/old.rs",
+      "line": 100,
+      "side": "RIGHT",
+      "body": "This line has a bug."
+    }
+  ]
+}

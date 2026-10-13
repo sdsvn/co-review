@@ -1,0 +1,69 @@
+{
+  "name": "design_small",
+  "fileName": "index.markdown",
+  "markdown": "---\nco-review: design\n---\n# Rate-limit password-reset emails\n\n## Context\nThe password-reset endpoint sends an email on every request, so anyone can flood an inbox. Login attempts are\nalready limited by the shared rate limiter (`RateLimiter`, Redis, per key).\n\n## Design\n- Send at most 3 reset emails per account per hour\n  - Reuse the shared rate limiter, keyed by account\n    - Still answer \"accepted\" when limited, so the endpoint doesn't reveal whether an account exists\n- Count limited requests in the existing auth rate-limit metric\n",
+  "title": "Rate-limit password-reset emails",
+  "pseudocode": true,
+  "blocks": [],
+  "format": {
+    "mode": "design",
+    "declared": true,
+    "warnings": []
+  },
+  "text": "Rate-limit password-reset emailsContextThe password-reset endpoint sends an email on every request, so anyone can flood an inbox. Login attempts are\nalready limited by the shared rate limiter (RateLimiter, Redis, per key).\nDesign L1L2L3Send at most 3 reset emails per account per hourReuse the shared rate limiter, keyed by accountStill answer \"accepted\" when limited, so the endpoint doesn't reveal whether an account existsCount limited requests in the existing auth rate-limit metric",
+  "selections": [
+    {
+      "text": "shared rate limiter",
+      "occurrence": 0,
+      "start": 171,
+      "end": 192,
+      "anchor": {
+        "type": "text",
+        "exact": "shared rate limiter",
+        "prefix": "gin attempts are\nalready limited by the ",
+        "suffix": " (RateLimiter, Redis, per key).\nDesign L",
+        "startOffsetHint": 172,
+        "endOffsetHint": 191
+      }
+    },
+    {
+      "text": "Context",
+      "occurrence": 0,
+      "start": 32,
+      "end": 39,
+      "anchor": {
+        "type": "text",
+        "exact": "Context",
+        "prefix": "Rate-limit password-reset emails",
+        "suffix": "The password-reset endpoint sends an ema",
+        "startOffsetHint": 32,
+        "endOffsetHint": 39
+      }
+    },
+    {
+      "text": "Still answer",
+      "occurrence": 0,
+      "start": 331,
+      "end": 344,
+      "anchor": {
+        "type": "text",
+        "exact": "Still answer",
+        "prefix": "he shared rate limiter, keyed by account",
+        "suffix": " \"accepted\" when limited, so the endpoin",
+        "startOffsetHint": 331,
+        "endOffsetHint": 343
+      }
+    }
+  ],
+  "located": [
+    {
+      "anchor": {
+        "type": "text",
+        "exact": "rate limiter",
+        "prefix": "Reuse the shared ",
+        "suffix": ", keyed"
+      },
+      "at": 301
+    }
+  ]
+}

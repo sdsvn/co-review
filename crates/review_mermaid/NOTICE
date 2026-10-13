@@ -1,0 +1,14 @@
+review_mermaid contains code ported from Ferrite (https://github.com/OlaProeis/Ferrite), commit
+3ba085c561670342d72c560efbf6b0b92b5c0b46, src/markdown/mermaid/:
+
+  src/flowchart/   flowchart parser, Sugiyama layout, subgraphs, edge routing and node/edge/subgraph drawing
+  src/sequence.rs  sequence diagram parser and drawing
+  src/text.rs      text measurement
+  src/utils.rs     drawing helpers
+
+Copyright (c) 2024-2025 OlaProeis, licensed under the MIT License (LICENSE-FERRITE in this directory).
+
+Changes for Co-Review: egui is replaced by a recording painter (src/egui.rs, Co-Review's own code), so the app draws
+the diagrams with Floem; nodes, edges, participants and messages record hit areas for comments (marked
+`co-review:`); text is measured by the app; node labels wrap to their node. Co-Review's own files (src/egui.rs,
+src/review_mermaid.rs) are EPL-2.0.

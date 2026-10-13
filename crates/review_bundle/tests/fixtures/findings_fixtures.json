@@ -1,0 +1,90 @@
+[
+  {
+    "name": "json-array",
+    "format": "json",
+    "input": "[{\"id\":\"f1\",\"body\":\"Issue one\",\"anchor\":{\"type\":\"code-line\",\"path\":\"src/main.rs\",\"line\":10},\"severity\":\"high\",\"labels\":[\"security\"]},{\"id\":\"f2\",\"body\":\"Issue two\",\"anchor\":{},\"verdict\":\"needs fix\"}]",
+    "expected": [
+      {
+        "id": "f1",
+        "body": "Issue one",
+        "anchor": {
+          "type": "code-line",
+          "path": "src/main.rs",
+          "line": 10
+        },
+        "severity": "high",
+        "labels": [
+          "security"
+        ]
+      },
+      {
+        "id": "f2",
+        "body": "Issue two",
+        "anchor": {},
+        "verdict": "needs fix"
+      }
+    ]
+  },
+  {
+    "name": "jsonl",
+    "format": "jsonl",
+    "input": "{\"id\":\"f1\",\"body\":\"First\",\"anchor\":{}}\n{\"id\":\"f2\",\"body\":\"Second\",\"anchor\":{\"type\":\"text\"},\"severity\":\"medium\"}\n",
+    "expected": [
+      {
+        "id": "f1",
+        "body": "First",
+        "anchor": {}
+      },
+      {
+        "id": "f2",
+        "body": "Second",
+        "anchor": {
+          "type": "text"
+        },
+        "severity": "medium"
+      }
+    ]
+  },
+  {
+    "name": "jsonl-with-blanks",
+    "format": "jsonl",
+    "input": "\n\n{\"id\":\"f1\",\"body\":\"Only one\",\"anchor\":{}}\n\n",
+    "expected": [
+      {
+        "id": "f1",
+        "body": "Only one",
+        "anchor": {}
+      }
+    ]
+  },
+  {
+    "name": "json-with-proposal",
+    "format": "json",
+    "input": "[{\"id\":\"f1\",\"body\":\"Fix this\",\"anchor\":{},\"proposal\":{\"before\":\"old text\",\"after\":\"new text\",\"path\":\"src/lib.rs\",\"startLine\":5}}]",
+    "expected": [
+      {
+        "id": "f1",
+        "body": "Fix this",
+        "anchor": {},
+        "proposal": {
+          "before": "old text",
+          "after": "new text",
+          "path": "src/lib.rs",
+          "startLine": 5
+        }
+      }
+    ]
+  },
+  {
+    "name": "empty-array",
+    "format": "json",
+    "input": "[]",
+    "expected": []
+  },
+  {
+    "name": "empty-jsonl",
+    "format": "jsonl",
+    "input": "",
+    "expected": []
+  }
+]

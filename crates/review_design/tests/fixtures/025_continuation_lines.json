@@ -1,0 +1,51 @@
+{
+  "name": "continuation_lines",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- This is a step that\n  continues on the next line\n  and even continues here\n  - Child step\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- This is a step that\n  continues on the next line\n  and even continues here\n  - Child step\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- This is a step that\n  continues on the next line\n  and even continues here\n  - Child step\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "This is a step that continues on the next line and even continues here",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Child step",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "stepIds": [
+      "This is a step that continues on the next line and even continues here",
+      "Child step"
+    ]
+  }
+}

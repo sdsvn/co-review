@@ -1,0 +1,36 @@
+{
+  "name": "empty_design",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\nJust some text but no steps.\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\nJust some text but no steps.\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "Just some text but no steps.\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "`## Design` has no `- ` step list."
+      ]
+    },
+    "stepTrees": {
+      "design": []
+    },
+    "stepIds": []
+  }
+}

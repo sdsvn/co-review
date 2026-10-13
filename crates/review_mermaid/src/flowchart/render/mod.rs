@@ -1,0 +1,168 @@
+//! Flowchart drawing onto the recording painter.
+//!
+//! Handles drawing of nodes, edges, subgraphs, and labels.
+
+pub(crate) mod colors;
+pub(crate) mod edges;
+pub(crate) mod nodes;
+pub(crate) mod subgraphs;
+
+use std::collections::HashMap;
+
+use crate::egui::Vec2;
+
+pub use colors::FlowchartColors;
+use edges::{back_edge_horizontal_padding, compute_back_edge_lanes, draw_edge, EdgeLabelInfo};
+use nodes::draw_node;
+use subgraphs::{compute_subgraph_depths, draw_subgraph};
+
+use super::types::*;
+use super::utils::layout_content_size;
+use crate::text::TextMeasurer;
+
+/// Render a flowchart onto `painter` (Co-Review: a recording painter, text measured by `text_measurer`); returns the
+/// size it takes.
+pub fn render_flowchart(
+    painter: &crate::egui::Painter,
+    flowchart: &Flowchart,
+    layout: &FlowchartLayout,
+    colors: &FlowchartColors,
+    font_size: f32,
+    text_measurer: &impl TextMeasurer,
+) -> Vec2 {
+    if flowchart.nodes.is_empty() {
+        return Vec2::ZERO;
+    }
+
+    // Edge labels, truncated to their edge's length.
+    let label_font_size = font_size - 2.0;
+    let edge_labels: HashMap<usize, EdgeLabelInfo> = {
+        flowchart
+            .edges
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, edge)| {
+                edge.label.as_ref().map(|label| {
+                    // Calculate max label width based on edge geometry
+                    let (from_layout, to_layout) =
+                        match (layout.nodes.get(&edge.from), layout.nodes.get(&edge.to)) {
+                            (Some(f), Some(t)) => (f, t),
+                            _ => return None,
+                        };
+                    let from_center = from_layout.pos + from_layout.size / 2.0;
+                    let to_center = to_layout.pos + to_layout.size / 2.0;
+                    let edge_length = ((to_center.x - from_center.x).powi(2)
+                        + (to_center.y - from_center.y).powi(2))
+                    .sqrt();
+                    let max_label_width = edge_length.max(60.0).min(200.0) * 0.8;
+
+                    // Measure and potentially truncate
+                    let text_size = text_measurer.measure(label, label_font_size);
+                    let display_text = if text_size.width > max_label_width {
+                        text_measurer.truncate_with_ellipsis(
+                            label,
+                            label_font_size,
+                            max_label_width,
+                        )
+                    } else {
+                        label.clone()
+                    };
+
+                    let display_size = text_measurer.measure(&display_text, label_font_size);
+                    let label_padding = Vec2::new(8.0, 4.0);
+                    let size = Vec2::new(
+                        display_size.width + label_padding.x,
+                        display_size.height + label_padding.y,
+                    );
+
+                    Some((idx, EdgeLabelInfo { display_text, size }))
+                })?
+            })
+            .collect()
+    };
+
+    // Size from actual node/subgraph bounds (guards stale total_size) plus side
+    // padding so back-edge loops are not clipped by the painter rect.
+    const LAYOUT_MARGIN: f32 = 20.0;
+    let content_size = layout_content_size(layout, LAYOUT_MARGIN);
+    let (left_pad, right_pad) = back_edge_horizontal_padding(layout, flowchart.direction);
+    let alloc_size = Vec2::new(
+        content_size.x.max(layout.total_size.x) + left_pad + right_pad,
+        content_size.y.max(layout.total_size.y),
+    );
+
+    let offset = Vec2::new(left_pad, 0.0);
+    let back_edge_lanes = compute_back_edge_lanes(layout, flowchart.direction, offset);
+
+    // Compute actual nesting depth for each subgraph
+    let subgraph_depths = compute_subgraph_depths(flowchart);
+
+    // Draw subgraphs first (behind everything else)
+    // Draw in reverse order so parent subgraphs are behind children
+    for subgraph in flowchart.subgraphs.iter().rev() {
+        if let Some(sg_layout) = layout.subgraphs.get(&subgraph.id) {
+            let depth = subgraph_depths.get(&subgraph.id).copied().unwrap_or(0);
+            draw_subgraph(painter, sg_layout, offset, colors, font_size, depth);
+        }
+    }
+
+    // Draw edges (behind nodes but above subgraphs)
+    for (idx, edge) in flowchart.edges.iter().enumerate() {
+        if let (Some(from_layout), Some(to_layout)) =
+            (layout.nodes.get(&edge.from), layout.nodes.get(&edge.to))
+        {
+            let label_info = edge_labels.get(&idx);
+            let is_back_edge = layout
+                .back_edges
+                .contains(&(edge.from.clone(), edge.to.clone()));
+            let back_edge_lane = if is_back_edge {
+                back_edge_lanes
+                    .get(&(edge.from.clone(), edge.to.clone()))
+                    .copied()
+            } else {
+                None
+            };
+            draw_edge(
+                painter,
+                edge,
+                idx,
+                from_layout,
+                to_layout,
+                offset,
+                colors,
+                label_font_size,
+                flowchart.direction,
+                label_info,
+                is_back_edge,
+                back_edge_lane,
+                flowchart,
+                &layout.subgraphs,
+                &layout.nodes,
+            );
+        }
+    }
+
+    // Draw nodes (on top)
+    for node in &flowchart.nodes {
+        if let Some(node_layout) = layout.nodes.get(&node.id) {
+            // ClassDef + per-node `style` (inline wins per field)
+            let class_style = flowchart
+                .node_classes
+                .get(&node.id)
+                .and_then(|class_name| flowchart.class_defs.get(class_name));
+            let inline_style = flowchart.node_styles.get(&node.id);
+            let merged = NodeStyle::merge_class_and_inline(class_style, inline_style);
+            draw_node(
+                painter,
+                node,
+                node_layout,
+                offset,
+                colors,
+                font_size,
+                merged.as_ref(),
+            );
+        }
+    }
+
+    alloc_size
+}

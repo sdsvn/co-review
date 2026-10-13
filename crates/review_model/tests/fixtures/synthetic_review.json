@@ -1,0 +1,724 @@
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "title": "Synthetic test review",
+  "viewed": {
+    "src/main.rs": 1700000000000,
+    "src/lib.rs": 1700000001000
+  },
+  "workspaceRoot": "file:///home/dev/project",
+  "scope": {
+    "kind": "repository"
+  },
+  "participants": [
+    {
+      "id": "human:test@example.com",
+      "kind": "human",
+      "name": "Test User"
+    },
+    {
+      "id": "agent:mcp:claude-code",
+      "kind": "agent",
+      "name": "claude-code"
+    },
+    {
+      "id": "system:co-review",
+      "kind": "system",
+      "name": "Co-Review"
+    }
+  ],
+  "threads": [
+    {
+      "id": "thread-repo-001",
+      "number": 1,
+      "location": {
+        "kind": "repository"
+      },
+      "messages": [
+        {
+          "id": "msg-001",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Overall architecture looks good.",
+          "createdAt": 1700000000000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "thread-range-002",
+      "number": 2,
+      "location": {
+        "kind": "range",
+        "uri": "file:///home/dev/project/src/main.rs",
+        "range": {
+          "start": { "line": 10, "character": 0 },
+          "end": { "line": 15, "character": 42 }
+        },
+        "symbol": "OrderService.CreateOrder",
+        "anchor": {
+          "text": "fn create_order(ctx: &Context)",
+          "before": "impl OrderService {",
+          "after": "    let order = Order::new();",
+          "syntax": {
+            "grammar": "rust",
+            "tokens": ["fn", "create_order", "(", "ctx", ":", "&", "Context", ")"]
+          }
+        },
+        "tracked": {
+          "version": "a5ad39b8-8kx",
+          "from": 340,
+          "to": 370,
+          "text": "fn create_order(ctx: &Context)",
+          "prefix": "impl OrderService {\n    ",
+          "suffix": " {\n        let order = Order::new();",
+          "status": "active",
+          "original": "fn create_order(ctx: &Context)"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-002",
+          "author": {
+            "id": "agent:mcp:claude-code",
+            "kind": "agent",
+            "name": "claude-code"
+          },
+          "body": "This function should validate the context before proceeding.",
+          "createdAt": 1700000001000,
+          "status": "done"
+        }
+      ],
+      "status": "proposed",
+      "intent": "comment",
+      "severity": "high",
+      "origin": "finding",
+      "sourceId": "f1",
+      "labels": ["validation", "safety"],
+      "proposal": {
+        "before": "fn create_order(ctx: &Context)",
+        "after": "fn create_order(ctx: &Context) -> Result<Order>",
+        "path": "src/main.rs",
+        "startLine": 10,
+        "status": "pending"
+      },
+      "createdAt": 1700000001000,
+      "updatedAt": 1700000002000
+    },
+    {
+      "id": "thread-doc-003",
+      "number": 3,
+      "location": {
+        "kind": "document",
+        "uri": "file:///home/dev/project/design/architecture.md",
+        "docAnchor": {
+          "type": "tree-node",
+          "nodeId": "Data flow: requests arrive at the gateway",
+          "source": "Data flow: requests arrive at the gateway and are routed to the appropriate service"
+        },
+        "anchor": {
+          "text": "Data flow: requests arrive at the gateway"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-003",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "How does the gateway handle failures?",
+          "createdAt": 1700000003000
+        },
+        {
+          "id": "msg-004",
+          "author": {
+            "id": "agent:mcp:claude-code",
+            "kind": "agent",
+            "name": "claude-code"
+          },
+          "body": "The gateway uses circuit breakers.",
+          "createdAt": 1700000004000,
+          "status": "done",
+          "activity": [
+            {
+              "id": "act-001",
+              "title": "Reading gateway source",
+              "kind": "file_read",
+              "status": "completed"
+            }
+          ],
+          "permission": {
+            "id": "perm-001",
+            "title": "Read src/gateway.rs?",
+            "options": [
+              { "id": "allow", "name": "Allow", "kind": "allow_once" },
+              { "id": "deny", "name": "Deny", "kind": "reject_once" }
+            ],
+            "outcome": "allow"
+          }
+        }
+      ],
+      "status": "resolved",
+      "intent": "question",
+      "agentState": "idle",
+      "createdAt": 1700000003000,
+      "updatedAt": 1700000004000
+    },
+    {
+      "id": "thread-patch-004",
+      "number": 4,
+      "location": {
+        "kind": "patch",
+        "uri": "file:///tmp/reviews/pr-123/pr-123.patch",
+        "patchAnchor": {
+          "type": "code-range",
+          "path": "src/handler.rs",
+          "startLine": 50,
+          "endLine": 60,
+          "side": "new"
+        },
+        "anchor": {
+          "text": ""
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-005",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "This change looks risky.",
+          "createdAt": 1700000005000,
+          "choice": "accepted"
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "severity": "medium",
+      "createdAt": 1700000005000,
+      "updatedAt": 1700000005000
+    },
+    {
+      "id": "thread-file-005",
+      "number": 5,
+      "location": {
+        "kind": "file",
+        "uri": "file:///home/dev/project/src/lib.rs"
+      },
+      "messages": [
+        {
+          "id": "msg-006",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "File-level comment.",
+          "createdAt": 1700000006000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "severity": "low",
+      "createdAt": 1700000006000,
+      "updatedAt": 1700000006000
+    },
+    {
+      "id": "thread-symbol-006",
+      "number": 6,
+      "location": {
+        "kind": "symbol",
+        "uri": "file:///home/dev/project/src/main.rs",
+        "symbol": "OrderService"
+      },
+      "messages": [
+        {
+          "id": "msg-007",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Symbol-level comment.",
+          "createdAt": 1700000007000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000007000,
+      "updatedAt": 1700000007000
+    },
+    {
+      "id": "thread-line-007",
+      "number": 7,
+      "location": {
+        "kind": "line",
+        "uri": "file:///home/dev/project/src/main.rs",
+        "range": {
+          "start": { "line": 42, "character": 0 },
+          "end": { "line": 42, "character": 80 }
+        },
+        "tracked": {
+          "version": "deadbeef-1z",
+          "from": 1000,
+          "to": 1080,
+          "text": "let result = process(input);",
+          "prefix": "    // Process the input\n    ",
+          "suffix": "\n    Ok(result)\n}",
+          "status": "removed",
+          "original": "let result = process(input);"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-008",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "This line was removed.",
+          "createdAt": 1700000008000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000008000,
+      "updatedAt": 1700000008000
+    },
+    {
+      "id": "thread-dir-008",
+      "number": 8,
+      "location": {
+        "kind": "directory",
+        "uri": "file:///home/dev/project/src/"
+      },
+      "messages": [
+        {
+          "id": "msg-009",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Directory comment.",
+          "createdAt": 1700000009000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000009000,
+      "updatedAt": 1700000009000
+    },
+    {
+      "id": "thread-doc-text-009",
+      "number": 9,
+      "location": {
+        "kind": "document",
+        "uri": "file:///home/dev/project/design/spec.md",
+        "docAnchor": {
+          "type": "text",
+          "exact": "The system SHALL support concurrent access",
+          "prefix": "## Requirements\n",
+          "suffix": " from multiple clients.",
+          "startOffsetHint": 100,
+          "endOffsetHint": 142,
+          "occurrence": 0
+        },
+        "anchor": {
+          "text": "The system SHALL support concurrent access"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-010",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Document text anchor.",
+          "createdAt": 1700000010000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000010000,
+      "updatedAt": 1700000010000
+    },
+    {
+      "id": "thread-mermaid-010",
+      "number": 10,
+      "location": {
+        "kind": "document",
+        "uri": "file:///home/dev/project/design/architecture.md",
+        "docAnchor": {
+          "type": "mermaid-node",
+          "blockId": "arch-diagram",
+          "nodeId": "Gateway",
+          "source": "Gateway[API Gateway]"
+        },
+        "anchor": {
+          "text": "Gateway"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-011",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Mermaid node comment.",
+          "createdAt": 1700000011000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000011000,
+      "updatedAt": 1700000011000
+    },
+    {
+      "id": "thread-mermaid-edge-011",
+      "number": 11,
+      "location": {
+        "kind": "document",
+        "uri": "file:///home/dev/project/design/architecture.md",
+        "docAnchor": {
+          "type": "mermaid-edge",
+          "blockId": "arch-diagram",
+          "edgeId": "Gateway-->Service"
+        },
+        "anchor": {
+          "text": "Gateway-->Service"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-012",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Mermaid edge comment.",
+          "createdAt": 1700000012000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000012000,
+      "updatedAt": 1700000012000
+    },
+    {
+      "id": "thread-mermaid-block-012",
+      "number": 12,
+      "location": {
+        "kind": "document",
+        "uri": "file:///home/dev/project/design/architecture.md",
+        "docAnchor": {
+          "type": "mermaid-block",
+          "blockId": "arch-diagram"
+        },
+        "anchor": {
+          "text": "mermaid block"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-013",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Mermaid block comment.",
+          "createdAt": 1700000013000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000013000,
+      "updatedAt": 1700000013000
+    },
+    {
+      "id": "thread-doc-whole-013",
+      "number": 13,
+      "location": {
+        "kind": "document",
+        "uri": "file:///home/dev/project/design/spec.md",
+        "docAnchor": {
+          "type": "document"
+        },
+        "anchor": {
+          "text": ""
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-014",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Whole document comment.",
+          "createdAt": 1700000014000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000014000,
+      "updatedAt": 1700000014000
+    },
+    {
+      "id": "thread-patch-file-014",
+      "number": 14,
+      "location": {
+        "kind": "patch",
+        "uri": "file:///tmp/reviews/pr-123/pr-123.patch",
+        "patchAnchor": {
+          "type": "code-file",
+          "path": "src/handler.rs"
+        },
+        "anchor": {
+          "text": ""
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-015",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Patch file comment.",
+          "createdAt": 1700000015000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000015000,
+      "updatedAt": 1700000015000
+    },
+    {
+      "id": "thread-patch-line-015",
+      "number": 15,
+      "location": {
+        "kind": "patch",
+        "uri": "file:///tmp/reviews/pr-123/pr-123.patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/handler.rs",
+          "line": 75,
+          "side": "old"
+        },
+        "anchor": {
+          "text": ""
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-016",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Old side line comment.",
+          "createdAt": 1700000016000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000016000,
+      "updatedAt": 1700000016000
+    },
+    {
+      "id": "thread-patch-whole-016",
+      "number": 16,
+      "location": {
+        "kind": "patch",
+        "uri": "file:///tmp/reviews/pr-123/pr-123.patch",
+        "patchAnchor": {
+          "type": "patch"
+        },
+        "anchor": {
+          "text": ""
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-017",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Whole patch comment.",
+          "createdAt": 1700000017000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000017000,
+      "updatedAt": 1700000017000
+    },
+    {
+      "id": "thread-ambiguous-017",
+      "number": 17,
+      "location": {
+        "kind": "range",
+        "uri": "file:///home/dev/project/src/main.rs",
+        "range": {
+          "start": { "line": 20, "character": 0 },
+          "end": { "line": 20, "character": 30 }
+        },
+        "tracked": {
+          "version": "cafebabe-2a",
+          "from": 500,
+          "to": 530,
+          "text": "let x = compute_value();",
+          "prefix": "    // Compute\n    ",
+          "suffix": "\n    use_value(x);\n",
+          "status": "ambiguous",
+          "original": "let x = compute_value();",
+          "candidates": [
+            { "from": 500, "to": 524 },
+            { "from": 800, "to": 824 }
+          ]
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-018",
+          "author": {
+            "id": "human:test@example.com",
+            "kind": "human",
+            "name": "Test User"
+          },
+          "body": "Ambiguous anchor.",
+          "createdAt": 1700000018000
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000018000,
+      "updatedAt": 1700000018000
+    }
+  ],
+  "activity": [
+    {
+      "kind": "review-created",
+      "actor": {
+        "id": "human:test@example.com",
+        "kind": "human",
+        "name": "Test User"
+      },
+      "at": 1700000000000
+    },
+    {
+      "kind": "thread-created",
+      "actor": {
+        "id": "agent:mcp:claude-code",
+        "kind": "agent",
+        "name": "claude-code"
+      },
+      "threadId": "thread-range-002",
+      "at": 1700000001000
+    },
+    {
+      "kind": "message-added",
+      "actor": {
+        "id": "human:test@example.com",
+        "kind": "human",
+        "name": "Test User"
+      },
+      "threadId": "thread-doc-003",
+      "at": 1700000003000
+    },
+    {
+      "kind": "thread-resolved",
+      "actor": {
+        "id": "human:test@example.com",
+        "kind": "human",
+        "name": "Test User"
+      },
+      "threadId": "thread-doc-003",
+      "at": 1700000004000
+    },
+    {
+      "kind": "thread-reopened",
+      "actor": {
+        "id": "human:test@example.com",
+        "kind": "human",
+        "name": "Test User"
+      },
+      "threadId": "thread-repo-001",
+      "at": 1700000005000
+    },
+    {
+      "kind": "review-submitted",
+      "actor": {
+        "id": "human:test@example.com",
+        "kind": "human",
+        "name": "Test User"
+      },
+      "at": 1700000010000
+    }
+  ],
+  "nextThreadNumber": 18,
+  "agent": {
+    "id": "agent:mcp:claude-code",
+    "name": "claude-code",
+    "transport": "mcp",
+    "settings": {
+      "model": "claude-sonnet-4-20250514",
+      "__mode": "thorough"
+    },
+    "settingsLabel": "Claude Sonnet 4 · thorough"
+  },
+  "bundle": {
+    "dir": "/tmp/reviews/pr-123",
+    "storePath": "/tmp/reviews/pr-123/review.json",
+    "openspec": "/tmp/reviews/pr-123/openspec",
+    "docVersion": 3,
+    "github": {
+      "url": "https://github.com/org/repo/pull/123",
+      "round": 2,
+      "postedAt": 1700000009000
+    },
+    "code": "/home/dev/.co-review/worktrees/pr-123/abc123",
+    "repo": "/home/dev/project",
+    "base": "abc123def456",
+    "head": "789012fed345",
+    "worktree": true,
+    "checkout": "full",
+    "related": ["src/utils.rs", "src/config.rs"]
+  },
+  "overview": "# Review Overview\n\nThis is a synthetic review for testing.",
+  "verdict": {
+    "decision": "request-changes",
+    "summary": "Several issues need to be addressed before merging.",
+    "submittedAt": 1700000010000,
+    "count": 1,
+    "toAgent": "delivered"
+  },
+  "closed": {
+    "at": 1700000011000
+  },
+  "archivedAt": 1700000012000,
+  "createdAt": 1700000000000,
+  "updatedAt": 1700000012000
+}

@@ -1,0 +1,19 @@
+[
+  {
+    "event": "COMMENT",
+    "body": "Found a bug.",
+    "comments": [
+      {
+        "path": "src/old.rs",
+        "line": 100,
+        "side": "RIGHT",
+        "body": "This line has a bug."
+      }
+    ]
+  },
+  {
+    "event": "COMMENT",
+    "body": "Found a bug.\n- **src/old.rs:100:** This line has a bug.",
+    "comments": []
+  }
+]

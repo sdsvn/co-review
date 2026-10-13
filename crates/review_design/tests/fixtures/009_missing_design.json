@@ -1,0 +1,34 @@
+{
+  "name": "missing_design",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Context\nSome context.\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Context\nSome context.\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Context",
+          "key": "context",
+          "body": "Some context.\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "No `## Design` section."
+      ]
+    },
+    "stepTrees": {},
+    "stepIds": []
+  }
+}

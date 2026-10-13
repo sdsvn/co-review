@@ -1,0 +1,13 @@
+{
+  "event": "REQUEST_CHANGES",
+  "body": "Needs error handling fix.",
+  "comments": [
+    {
+      "threadId": "reworded-1",
+      "path": "src/handler.rs",
+      "line": 15,
+      "side": "RIGHT",
+      "body": "Please improve the error handling in this function."
+    }
+  ]
+}

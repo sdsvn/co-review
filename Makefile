@@ -1,35 +1,33 @@
-# Co-Review — build, run and package.
+# Co-Review — build, run and package (Lapce's own Makefile is Makefile.lapce).
 #
-#   make install        dependencies + VS Code built-in plugins (first time)
-#   make start          browser app on http://localhost:$(PORT), reviewing $(REPO)
-#   make desktop        desktop (Electron) app, reviewing $(REPO)
-#   make package        installable desktop app (dmg/zip, AppImage/deb or nsis) in applications/electron/dist
-#   make install-app    macOS: build and install Co-Review.app + the `co-review` command
-#   make install-cli    the `co-review` command, running from this checkout
+#   make build          the app and the `co-review` command (debug build, target/debug)
+#   make run            run the app on $(REPO), through the `co-review` command
+#   make test           version check, prompt check, the review crates' tests and the Pi / omp extension's
+#   make package        the release asset for this OS in target/package (Co-Review-mac-arm64.zip, …)
+#   make install-app    package and install it with install.sh (the app + the `co-review` command)
+#   make install-cli    the `co-review` command built in this checkout, into PATH
 #   make prompts        copy the shared agent prompts (prompts/) to the skills, commands, agents, app and docs
-#
-# Native modules (node-pty, drivelist, …) are compiled either for Node (browser app) or for
-# Electron (desktop app); each target switches them as needed, so the two can be built alternately.
 
-PORT  ?= 3000
-REPO  ?= $(CURDIR)
-MODE  ?= production
+REPO    ?= $(CURDIR)
+# cargo profile for `make package` (the release workflow uses release-lto)
+PROFILE ?= release
+PACKAGE := $(CURDIR)/target/package
 
-THEIA := $(CURDIR)/node_modules/.bin/theia
-BROWSER := applications/browser
-ELECTRON := applications/electron
+# Lapce's crates; the rest of the workspace is Co-Review's.
+LAPCE_CRATES := --exclude lapce --exclude lapce-app --exclude lapce-core --exclude lapce-proxy --exclude lapce-rpc
 
-.PHONY: help install plugins prompts check-prompts check-versions extension test browser start dev desktop-build desktop package package-dir install-app install-cli mcp-claude clean distclean
+.PHONY: help build run start desktop test lint prompts check-prompts check-versions package install-app install-cli mcp-claude clean
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install npm dependencies and download the VS Code built-in plugins
-	npm install
-	$(MAKE) plugins
+build: ## Build the app and the `co-review` command (debug)
+	cargo build -p lapce --bin lapce -p review_cli --bin co-review
 
-plugins: ## (Re)download the VS Code built-in plugins from Open VSX into plugins/
-	npm run download:plugins
+run: build ## Run the app on a repository (REPO=/path/to/repo; default: this checkout)
+	target/debug/co-review $(REPO)
+
+start desktop: run
 
 prompts: ## Copy the shared agent prompts in prompts/ everywhere agents read them
 	node bin/gen-prompts.mjs
@@ -37,57 +35,29 @@ prompts: ## Copy the shared agent prompts in prompts/ everywhere agents read the
 check-prompts: ## Fail if a copy of the shared agent prompts is out of date
 	node bin/gen-prompts.mjs --check
 
-check-versions: ## Fail if the plugin manifests or the Pi/omp packages differ from the app's version
+check-versions: ## Fail if the plugin manifests or the Pi/omp packages differ from the app's version (Cargo.toml)
 	node bin/check-versions.mjs
 
-extension: prompts ## Compile the review extension (TypeScript)
-	npm run -w @co-review/review build
+test: check-versions check-prompts ## Run the checks, the review crates' tests and the Pi / Oh My Pi extension's
+	cargo test --workspace $(LAPCE_CRATES)
+	node --experimental-transform-types --test integrations/shared/co-review.test.ts
 
-test: check-versions extension ## Run the unit tests (Node's test runner, on the compiled extension)
-	node --test extensions/review/test/*.test.mjs
+lint: ## Clippy: the review crates with warnings as errors, Lapce's as upstream does
+	cargo clippy --workspace $(LAPCE_CRATES) --all-targets -- -D warnings
+	cargo clippy -p lapce -p lapce-app -p lapce-core -p lapce-proxy -p lapce-rpc
 
-browser: extension ## Build the browser app
-	cd $(BROWSER) && $(THEIA) rebuild:browser --cacheRoot ../.. && $(THEIA) build --mode $(MODE)
+package: check-versions ## Package the app for this OS into target/package (PROFILE=release)
+	PROFILE=$(PROFILE) OUT=$(PACKAGE) packaging/package.sh
 
-start: browser ## Run the browser app (PORT=3000 REPO=/path/to/repo)
-	node bin/co-review.mjs --port $(PORT) $(REPO)
-	@echo "Co-Review is running in the background on http://127.0.0.1:$(PORT) (log: ~/.co-review/server.log)"
+install-app: package ## Install the packaged app (macOS: /Applications or ~/Applications; Linux: ~/.local/share/co-review) and the `co-review` command
+	@# install.sh quits a running Co-Review before replacing it, links the command and refreshes the integrations.
+	CO_REVIEW_DOWNLOAD_URL=file://$(PACKAGE) CO_REVIEW_FORCE=1 ./install.sh
 
-dev: ## Rebuild the extension on change; reload the browser to pick up frontend changes
-	npm run -w @co-review/review watch & (cd $(BROWSER) && $(THEIA) build --watch --mode development)
-
-desktop-build: extension ## Build the desktop (Electron) app
-	cd $(ELECTRON) && $(THEIA) rebuild:electron --cacheRoot ../.. && $(THEIA) build --mode $(MODE)
-
-desktop: desktop-build ## Run the desktop app (REPO=/path/to/repo)
-	cd $(ELECTRON) && ../../node_modules/.bin/electron . $(REPO)
-
-package: desktop-build ## Package the desktop app for this OS into applications/electron/dist
-	rm -rf $(ELECTRON)/plugins && cp -R plugins $(ELECTRON)/plugins
-	cd $(ELECTRON) && ../../node_modules/.bin/electron-builder --config electron-builder.yml
-
-package-dir: desktop-build ## Package the desktop app unpacked (faster; for testing)
-	rm -rf $(ELECTRON)/plugins && cp -R plugins $(ELECTRON)/plugins
-	cd $(ELECTRON) && ../../node_modules/.bin/electron-builder --config electron-builder.yml --dir
-
-APPS ?= $(shell [ -w /Applications ] && echo /Applications || echo $(HOME)/Applications)
-MAC_APP = $(ELECTRON)/dist/mac-$(shell uname -m | sed 's/x86_64/x64/')/Co-Review.app
-
-install-app: package ## macOS: install Co-Review.app into /Applications (or ~/Applications) and the `co-review` command
-	@test "$$(uname)" = Darwin || { echo "make install-app is macOS-only; use make install-cli"; exit 1; }
-	@# A running app must quit before its files go (else it lives on without its backend, blocking every launch).
-	pkill -TERM -f "$(APPS)/Co-Review.app/Contents/MacOS/Co-Review" 2>/dev/null; sleep 2; pkill -KILL -f "$(APPS)/Co-Review.app/Contents/MacOS/Co-Review" 2>/dev/null; true
-	mkdir -p "$(APPS)" && rm -rf "$(APPS)/Co-Review.app" && cp -R "$(MAC_APP)" "$(APPS)/"
-	"$(APPS)/Co-Review.app/Contents/Resources/app/bin/install-cli.sh"
-
-install-cli: ## Install the `co-review` command running from this checkout (needs `make browser`)
+install-cli: build ## Install the `co-review` command built in this checkout (target/debug) into PATH
 	bin/install-cli.sh
 
-mcp-claude: ## Register Co-Review as an MCP server in Claude Code (user scope)
-	claude mcp add -s user co-review -- node $(CURDIR)/bin/co-review.mjs mcp
+mcp-claude: build ## Register this checkout's `co-review` as an MCP server in Claude Code (user scope)
+	claude mcp add -s user co-review -- $(CURDIR)/target/debug/co-review mcp
 
-clean: ## Remove build output
-	rm -rf extensions/review/lib $(BROWSER)/lib $(BROWSER)/src-gen $(ELECTRON)/lib $(ELECTRON)/src-gen $(ELECTRON)/dist $(ELECTRON)/plugins
-
-distclean: clean ## Also remove node_modules, plugins and native-module caches
-	rm -rf node_modules plugins .browser_modules
+clean: ## Remove the build output
+	cargo clean

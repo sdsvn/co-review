@@ -17,7 +17,7 @@ const pages = {
 	'docs/agent-setup.md': { slug: 'guides/connect-your-agent', order: 2, title: 'Connect your agent' },
 	'docs/agents.md': { slug: 'guides/agents', order: 3, title: 'How agents review with you' },
 	'docs/design-docs.md': { slug: 'guides/design-docs', order: 4, title: 'Design documents' },
-	'docs/running-and-packaging.md': { slug: 'guides/running-and-packaging', order: 5, title: 'Running and packaging' },
+	'docs/running-and-packaging.md': { slug: 'guides/running-and-packaging', order: 5, title: 'Building and running' },
 	'llms.txt': { slug: 'reference/agent-contract', order: 1, title: 'Agent contract (llms.txt)' },
 	'docs/architecture.md': { slug: 'reference/architecture', order: 2, title: 'Architecture' }
 };

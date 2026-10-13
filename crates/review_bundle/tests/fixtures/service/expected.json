@@ -1,0 +1,3341 @@
+{
+ "design": {
+  "opened": [
+   {
+    "dir": "<ROOT>/cases/design",
+    "docFile": "<ROOT>/cases/design/index.md",
+    "patches": [],
+    "threads": 0
+   }
+  ],
+  "snapshots": [
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "index.md": "# Feature: Rate limiter\n\n## Context\n\nRequests from one client can starve the others. We add a token bucket per client.\n\n## Design\n\n- Limit requests per client — so one client cannot starve the rest\n  - Keep a token bucket per client key\n  - Refill the bucket every second ⚠ clock skew between nodes\n- Reject over-limit requests with 429\n\nThe bucket size is configurable. The bucket size defaults to 100 tokens.\n\nRésumé: naïve clients retry immediately — that is the problem.\n"
+    },
+    "label": "opened",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/cases/design"
+     },
+     "createdAt": 0,
+     "id": "<ID0>",
+     "nextThreadNumber": 1,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [],
+     "title": "Rate limiter",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/cases/design"
+    },
+    "stateFile": null
+   },
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "index.md": "# Feature: Rate limiter\n\n## Context\n\nRequests from one client can starve the others. We add a token bucket per client.\n\n## Design\n\n- Limit requests per client — so one client cannot starve the rest\n  - Keep a token bucket per client key\n  - Refill the bucket every second ⚠ clock skew between nodes\n- Reject over-limit requests with 429\n\nThe bucket size is configurable. The bucket size defaults to 100 tokens.\n\nRésumé: naïve clients retry immediately — that is the problem.\n"
+    },
+    "label": "findings added",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID1>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID2>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID3>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID4>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID5>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID6>"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/cases/design"
+     },
+     "createdAt": 0,
+     "id": "<ID0>",
+     "nextThreadNumber": 7,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      },
+      {
+       "id": "agent:review-bot",
+       "kind": "agent",
+       "name": "review-bot"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [
+      {
+       "createdAt": 0,
+       "id": "<ID1>",
+       "intent": "comment",
+       "labels": [
+        "clarity"
+       ],
+       "location": {
+        "anchor": {
+         "text": "The bucket size defaults to 100 tokens."
+        },
+        "docAnchor": {
+         "exact": "The bucket size defaults to 100 tokens.",
+         "prefix": "The bucket size is configurable.",
+         "suffix": "Résumé",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 371,
+         "original": "The bucket size defaults to 100 tokens.",
+         "prefix": "h 429\n\nThe bucket size is configurable. ",
+         "status": "active",
+         "suffix": "\n\nRésumé: naïve clients retry immediatel",
+         "text": "The bucket size defaults to 100 tokens.",
+         "to": 410,
+         "version": "bee72cea-d7"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "100 is too many.",
+         "createdAt": 0,
+         "id": "<ID7>"
+        }
+       ],
+       "number": 1,
+       "origin": "finding",
+       "proposal": {
+        "after": "defaults to 50 tokens",
+        "before": "defaults to 100 tokens",
+        "status": "pending"
+       },
+       "severity": "medium",
+       "sourceId": "d-1",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID2>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "The bucket size"
+        },
+        "docAnchor": {
+         "exact": "The bucket size",
+         "prefix": "is configurable. ",
+         "suffix": " defaults to",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 371,
+         "original": "The bucket size",
+         "prefix": "h 429\n\nThe bucket size is configurable. ",
+         "status": "active",
+         "suffix": " defaults to 100 tokens.\n\nRésumé: naïve ",
+         "text": "The bucket size",
+         "to": 386,
+         "version": "bee72cea-d7"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Say which bucket.",
+         "createdAt": 0,
+         "id": "<ID8>"
+        }
+       ],
+       "number": 2,
+       "origin": "finding",
+       "proposal": {
+        "after": "The default bucket size",
+        "before": "The bucket size",
+        "status": "pending"
+       },
+       "severity": "low",
+       "sourceId": "d-2",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID3>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "naïve clients retry immediately"
+        },
+        "docAnchor": {
+         "exact": "naïve clients retry immediately",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 420,
+         "original": "naïve clients retry immediately",
+         "prefix": "t size defaults to 100 tokens.\n\nRésumé: ",
+         "status": "active",
+         "suffix": " — that is the problem.\n",
+         "text": "naïve clients retry immediately",
+         "to": 451,
+         "version": "bee72cea-d7"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Which clients?",
+         "createdAt": 0,
+         "id": "<ID9>"
+        }
+       ],
+       "number": 3,
+       "origin": "finding",
+       "sourceId": "d-3",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID4>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "docAnchor": {
+         "nodeId": "Keep a token bucket per client key",
+         "type": "tree-node"
+        },
+        "kind": "document",
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Per key or per IP?\n\n_Question_",
+         "createdAt": 0,
+         "id": "<ID10>"
+        }
+       ],
+       "number": 4,
+       "origin": "finding",
+       "sourceId": "d-4",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID5>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "docAnchor": {
+         "blockId": "flow",
+         "nodeId": "A",
+         "type": "mermaid-node"
+        },
+        "kind": "document",
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Gone text.",
+         "createdAt": 0,
+         "id": "<ID11>"
+        }
+       ],
+       "number": 5,
+       "origin": "finding",
+       "proposal": {
+        "after": "Replacement.",
+        "before": "This sentence is not in the document.",
+        "status": "pending"
+       },
+       "sourceId": "d-5",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID6>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "Reject over-limit requests with 429"
+        },
+        "docAnchor": {
+         "exact": "Reject over-limit requests with 429",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 301,
+         "original": "Reject over-limit requests with 429",
+         "prefix": "ery second ⚠ clock skew between nodes\n- ",
+         "status": "active",
+         "suffix": "\n\nThe bucket size is configurable. The b",
+         "text": "Reject over-limit requests with 429",
+         "to": 336,
+         "version": "bee72cea-d7"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Use 503?",
+         "createdAt": 0,
+         "id": "<ID12>"
+        }
+       ],
+       "number": 6,
+       "origin": "finding",
+       "proposal": {
+        "after": "503",
+        "before": "429",
+        "status": "pending"
+       },
+       "sourceId": "d-6",
+       "status": "proposed",
+       "updatedAt": 0
+      }
+     ],
+     "title": "Rate limiter",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/cases/design"
+    },
+    "stateFile": null
+   },
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "index.md": "# Feature: Rate limiter\n\n## Context\n\nRequests from one client can starve the others. We add a token bucket per client.\n\n## Design\n\n- Limit requests per client — so one client cannot starve the rest\n  - Keep a token bucket per client key\n  - Refill the bucket every second ⚠ clock skew between nodes\n- Reject over-limit requests with 429\n\nThe bucket size is configurable. The default bucket size defaults to 100 tokens.\n\nRésumé: naïve clients retry immediately — that is the problem.\n"
+    },
+    "label": "tracked edit accepted",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID1>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID2>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID3>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID4>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID5>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID6>"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/cases/design",
+      "docVersion": 2
+     },
+     "createdAt": 0,
+     "id": "<ID0>",
+     "nextThreadNumber": 7,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      },
+      {
+       "id": "agent:review-bot",
+       "kind": "agent",
+       "name": "review-bot"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [
+      {
+       "createdAt": 0,
+       "id": "<ID1>",
+       "intent": "comment",
+       "labels": [
+        "clarity"
+       ],
+       "location": {
+        "anchor": {
+         "text": "The bucket size defaults to 100 tokens."
+        },
+        "docAnchor": {
+         "exact": "configurable. The default bucket size defaults to 100 tokens.",
+         "occurrence": 0,
+         "prefix": "The bucket size is configurable.",
+         "suffix": "Résumé",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 357,
+         "original": "The bucket size defaults to 100 tokens.",
+         "prefix": "t requests with 429\n\nThe bucket size is ",
+         "status": "modified",
+         "suffix": "\n\nRésumé: naïve clients retry immediatel",
+         "text": "configurable. The default bucket size defaults to 100 tokens.",
+         "to": 418,
+         "version": "907117f9-df"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "100 is too many.",
+         "createdAt": 0,
+         "id": "<ID7>"
+        }
+       ],
+       "number": 1,
+       "origin": "finding",
+       "proposal": {
+        "after": "defaults to 50 tokens",
+        "before": "defaults to 100 tokens",
+        "status": "pending"
+       },
+       "severity": "medium",
+       "sourceId": "d-1",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID2>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "The default bucket size"
+        },
+        "docAnchor": {
+         "exact": "The default bucket size",
+         "prefix": "is configurable. ",
+         "suffix": " defaults to",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 371,
+         "original": "The bucket size",
+         "prefix": "h 429\n\nThe bucket size is configurable. ",
+         "status": "removed",
+         "suffix": " defaults to 100 tokens.\n\nRésumé: naïve ",
+         "text": "The bucket size",
+         "to": 386,
+         "version": "907117f9-df"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Say which bucket.",
+         "createdAt": 0,
+         "id": "<ID8>"
+        },
+        {
+         "author": {
+          "id": "system",
+          "kind": "system",
+          "name": "system"
+         },
+         "body": "Edit accepted. Document version 2 created.",
+         "createdAt": 0,
+         "id": "<ID13>"
+        }
+       ],
+       "number": 2,
+       "origin": "finding",
+       "proposal": {
+        "after": "The default bucket size",
+        "before": "The bucket size",
+        "status": "accepted"
+       },
+       "severity": "low",
+       "sourceId": "d-2",
+       "status": "resolved",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID3>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "naïve clients retry immediately"
+        },
+        "docAnchor": {
+         "exact": "naïve clients retry immediately",
+         "occurrence": 0,
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 428,
+         "original": "naïve clients retry immediately",
+         "prefix": "t size defaults to 100 tokens.\n\nRésumé: ",
+         "status": "active",
+         "suffix": " — that is the problem.\n",
+         "text": "naïve clients retry immediately",
+         "to": 459,
+         "version": "907117f9-df"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Which clients?",
+         "createdAt": 0,
+         "id": "<ID9>"
+        }
+       ],
+       "number": 3,
+       "origin": "finding",
+       "sourceId": "d-3",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID4>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "docAnchor": {
+         "nodeId": "Keep a token bucket per client key",
+         "type": "tree-node"
+        },
+        "kind": "document",
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Per key or per IP?\n\n_Question_",
+         "createdAt": 0,
+         "id": "<ID10>"
+        }
+       ],
+       "number": 4,
+       "origin": "finding",
+       "sourceId": "d-4",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID5>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "docAnchor": {
+         "blockId": "flow",
+         "nodeId": "A",
+         "type": "mermaid-node"
+        },
+        "kind": "document",
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Gone text.",
+         "createdAt": 0,
+         "id": "<ID11>"
+        }
+       ],
+       "number": 5,
+       "origin": "finding",
+       "proposal": {
+        "after": "Replacement.",
+        "before": "This sentence is not in the document.",
+        "status": "pending"
+       },
+       "sourceId": "d-5",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID6>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "Reject over-limit requests with 429"
+        },
+        "docAnchor": {
+         "exact": "Reject over-limit requests with 429",
+         "occurrence": 0,
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 301,
+         "original": "Reject over-limit requests with 429",
+         "prefix": "ery second ⚠ clock skew between nodes\n- ",
+         "status": "active",
+         "suffix": "\n\nThe bucket size is configurable. The d",
+         "text": "Reject over-limit requests with 429",
+         "to": 336,
+         "version": "907117f9-df"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Use 503?",
+         "createdAt": 0,
+         "id": "<ID12>"
+        }
+       ],
+       "number": 6,
+       "origin": "finding",
+       "proposal": {
+        "after": "503",
+        "before": "429",
+        "status": "pending"
+       },
+       "sourceId": "d-6",
+       "status": "proposed",
+       "updatedAt": 0
+      }
+     ],
+     "title": "Rate limiter",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/cases/design"
+    },
+    "stateFile": null
+   },
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "index.md": "# Feature: Rate limiter\n\n## Context\n\nRequests from one client can starve the others. We add a token bucket per client.\n\n## Design\n\n- Limit requests per client — so one client cannot starve the rest\n  - Keep a token bucket per client key\n  - Refill the bucket every second ⚠ clock skew between nodes\n- Reject over-limit requests with 429\n\nThe bucket size is configurable. The default bucket size defaults to 50 tokens.\n\nRésumé: naïve clients retry immediately — that is the problem.\n"
+    },
+    "label": "decided",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID1>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID2>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID3>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID4>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID5>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID6>"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/cases/design",
+      "docVersion": 3
+     },
+     "createdAt": 0,
+     "id": "<ID0>",
+     "nextThreadNumber": 7,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      },
+      {
+       "id": "agent:review-bot",
+       "kind": "agent",
+       "name": "review-bot"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [
+      {
+       "createdAt": 0,
+       "id": "<ID1>",
+       "intent": "comment",
+       "labels": [
+        "clarity"
+       ],
+       "location": {
+        "anchor": {
+         "text": "defaults to 50 tokens"
+        },
+        "docAnchor": {
+         "exact": "defaults to 50 tokens",
+         "occurrence": 0,
+         "prefix": "The bucket size is configurable.",
+         "suffix": "Résumé",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 357,
+         "original": "The bucket size defaults to 100 tokens.",
+         "prefix": "t requests with 429\n\nThe bucket size is ",
+         "status": "modified",
+         "suffix": "\n\nRésumé: naïve clients retry immediatel",
+         "text": "configurable. The default bucket size defaults to 50 tokens.",
+         "to": 417,
+         "version": "10ec34a9-de"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "100 is too many.",
+         "createdAt": 0,
+         "id": "<ID7>"
+        },
+        {
+         "author": {
+          "id": "system",
+          "kind": "system",
+          "name": "system"
+         },
+         "body": "Edit accepted. Document version 3 created.",
+         "createdAt": 0,
+         "id": "<ID14>"
+        }
+       ],
+       "number": 1,
+       "origin": "finding",
+       "proposal": {
+        "after": "defaults to 50 tokens",
+        "before": "defaults to 100 tokens",
+        "status": "accepted"
+       },
+       "severity": "medium",
+       "sourceId": "d-1",
+       "status": "resolved",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID2>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "The default bucket size"
+        },
+        "docAnchor": {
+         "exact": "The default bucket size",
+         "prefix": "is configurable. ",
+         "suffix": " defaults to",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 371,
+         "original": "The bucket size",
+         "prefix": "h 429\n\nThe bucket size is configurable. ",
+         "status": "removed",
+         "suffix": " defaults to 100 tokens.\n\nRésumé: naïve ",
+         "text": "The bucket size",
+         "to": 386,
+         "version": "907117f9-df"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Say which bucket.",
+         "createdAt": 0,
+         "id": "<ID8>"
+        },
+        {
+         "author": {
+          "id": "system",
+          "kind": "system",
+          "name": "system"
+         },
+         "body": "Edit accepted. Document version 2 created.",
+         "createdAt": 0,
+         "id": "<ID13>"
+        }
+       ],
+       "number": 2,
+       "origin": "finding",
+       "proposal": {
+        "after": "The default bucket size",
+        "before": "The bucket size",
+        "status": "accepted"
+       },
+       "severity": "low",
+       "sourceId": "d-2",
+       "status": "resolved",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID3>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "naïve clients retry immediately"
+        },
+        "docAnchor": {
+         "exact": "naïve clients retry immediately",
+         "occurrence": 0,
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 427,
+         "original": "naïve clients retry immediately",
+         "prefix": "et size defaults to 50 tokens.\n\nRésumé: ",
+         "status": "active",
+         "suffix": " — that is the problem.\n",
+         "text": "naïve clients retry immediately",
+         "to": 458,
+         "version": "10ec34a9-de"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Which clients?",
+         "createdAt": 0,
+         "id": "<ID9>"
+        }
+       ],
+       "number": 3,
+       "origin": "finding",
+       "sourceId": "d-3",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID4>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "docAnchor": {
+         "nodeId": "Keep a token bucket per client key",
+         "type": "tree-node"
+        },
+        "kind": "document",
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Per key or per IP?\n\n_Question_",
+         "createdAt": 0,
+         "id": "<ID10>"
+        }
+       ],
+       "number": 4,
+       "origin": "finding",
+       "sourceId": "d-4",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID5>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "docAnchor": {
+         "blockId": "flow",
+         "nodeId": "A",
+         "type": "mermaid-node"
+        },
+        "kind": "document",
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Gone text.",
+         "createdAt": 0,
+         "id": "<ID11>"
+        },
+        {
+         "author": {
+          "id": "system",
+          "kind": "system",
+          "name": "system"
+         },
+         "body": "Accepted, but the quoted text was no longer in the source, so no new version was written.",
+         "createdAt": 0,
+         "id": "<ID15>"
+        }
+       ],
+       "number": 5,
+       "origin": "finding",
+       "proposal": {
+        "after": "Replacement.",
+        "before": "This sentence is not in the document.",
+        "status": "accepted"
+       },
+       "sourceId": "d-5",
+       "status": "resolved",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID6>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "Reject over-limit requests with 429"
+        },
+        "docAnchor": {
+         "exact": "Reject over-limit requests with 429",
+         "occurrence": 0,
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 301,
+         "original": "Reject over-limit requests with 429",
+         "prefix": "ery second ⚠ clock skew between nodes\n- ",
+         "status": "active",
+         "suffix": "\n\nThe bucket size is configurable. The d",
+         "text": "Reject over-limit requests with 429",
+         "to": 336,
+         "version": "10ec34a9-de"
+        },
+        "uri": "file://<ROOT>/cases/design/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Use 503?",
+         "createdAt": 0,
+         "id": "<ID12>"
+        },
+        {
+         "author": {
+          "id": "system",
+          "kind": "system",
+          "name": "system"
+         },
+         "body": "Edit rejected.",
+         "createdAt": 0,
+         "id": "<ID16>"
+        }
+       ],
+       "number": 6,
+       "origin": "finding",
+       "proposal": {
+        "after": "503",
+        "before": "429",
+        "status": "rejected"
+       },
+       "sourceId": "d-6",
+       "status": "resolved",
+       "updatedAt": 0
+      }
+     ],
+     "title": "Rate limiter",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/cases/design"
+    },
+    "stateFile": {
+     "doc": {
+      "markdown": "# Feature: Rate limiter\n\n## Context\n\nRequests from one client can starve the others. We add a token bucket per client.\n\n## Design\n\n- Limit requests per client — so one client cannot starve the rest\n  - Keep a token bucket per client key\n  - Refill the bucket every second ⚠ clock skew between nodes\n- Reject over-limit requests with 429\n\nThe bucket size is configurable. The default bucket size defaults to 50 tokens.\n\nRésumé: naïve clients retry immediately — that is the problem.\n",
+      "slug": "index.md",
+      "title": "Rate limiter",
+      "version": 3
+     },
+     "review": {
+      "count": 0
+     },
+     "seq": 6,
+     "threads": [
+      {
+       "anchor": {
+        "exact": "defaults to 50 tokens",
+        "occurrence": 0,
+        "prefix": "The bucket size is configurable.",
+        "suffix": "Résumé",
+        "type": "text"
+       },
+       "id": "t1",
+       "intent": "comment",
+       "labels": [
+        "clarity"
+       ],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "100 is too many.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        },
+        {
+         "author": "system",
+         "body": "Edit accepted. Document version 3 created.",
+         "role": "system",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "proposal": {
+        "after": "defaults to 50 tokens",
+        "before": "defaults to 100 tokens",
+        "status": "accepted"
+       },
+       "severity": "medium",
+       "sourceId": "d-1",
+       "status": "resolved",
+       "target": "doc"
+      },
+      {
+       "anchor": {
+        "exact": "The default bucket size",
+        "prefix": "is configurable. ",
+        "suffix": " defaults to",
+        "type": "text"
+       },
+       "id": "t2",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Say which bucket.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        },
+        {
+         "author": "system",
+         "body": "Edit accepted. Document version 2 created.",
+         "role": "system",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "proposal": {
+        "after": "The default bucket size",
+        "before": "The bucket size",
+        "status": "accepted"
+       },
+       "severity": "low",
+       "sourceId": "d-2",
+       "status": "resolved",
+       "target": "doc"
+      },
+      {
+       "anchor": {
+        "exact": "naïve clients retry immediately",
+        "occurrence": 0,
+        "type": "text"
+       },
+       "id": "t3",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Which clients?",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "d-3",
+       "status": "proposed",
+       "target": "doc"
+      },
+      {
+       "anchor": {
+        "nodeId": "Keep a token bucket per client key",
+        "type": "tree-node"
+       },
+       "id": "t4",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Per key or per IP?\n\n_Question_",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "d-4",
+       "status": "proposed",
+       "target": "doc"
+      },
+      {
+       "anchor": {
+        "blockId": "flow",
+        "nodeId": "A",
+        "type": "mermaid-node"
+       },
+       "id": "t5",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Gone text.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        },
+        {
+         "author": "system",
+         "body": "Accepted, but the quoted text was no longer in the source, so no new version was written.",
+         "role": "system",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "proposal": {
+        "after": "Replacement.",
+        "before": "This sentence is not in the document.",
+        "status": "accepted"
+       },
+       "severity": "medium",
+       "sourceId": "d-5",
+       "status": "resolved",
+       "target": "doc"
+      },
+      {
+       "anchor": {
+        "exact": "Reject over-limit requests with 429",
+        "occurrence": 0,
+        "type": "text"
+       },
+       "id": "t6",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Use 503?",
+         "role": "agent",
+         "time": "<CLOCK>"
+        },
+        {
+         "author": "system",
+         "body": "Edit rejected.",
+         "role": "system",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "proposal": {
+        "after": "503",
+        "before": "429",
+        "status": "rejected"
+       },
+       "severity": "medium",
+       "sourceId": "d-6",
+       "status": "resolved",
+       "target": "doc"
+      }
+     ]
+    }
+   }
+  ],
+  "synced": []
+ },
+ "change": {
+  "opened": [
+   {
+    "dir": "<ROOT>/cases/change",
+    "docFile": null,
+    "patches": [
+     "<ROOT>/cases/change/change.patch"
+    ],
+    "threads": 3
+   },
+   {
+    "dir": "<ROOT>/cases/change",
+    "docFile": null,
+    "patches": [
+     "<ROOT>/cases/change/change.patch"
+    ],
+    "threads": 4
+   }
+  ],
+  "snapshots": [
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "PR.md": "title: Add refill to the limiter\npr: 42\nbranch: feature/refill\nbase: main\nrepo: example/limiter\n\nAdds a refill rate to the limiter.\n",
+     "change.comments.jsonl": "{\"id\":\"f-1\",\"severity\":\"high\",\"labels\":[\"correctness\"],\"anchor\":{\"type\":\"code-line\",\"path\":\"src/limiter.go\",\"line\":5,\"side\":\"new\",\"source\":\"\\trefill int\"},\"body\":\"`refill` is never validated.\",\"verdict\":\"Must fix\"}\n{\"id\":\"f-2\",\"severity\":\"low\",\"anchor\":{\"type\":\"code-range\",\"path\":\"src/limiter.go\",\"startLine\":9,\"endLine\":10,\"side\":\"new\",\"source\":\"\\treturn &Limiter{size: size, refill: size}\"},\"body\":\"Use a named default.\",\"proposal\":{\"before\":\"refill: size\",\"after\":\"refill: defaultRefill(size)\",\"path\":\"src/limiter.go\",\"startLine\":9}}\n\n{\"id\":\"f-3\",\"anchor\":{\"type\":\"patch\"},\"body\":\"The patch has no tests.\"}\n{\"body\":\"A finding without an id is skipped.\",\"anchor\":{\"type\":\"patch\"}}\n",
+     "change.patch": "diff --git a/src/limiter.go b/src/limiter.go\nindex 1111111..2222222 100644\n--- a/src/limiter.go\n+++ b/src/limiter.go\n@@ -1,7 +1,10 @@\n package limiter\n \n type Limiter struct {\n-\tsize int\n+\tsize   int\n+\trefill int\n }\n \n func New(size int) *Limiter {\n-\treturn &Limiter{size: size}\n+\treturn &Limiter{size: size, refill: size}\n }\n+\n+// Allow reports whether a request may proceed.\n"
+    },
+    "label": "opened",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID0>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID1>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID2>"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/cases/change",
+      "storePath": "<ROOT>/cases/change/out/state.json"
+     },
+     "createdAt": 0,
+     "id": "<ID3>",
+     "nextThreadNumber": 4,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      },
+      {
+       "id": "agent:review-bot",
+       "kind": "agent",
+       "name": "review-bot"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [
+      {
+       "createdAt": 0,
+       "id": "<ID0>",
+       "intent": "comment",
+       "labels": [
+        "correctness"
+       ],
+       "location": {
+        "anchor": {
+         "text": "\trefill int"
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "line": 5,
+         "path": "src/limiter.go",
+         "side": "new",
+         "source": "\trefill int",
+         "type": "code-line"
+        },
+        "uri": "file://<ROOT>/cases/change/change.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "`refill` is never validated.\n\n_Must fix_",
+         "createdAt": 0,
+         "id": "<ID4>"
+        }
+       ],
+       "number": 1,
+       "origin": "finding",
+       "severity": "high",
+       "sourceId": "f-1",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID1>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "\treturn &Limiter{size: size, refill: size}"
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "endLine": 10,
+         "path": "src/limiter.go",
+         "side": "new",
+         "source": "\treturn &Limiter{size: size, refill: size}",
+         "startLine": 9,
+         "type": "code-range"
+        },
+        "uri": "file://<ROOT>/cases/change/change.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Use a named default.",
+         "createdAt": 0,
+         "id": "<ID5>"
+        }
+       ],
+       "number": 2,
+       "origin": "finding",
+       "proposal": {
+        "after": "refill: defaultRefill(size)",
+        "before": "refill: size",
+        "path": "src/limiter.go",
+        "startLine": 9,
+        "status": "pending"
+       },
+       "severity": "low",
+       "sourceId": "f-2",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID2>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "type": "patch"
+        },
+        "uri": "file://<ROOT>/cases/change/change.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "The patch has no tests.",
+         "createdAt": 0,
+         "id": "<ID6>"
+        }
+       ],
+       "number": 3,
+       "origin": "finding",
+       "sourceId": "f-3",
+       "status": "proposed",
+       "updatedAt": 0
+      }
+     ],
+     "title": "Refill review",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/cases/change"
+    },
+    "stateFile": null
+   },
+   {
+    "acceptedSuggestions": [
+     {
+      "after": "refill: defaultRefill(size)",
+      "before": "refill: size",
+      "path": "src/limiter.go",
+      "startLine": 9,
+      "threadId": "t2"
+     }
+    ],
+    "files": {
+     "PR.md": "title: Add refill to the limiter\npr: 42\nbranch: feature/refill\nbase: main\nrepo: example/limiter\n\nAdds a refill rate to the limiter.\n",
+     "change.comments.jsonl": "{\"id\":\"f-1\",\"severity\":\"high\",\"labels\":[\"correctness\"],\"anchor\":{\"type\":\"code-line\",\"path\":\"src/limiter.go\",\"line\":5,\"side\":\"new\",\"source\":\"\\trefill int\"},\"body\":\"`refill` is never validated.\",\"verdict\":\"Must fix\"}\n{\"id\":\"f-2\",\"severity\":\"low\",\"anchor\":{\"type\":\"code-range\",\"path\":\"src/limiter.go\",\"startLine\":9,\"endLine\":10,\"side\":\"new\",\"source\":\"\\treturn &Limiter{size: size, refill: size}\"},\"body\":\"Use a named default.\",\"proposal\":{\"before\":\"refill: size\",\"after\":\"refill: defaultRefill(size)\",\"path\":\"src/limiter.go\",\"startLine\":9}}\n\n{\"id\":\"f-3\",\"anchor\":{\"type\":\"patch\"},\"body\":\"The patch has no tests.\"}\n{\"body\":\"A finding without an id is skipped.\",\"anchor\":{\"type\":\"patch\"}}\n{\"id\":\"f-1\",\"anchor\":{\"type\":\"patch\"},\"body\":\"Edited duplicate.\"}\n{\"id\":\"f-4\",\"severity\":\"medium\",\"anchor\":{\"type\":\"code-file\",\"path\":\"src/limiter.go\"},\"body\":\"Add a test file.\"}\n",
+     "change.patch": "diff --git a/src/limiter.go b/src/limiter.go\nindex 1111111..2222222 100644\n--- a/src/limiter.go\n+++ b/src/limiter.go\n@@ -1,7 +1,10 @@\n package limiter\n \n type Limiter struct {\n-\tsize int\n+\tsize   int\n+\trefill int\n }\n \n func New(size int) *Limiter {\n-\treturn &Limiter{size: size}\n+\treturn &Limiter{size: size, refill: size}\n }\n+\n+// Allow reports whether a request may proceed.\n"
+    },
+    "label": "resynced",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID0>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID1>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID2>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID7>"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/cases/change",
+      "storePath": "<ROOT>/cases/change/out/state.json"
+     },
+     "createdAt": 0,
+     "id": "<ID3>",
+     "nextThreadNumber": 5,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      },
+      {
+       "id": "agent:review-bot",
+       "kind": "agent",
+       "name": "review-bot"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [
+      {
+       "createdAt": 0,
+       "id": "<ID0>",
+       "intent": "comment",
+       "labels": [
+        "correctness"
+       ],
+       "location": {
+        "anchor": {
+         "text": "\trefill int"
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "line": 5,
+         "path": "src/limiter.go",
+         "side": "new",
+         "source": "\trefill int",
+         "type": "code-line"
+        },
+        "uri": "file://<ROOT>/cases/change/change.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "`refill` is never validated.\n\n_Must fix_",
+         "createdAt": 0,
+         "id": "<ID4>"
+        }
+       ],
+       "number": 1,
+       "origin": "finding",
+       "severity": "high",
+       "sourceId": "f-1",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID1>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "\treturn &Limiter{size: size, refill: size}"
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "endLine": 10,
+         "path": "src/limiter.go",
+         "side": "new",
+         "source": "\treturn &Limiter{size: size, refill: size}",
+         "startLine": 9,
+         "type": "code-range"
+        },
+        "uri": "file://<ROOT>/cases/change/change.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Use a named default.",
+         "createdAt": 0,
+         "id": "<ID5>"
+        },
+        {
+         "author": {
+          "id": "system",
+          "kind": "system",
+          "name": "system"
+         },
+         "body": "Suggestion accepted. Apply it as a new commit on feature/refill; the reviewed patch stays as it is.",
+         "createdAt": 0,
+         "id": "<ID8>"
+        }
+       ],
+       "number": 2,
+       "origin": "finding",
+       "proposal": {
+        "after": "refill: defaultRefill(size)",
+        "before": "refill: size",
+        "path": "src/limiter.go",
+        "startLine": 9,
+        "status": "accepted"
+       },
+       "severity": "low",
+       "sourceId": "f-2",
+       "status": "resolved",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID2>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "type": "patch"
+        },
+        "uri": "file://<ROOT>/cases/change/change.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "The patch has no tests.",
+         "createdAt": 0,
+         "id": "<ID6>"
+        }
+       ],
+       "number": 3,
+       "origin": "finding",
+       "sourceId": "f-3",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID7>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "path": "src/limiter.go",
+         "type": "code-file"
+        },
+        "uri": "file://<ROOT>/cases/change/change.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Add a test file.",
+         "createdAt": 0,
+         "id": "<ID9>"
+        }
+       ],
+       "number": 4,
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "f-4",
+       "status": "proposed",
+       "updatedAt": 0
+      }
+     ],
+     "title": "Refill review",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/cases/change"
+    },
+    "stateFile": {
+     "doc": {
+      "markdown": "",
+      "slug": "",
+      "title": "Refill review",
+      "version": 1
+     },
+     "review": {
+      "count": 0
+     },
+     "seq": 4,
+     "threads": [
+      {
+       "anchor": {
+        "line": 5,
+        "path": "src/limiter.go",
+        "side": "new",
+        "source": "\trefill int",
+        "type": "code-line"
+       },
+       "id": "t1",
+       "intent": "comment",
+       "labels": [
+        "correctness"
+       ],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "`refill` is never validated.\n\n_Must fix_",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "high",
+       "sourceId": "f-1",
+       "status": "proposed",
+       "target": "patch:change"
+      },
+      {
+       "anchor": {
+        "endLine": 10,
+        "path": "src/limiter.go",
+        "side": "new",
+        "source": "\treturn &Limiter{size: size, refill: size}",
+        "startLine": 9,
+        "type": "code-range"
+       },
+       "id": "t2",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Use a named default.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        },
+        {
+         "author": "system",
+         "body": "Suggestion accepted. Apply it as a new commit on feature/refill; the reviewed patch stays as it is.",
+         "role": "system",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "proposal": {
+        "after": "refill: defaultRefill(size)",
+        "before": "refill: size",
+        "path": "src/limiter.go",
+        "startLine": 9,
+        "status": "accepted"
+       },
+       "severity": "low",
+       "sourceId": "f-2",
+       "status": "resolved",
+       "target": "patch:change"
+      },
+      {
+       "anchor": {
+        "type": "patch"
+       },
+       "id": "t3",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "The patch has no tests.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "f-3",
+       "status": "proposed",
+       "target": "patch:change"
+      },
+      {
+       "anchor": {
+        "path": "src/limiter.go",
+        "type": "code-file"
+       },
+       "id": "t4",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Add a test file.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "f-4",
+       "status": "proposed",
+       "target": "patch:change"
+      }
+     ]
+    }
+   }
+  ],
+  "synced": [
+   1,
+   0
+  ]
+ },
+ "okf": {
+  "opened": [
+   {
+    "dir": "<ROOT>/cases/okf",
+    "docFile": "<ROOT>/cases/okf/index.md",
+    "patches": [
+     "<ROOT>/cases/okf/okf.patch"
+    ],
+    "threads": 2
+   }
+  ],
+  "snapshots": [
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "concepts/bucket.md": "---\ntype: concept\ndescription: The token bucket\nresource: ../../src/limiter.go\n---\n\n# Token bucket\n\nA bucket holds tokens. Each request takes one token. A bucket holds tokens up to its size.\n",
+     "index.md": "# Limiter knowledge bundle\n\nSee [the bucket concept](concepts/bucket.md).\n",
+     "okf.comments.json": "[\n  {\"id\":\"okf-1\",\"target\":\"doc:concepts/bucket.md\",\"severity\":\"medium\",\"labels\":[\"docs\"],\"anchor\":{\"type\":\"code-line\",\"path\":\"concepts/bucket.md\",\"line\":1,\"side\":\"new\",\"source\":\"# Token bucket\"},\"body\":\"The target is the patch the findings file belongs to.\"},\n  {\"id\":\"okf-2\",\"anchor\":{\"type\":\"code-file\",\"path\":\"concepts/bucket.md\"},\"body\":\"New page; link it from the index.\"}\n]\n",
+     "okf.patch": "diff --git a/concepts/bucket.md b/concepts/bucket.md\nnew file mode 100644\n--- /dev/null\n+++ b/concepts/bucket.md\n@@ -0,0 +1,1 @@\n+# Token bucket\n"
+    },
+    "label": "findings added",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID0>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID1>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID2>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID3>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID4>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID5>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID6>"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/cases/okf"
+     },
+     "createdAt": 0,
+     "id": "<ID7>",
+     "nextThreadNumber": 8,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      },
+      {
+       "id": "agent:review-bot",
+       "kind": "agent",
+       "name": "review-bot"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [
+      {
+       "createdAt": 0,
+       "id": "<ID0>",
+       "intent": "comment",
+       "labels": [
+        "docs"
+       ],
+       "location": {
+        "anchor": {
+         "text": "# Token bucket"
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "line": 1,
+         "path": "concepts/bucket.md",
+         "side": "new",
+         "source": "# Token bucket",
+         "type": "code-line"
+        },
+        "uri": "file://<ROOT>/cases/okf/okf.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "The target is the patch the findings file belongs to.",
+         "createdAt": 0,
+         "id": "<ID8>"
+        }
+       ],
+       "number": 1,
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "okf-1",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID1>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "path": "concepts/bucket.md",
+         "type": "code-file"
+        },
+        "uri": "file://<ROOT>/cases/okf/okf.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "New page; link it from the index.",
+         "createdAt": 0,
+         "id": "<ID9>"
+        }
+       ],
+       "number": 2,
+       "origin": "finding",
+       "sourceId": "okf-2",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID2>",
+       "intent": "comment",
+       "labels": [
+        "docs"
+       ],
+       "location": {
+        "anchor": {
+         "text": "Each request takes one token."
+        },
+        "docAnchor": {
+         "exact": "Each request takes one token.",
+         "prefix": "A bucket holds tokens.",
+         "suffix": "A bucket holds",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 123,
+         "original": "Each request takes one token.",
+         "prefix": "\n# Token bucket\n\nA bucket holds tokens. ",
+         "status": "active",
+         "suffix": " A bucket holds tokens up to its size.\n",
+         "text": "Each request takes one token.",
+         "to": 152,
+         "version": "a2edd4ea-5b"
+        },
+        "uri": "file://<ROOT>/cases/okf/concepts/bucket.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "And when it is empty?",
+         "createdAt": 0,
+         "id": "<ID10>"
+        }
+       ],
+       "number": 3,
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "okf-3",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID3>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "Token bucket"
+        },
+        "docAnchor": {
+         "exact": "Token bucket",
+         "type": "text"
+        },
+        "kind": "document",
+        "uri": "file://<ROOT>/cases/okf/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Escapes the directory.",
+         "createdAt": 0,
+         "id": "<ID11>"
+        }
+       ],
+       "number": 4,
+       "origin": "finding",
+       "sourceId": "okf-4",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID4>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "docAnchor": {
+         "type": "document"
+        },
+        "kind": "document",
+        "uri": "file://<ROOT>/cases/okf/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Whole document.",
+         "createdAt": 0,
+         "id": "<ID12>"
+        }
+       ],
+       "number": 5,
+       "origin": "finding",
+       "sourceId": "okf-5",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID5>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "A bucket holds tokens up to its size."
+        },
+        "docAnchor": {
+         "exact": "A bucket holds tokens up to its size.",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 153,
+         "original": "A bucket holds tokens up to its size.",
+         "prefix": "s tokens. Each request takes one token. ",
+         "status": "active",
+         "suffix": "\n",
+         "text": "A bucket holds tokens up to its size.",
+         "to": 190,
+         "version": "a2edd4ea-5b"
+        },
+        "uri": "file://<ROOT>/cases/okf/concepts/bucket.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Name the limit.",
+         "createdAt": 0,
+         "id": "<ID13>"
+        }
+       ],
+       "number": 6,
+       "origin": "finding",
+       "proposal": {
+        "after": "A bucket holds at most `size` tokens.",
+        "before": "A bucket holds tokens up to its size.",
+        "status": "pending"
+       },
+       "sourceId": "okf-6",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID6>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "line": 1,
+         "path": "concepts/bucket.md",
+         "side": "new",
+         "type": "code-line"
+        },
+        "uri": "file://<ROOT>/cases/okf/okf.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Title case.",
+         "createdAt": 0,
+         "id": "<ID14>"
+        }
+       ],
+       "number": 7,
+       "origin": "finding",
+       "sourceId": "okf-7",
+       "status": "proposed",
+       "updatedAt": 0
+      }
+     ],
+     "title": "Limiter knowledge bundle",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/cases/okf"
+    },
+    "stateFile": null
+   },
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "concepts/bucket.md": "---\ntype: concept\ndescription: The token bucket\nresource: ../../src/limiter.go\n---\n\n# Token bucket\n\nA bucket holds tokens. Each request takes one token. A bucket holds at most `size` tokens.\n",
+     "index.md": "# Limiter knowledge bundle\n\nSee [the bucket concept](concepts/bucket.md).\n",
+     "okf.comments.json": "[\n  {\"id\":\"okf-1\",\"target\":\"doc:concepts/bucket.md\",\"severity\":\"medium\",\"labels\":[\"docs\"],\"anchor\":{\"type\":\"code-line\",\"path\":\"concepts/bucket.md\",\"line\":1,\"side\":\"new\",\"source\":\"# Token bucket\"},\"body\":\"The target is the patch the findings file belongs to.\"},\n  {\"id\":\"okf-2\",\"anchor\":{\"type\":\"code-file\",\"path\":\"concepts/bucket.md\"},\"body\":\"New page; link it from the index.\"}\n]\n",
+     "okf.patch": "diff --git a/concepts/bucket.md b/concepts/bucket.md\nnew file mode 100644\n--- /dev/null\n+++ b/concepts/bucket.md\n@@ -0,0 +1,1 @@\n+# Token bucket\n"
+    },
+    "label": "page edit accepted",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID0>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID1>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID2>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID3>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID4>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID5>"
+      },
+      {
+       "actor": {
+        "id": "agent:review-bot",
+        "kind": "agent",
+        "name": "review-bot"
+       },
+       "at": 0,
+       "kind": "thread-created",
+       "threadId": "<ID6>"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/cases/okf",
+      "docVersion": 2
+     },
+     "createdAt": 0,
+     "id": "<ID7>",
+     "nextThreadNumber": 8,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      },
+      {
+       "id": "agent:review-bot",
+       "kind": "agent",
+       "name": "review-bot"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [
+      {
+       "createdAt": 0,
+       "id": "<ID0>",
+       "intent": "comment",
+       "labels": [
+        "docs"
+       ],
+       "location": {
+        "anchor": {
+         "text": "# Token bucket"
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "line": 1,
+         "path": "concepts/bucket.md",
+         "side": "new",
+         "source": "# Token bucket",
+         "type": "code-line"
+        },
+        "uri": "file://<ROOT>/cases/okf/okf.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "The target is the patch the findings file belongs to.",
+         "createdAt": 0,
+         "id": "<ID8>"
+        }
+       ],
+       "number": 1,
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "okf-1",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID1>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "path": "concepts/bucket.md",
+         "type": "code-file"
+        },
+        "uri": "file://<ROOT>/cases/okf/okf.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "New page; link it from the index.",
+         "createdAt": 0,
+         "id": "<ID9>"
+        }
+       ],
+       "number": 2,
+       "origin": "finding",
+       "sourceId": "okf-2",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID2>",
+       "intent": "comment",
+       "labels": [
+        "docs"
+       ],
+       "location": {
+        "anchor": {
+         "text": "Each request takes one token."
+        },
+        "docAnchor": {
+         "exact": "Each request takes one token.",
+         "occurrence": 0,
+         "prefix": "A bucket holds tokens.",
+         "suffix": "A bucket holds",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 123,
+         "original": "Each request takes one token.",
+         "prefix": "\n# Token bucket\n\nA bucket holds tokens. ",
+         "status": "active",
+         "suffix": " A bucket holds at most `size` tokens.\n",
+         "text": "Each request takes one token.",
+         "to": 152,
+         "version": "89ee9962-5b"
+        },
+        "uri": "file://<ROOT>/cases/okf/concepts/bucket.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "And when it is empty?",
+         "createdAt": 0,
+         "id": "<ID10>"
+        }
+       ],
+       "number": 3,
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "okf-3",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID3>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "Token bucket"
+        },
+        "docAnchor": {
+         "exact": "Token bucket",
+         "type": "text"
+        },
+        "kind": "document",
+        "uri": "file://<ROOT>/cases/okf/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Escapes the directory.",
+         "createdAt": 0,
+         "id": "<ID11>"
+        }
+       ],
+       "number": 4,
+       "origin": "finding",
+       "sourceId": "okf-4",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID4>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "docAnchor": {
+         "type": "document"
+        },
+        "kind": "document",
+        "uri": "file://<ROOT>/cases/okf/index.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Whole document.",
+         "createdAt": 0,
+         "id": "<ID12>"
+        }
+       ],
+       "number": 5,
+       "origin": "finding",
+       "sourceId": "okf-5",
+       "status": "proposed",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID5>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": "A bucket holds at most `size` tokens."
+        },
+        "docAnchor": {
+         "exact": "A bucket holds at most `size` tokens.",
+         "type": "text"
+        },
+        "kind": "document",
+        "tracked": {
+         "from": 153,
+         "original": "A bucket holds tokens up to its size.",
+         "prefix": "s tokens. Each request takes one token. ",
+         "status": "removed",
+         "suffix": "\n",
+         "text": "A bucket holds tokens up to its size.",
+         "to": 190,
+         "version": "89ee9962-5b"
+        },
+        "uri": "file://<ROOT>/cases/okf/concepts/bucket.md"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Name the limit.",
+         "createdAt": 0,
+         "id": "<ID13>"
+        },
+        {
+         "author": {
+          "id": "system",
+          "kind": "system",
+          "name": "system"
+         },
+         "body": "Edit accepted. Document version 2 created.",
+         "createdAt": 0,
+         "id": "<ID15>"
+        }
+       ],
+       "number": 6,
+       "origin": "finding",
+       "proposal": {
+        "after": "A bucket holds at most `size` tokens.",
+        "before": "A bucket holds tokens up to its size.",
+        "status": "accepted"
+       },
+       "sourceId": "okf-6",
+       "status": "resolved",
+       "updatedAt": 0
+      },
+      {
+       "createdAt": 0,
+       "id": "<ID6>",
+       "intent": "comment",
+       "location": {
+        "anchor": {
+         "text": ""
+        },
+        "kind": "patch",
+        "patchAnchor": {
+         "line": 1,
+         "path": "concepts/bucket.md",
+         "side": "new",
+         "type": "code-line"
+        },
+        "uri": "file://<ROOT>/cases/okf/okf.patch"
+       },
+       "messages": [
+        {
+         "author": {
+          "id": "agent:review-bot",
+          "kind": "agent",
+          "name": "review-bot"
+         },
+         "body": "Title case.",
+         "createdAt": 0,
+         "id": "<ID14>"
+        }
+       ],
+       "number": 7,
+       "origin": "finding",
+       "sourceId": "okf-7",
+       "status": "proposed",
+       "updatedAt": 0
+      }
+     ],
+     "title": "Limiter knowledge bundle",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/cases/okf"
+    },
+    "stateFile": {
+     "doc": {
+      "markdown": "# Limiter knowledge bundle\n\nSee [the bucket concept](concepts/bucket.md).\n",
+      "slug": "index.md",
+      "title": "Limiter knowledge bundle",
+      "version": 2
+     },
+     "review": {
+      "count": 0
+     },
+     "seq": 7,
+     "threads": [
+      {
+       "anchor": {
+        "line": 1,
+        "path": "concepts/bucket.md",
+        "side": "new",
+        "source": "# Token bucket",
+        "type": "code-line"
+       },
+       "id": "t1",
+       "intent": "comment",
+       "labels": [
+        "docs"
+       ],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "The target is the patch the findings file belongs to.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "okf-1",
+       "status": "proposed",
+       "target": "patch:okf"
+      },
+      {
+       "anchor": {
+        "path": "concepts/bucket.md",
+        "type": "code-file"
+       },
+       "id": "t2",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "New page; link it from the index.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "okf-2",
+       "status": "proposed",
+       "target": "patch:okf"
+      },
+      {
+       "anchor": {
+        "exact": "Each request takes one token.",
+        "occurrence": 0,
+        "prefix": "A bucket holds tokens.",
+        "suffix": "A bucket holds",
+        "type": "text"
+       },
+       "id": "t3",
+       "intent": "comment",
+       "labels": [
+        "docs"
+       ],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "And when it is empty?",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "okf-3",
+       "status": "proposed",
+       "target": "doc:concepts/bucket.md"
+      },
+      {
+       "anchor": {
+        "exact": "Token bucket",
+        "type": "text"
+       },
+       "id": "t4",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Escapes the directory.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "okf-4",
+       "status": "proposed",
+       "target": "doc"
+      },
+      {
+       "anchor": {
+        "type": "document"
+       },
+       "id": "t5",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Whole document.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "okf-5",
+       "status": "proposed",
+       "target": "doc"
+      },
+      {
+       "anchor": {
+        "exact": "A bucket holds at most `size` tokens.",
+        "type": "text"
+       },
+       "id": "t6",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Name the limit.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        },
+        {
+         "author": "system",
+         "body": "Edit accepted. Document version 2 created.",
+         "role": "system",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "proposal": {
+        "after": "A bucket holds at most `size` tokens.",
+        "before": "A bucket holds tokens up to its size.",
+        "status": "accepted"
+       },
+       "severity": "medium",
+       "sourceId": "okf-6",
+       "status": "resolved",
+       "target": "doc:concepts/bucket.md"
+      },
+      {
+       "anchor": {
+        "line": 1,
+        "path": "concepts/bucket.md",
+        "side": "new",
+        "type": "code-line"
+       },
+       "id": "t7",
+       "intent": "comment",
+       "labels": [],
+       "messages": [
+        {
+         "author": "review-bot",
+         "body": "Title case.",
+         "role": "agent",
+         "time": "<CLOCK>"
+        }
+       ],
+       "origin": "finding",
+       "severity": "medium",
+       "sourceId": "okf-7",
+       "status": "proposed",
+       "target": "patch:okf"
+      }
+     ]
+    }
+   }
+  ],
+  "synced": []
+ },
+ "openspec": {
+  "opened": [
+   {
+    "dir": "<ROOT>/cases/openspec",
+    "docFile": "<ROOT>/cases/openspec/README.md",
+    "patches": [
+     "<ROOT>/cases/openspec/refill.diff"
+    ],
+    "threads": 0
+   },
+   {
+    "dir": "<ROOT>/cases/openspec",
+    "docFile": "<ROOT>/cases/openspec/README.md",
+    "patches": [
+     "<ROOT>/cases/openspec/refill.diff"
+    ],
+    "threads": 0
+   }
+  ],
+  "snapshots": [
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "README.md": "# Add a refill rate\n\nThe limiter gains a refill rate.\n",
+     "openspec/proposal.md": "# Proposal: refill rate\n\n## Why\nBuckets never refill.\n",
+     "openspec/specs/limits/spec.md": "## ADDED Requirements\n\n### Requirement: Refill\nThe limiter SHALL refill buckets.\n",
+     "refill.diff": "diff --git a/limiter.go b/limiter.go\n--- a/limiter.go\n+++ b/limiter.go\n@@ -1,1 +1,1 @@\n-old\n+new\n"
+    },
+    "label": "detected",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/cases/openspec",
+      "openspec": "<ROOT>/cases/openspec/openspec"
+     },
+     "createdAt": 0,
+     "id": "<ID0>",
+     "nextThreadNumber": 1,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [],
+     "title": "Add a refill rate",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/cases/openspec"
+    },
+    "stateFile": {
+     "doc": {
+      "markdown": "# Add a refill rate\n\nThe limiter gains a refill rate.\n",
+      "slug": "README.md",
+      "title": "Add a refill rate",
+      "version": 1
+     },
+     "review": {
+      "count": 0
+     },
+     "seq": 0,
+     "threads": []
+    }
+   },
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "README.md": "# Add a refill rate\n\nThe limiter gains a refill rate.\n",
+     "openspec/proposal.md": "# Proposal: refill rate\n\n## Why\nBuckets never refill.\n",
+     "openspec/specs/limits/spec.md": "## ADDED Requirements\n\n### Requirement: Refill\nThe limiter SHALL refill buckets.\n",
+     "refill.diff": "diff --git a/limiter.go b/limiter.go\n--- a/limiter.go\n+++ b/limiter.go\n@@ -1,1 +1,1 @@\n-old\n+new\n"
+    },
+    "label": "explicit",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/cases/openspec",
+      "openspec": "<ROOT>/cases/openspec/openspec"
+     },
+     "createdAt": 0,
+     "id": "<ID0>",
+     "nextThreadNumber": 1,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [],
+     "title": "Add a refill rate",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/cases/openspec"
+    },
+    "stateFile": {
+     "doc": {
+      "markdown": "# Add a refill rate\n\nThe limiter gains a refill rate.\n",
+      "slug": "README.md",
+      "title": "Add a refill rate",
+      "version": 1
+     },
+     "review": {
+      "count": 0
+     },
+     "seq": 0,
+     "threads": []
+    }
+   }
+  ],
+  "synced": []
+ },
+ "inline": {
+  "opened": [
+   {
+    "dir": "<ROOT>/home/inline/98d5e1e084f0",
+    "docFile": "<ROOT>/home/inline/98d5e1e084f0/index.markdown",
+    "patches": [
+     "<ROOT>/home/inline/98d5e1e084f0/change.patch"
+    ],
+    "threads": 0
+   },
+   {
+    "dir": "<ROOT>/home/inline/c4ae7f2fa92e",
+    "docFile": "<ROOT>/home/inline/c4ae7f2fa92e/index.markdown",
+    "patches": [
+     "<ROOT>/home/inline/c4ae7f2fa92e/fix.patch"
+    ],
+    "threads": 0
+   },
+   {
+    "dir": "<ROOT>/home/inline/a6d6b81c70df",
+    "docFile": "<ROOT>/home/inline/a6d6b81c70df/index.markdown",
+    "patches": [],
+    "threads": 0
+   }
+  ],
+  "snapshots": [
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "change.patch": "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n",
+     "index.markdown": "# Inline design\n\nText without a heading.\n"
+    },
+    "label": "inline with title",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/home/inline/98d5e1e084f0"
+     },
+     "createdAt": 0,
+     "id": "<ID0>",
+     "nextThreadNumber": 1,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [],
+     "title": "Inline design",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/home/inline/98d5e1e084f0"
+    },
+    "stateFile": {
+     "doc": {
+      "markdown": "# Inline design\n\nText without a heading.\n",
+      "slug": "index.markdown",
+      "title": "Inline design",
+      "version": 1
+     },
+     "review": {
+      "count": 0
+     },
+     "seq": 0,
+     "threads": []
+    }
+   },
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "fix.patch": "diff --git a/y b/y\n",
+     "index.markdown": "# Own heading\n\nBody.\n"
+    },
+    "label": "inline with heading",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/home/inline/c4ae7f2fa92e"
+     },
+     "createdAt": 0,
+     "id": "<ID1>",
+     "nextThreadNumber": 1,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [],
+     "title": "Ignored",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/home/inline/c4ae7f2fa92e"
+    },
+    "stateFile": null
+   },
+   {
+    "acceptedSuggestions": [],
+    "files": {
+     "index.markdown": "No heading, no title.\n"
+    },
+    "label": "inline untitled",
+    "review": {
+     "activity": [
+      {
+       "actor": {
+        "id": "agent:test",
+        "kind": "agent",
+        "name": "test-agent"
+       },
+       "at": 0,
+       "kind": "review-created"
+      }
+     ],
+     "bundle": {
+      "dir": "<ROOT>/home/inline/a6d6b81c70df"
+     },
+     "createdAt": 0,
+     "id": "<ID2>",
+     "nextThreadNumber": 1,
+     "participants": [
+      {
+       "id": "agent:test",
+       "kind": "agent",
+       "name": "test-agent"
+      }
+     ],
+     "scope": {
+      "kind": "repository"
+     },
+     "threads": [],
+     "title": "a6d6b81c70df",
+     "updatedAt": 0,
+     "workspaceRoot": "file://<ROOT>/home/inline/a6d6b81c70df"
+    },
+    "stateFile": null
+   }
+  ],
+  "synced": []
+ }
+}

@@ -1,0 +1,51 @@
+{
+  "name": "line_references",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Step one\n## Context\nSee handler.go:42 and also router.ts:100 for context. Also #L55 is relevant.\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Step one\n## Context\nSee handler.go:42 and also router.ts:100 for context. Also #L55 is relevant.\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n"
+        },
+        {
+          "heading": "Context",
+          "key": "context",
+          "body": "See handler.go:42 and also router.ts:100 for context. Also #L55 is relevant.\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": [
+        "Sections are out of order (Context, Design, Alternatives, Behaviour, Diagrams, Open Questions).",
+        "Line references (`handler.go:42`, `router.ts:100`, `#L55`): a person reads this; describe the code in words and name only the top-level module or function."
+      ]
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

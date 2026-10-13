@@ -1,0 +1,43 @@
+[package]
+name = "review_mcp"
+# The app's version: MCP clients see it as serverInfo.version.
+version.workspace = true
+edition.workspace = true
+publish = false
+license = "EPL-2.0"
+
+[lib]
+path = "src/review_mcp.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+review_bundle.workspace = true
+review_code.workspace = true
+review_design.workspace = true
+review_github.workspace = true
+review_graph.workspace = true
+review_index.workspace = true
+review_model.workspace = true
+review_pages.workspace = true
+review_store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+smol.workspace = true
+uuid.workspace = true
+
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+rmcp = { version = "3.5.1", default-features = false, features = ["server", "transport-streamable-http-server"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "net", "macros"] }
+tokio-util = "0.7"
+
+[dev-dependencies]
+regex.workspace = true
+similar.workspace = true
+rmcp = { version = "3.5.1", features = ["client", "transport-streamable-http-client-reqwest"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

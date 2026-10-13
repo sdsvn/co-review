@@ -1,0 +1,2157 @@
+[
+ {
+  "name": "repository, building",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  "root": "/work/repo",
+  "parts": {
+   "patches": [],
+   "building": true
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## Overview\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## Findings and comments (0)\n\nNone yet.\n\n## The repository\n\n_Co-Review is indexing the repository. Where to start, the areas of the code and how they connect appear here when it is ready._\n"
+ },
+ {
+  "name": "repository, built",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "overview": "  \n "
+  },
+  "root": "/work/repo",
+  "parts": {
+   "patches": [],
+   "repository": "# Repository overview: repo\n\nBuilt from somewhere.\n\n## Start here\n\n- [main](src/main.ts)\n\n## Areas\n\n~~~\n## fenced\n~~~\n"
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## Overview\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## Findings and comments (0)\n\nNone yet.\n\n## The repository\n\nBuilt from somewhere.\n\n### Start here\n\n- [main](src/main.ts)\n\n### Areas\n\n~~~\n## fenced\n~~~\n\n"
+ },
+ {
+  "name": "repository, empty section",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1
+  },
+  "root": "/work/repo",
+  "parts": {
+   "patches": [],
+   "repository": ""
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## Overview\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "repository, every thread",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [
+    {
+     "id": "t3",
+     "number": 3,
+     "location": {
+      "kind": "range",
+      "uri": "file:///work/repo/src/api/handler.ts",
+      "range": {
+       "start": {
+        "line": 9,
+        "character": 0
+       },
+       "end": {
+        "line": 14,
+        "character": 4
+       }
+      },
+      "symbol": "handle",
+      "anchor": {
+       "text": "line 0 has ``` ticks\nline 1 has ``` ticks\nline 2 has ``` ticks\nline 3 has ``` ticks\nline 4 has ``` ticks\nline 5 has ``` ticks\nline 6 has ``` ticks\nline 7 has ``` ticks\nline 8 has ``` ticks\nline 9 has ``` ticks\nline 10 has ``` ticks\nline 11 has ``` ticks\nline 12 has ``` ticks\nline 13 has ``` ticks\nline 14 has ``` ticks\n\n"
+      }
+     },
+     "messages": [
+      {
+       "id": "m1",
+       "author": {
+        "id": "agent:claude",
+        "kind": "agent",
+        "name": "Claude"
+       },
+       "body": "## Missing **error** handling\n\nThe handler drops errors.\n# A heading in a message",
+       "createdAt": 1
+      },
+      {
+       "id": "m2",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "  ",
+       "createdAt": 1
+      },
+      {
+       "id": "m3",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "Agreed.\nLet us fix it.",
+       "createdAt": 1
+      }
+     ],
+     "status": "proposed",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1,
+     "severity": "high",
+     "labels": [
+      "API"
+     ]
+    },
+    {
+     "id": "t1",
+     "number": 1,
+     "location": {
+      "kind": "line",
+      "uri": "file:///work/repo/src/db/store.ts",
+      "range": {
+       "start": {
+        "line": 4,
+        "character": 0
+       },
+       "end": {
+        "line": 4,
+        "character": 4
+       }
+      },
+      "anchor": {
+       "text": "   const x = 1;   "
+      }
+     },
+     "messages": [
+      {
+       "id": "m4",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "Why a constant here?",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1,
+     "severity": "low"
+    },
+    {
+     "id": "t2",
+     "number": 2,
+     "location": {
+      "kind": "file",
+      "uri": "file:///work/repo/README.md"
+     },
+     "messages": [
+      {
+       "id": "m5",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+       "createdAt": 1
+      }
+     ],
+     "status": "resolved",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1,
+     "severity": "medium"
+    },
+    {
+     "id": "t4",
+     "number": 4,
+     "location": {
+      "kind": "repository"
+     },
+     "messages": [
+      {
+       "id": "m6",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "### Overall the structure is fine",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1
+    },
+    {
+     "id": "t5",
+     "number": 5,
+     "location": {
+      "kind": "file",
+      "uri": "file:///elsewhere/other.ts"
+     },
+     "messages": [
+      {
+       "id": "m7",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "Outside the root",
+       "createdAt": 1
+      }
+     ],
+     "status": "resolved",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1
+    },
+    {
+     "id": "t6",
+     "number": 6,
+     "location": {
+      "kind": "file",
+      "uri": "file:///work/repo/src/db/schema%20v2.sql",
+      "range": {
+       "start": {
+        "line": 0,
+        "character": 0
+       },
+       "end": {
+        "line": 0,
+        "character": 4
+       }
+      }
+     },
+     "messages": [
+      {
+       "id": "m8",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "Encoded path, emoji 😀😀😀 éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1,
+     "labels": [
+      "Database"
+     ]
+    },
+    {
+     "id": "t7",
+     "number": 7,
+     "location": {
+      "kind": "document",
+      "uri": "file:///home/.co-review/workspaces/abc/pages/r1/overview.md"
+     },
+     "messages": [
+      {
+       "id": "m9",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "A comment on the overview page itself",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1
+    },
+    {
+     "id": "t8",
+     "number": 8,
+     "location": {
+      "kind": "directory",
+      "uri": "file:///work/repo/src"
+     },
+     "messages": [],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1
+    },
+    {
+     "id": "t9",
+     "number": 9,
+     "location": {
+      "kind": "line",
+      "uri": "file:///work/repo/src/api/routes.ts",
+      "range": {
+       "start": {
+        "line": 1,
+        "character": 0
+       },
+       "end": {
+        "line": 1,
+        "character": 4
+       }
+      }
+     },
+     "messages": [
+      {
+       "id": "m10",
+       "author": {
+        "id": "agent:claude",
+        "kind": "agent",
+        "name": "Claude"
+       },
+       "body": "Second in API",
+       "createdAt": 1
+      }
+     ],
+     "status": "proposed",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1,
+     "labels": [
+      "API"
+     ]
+    }
+   ],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "agent": {
+    "id": "claude",
+    "name": "Claude"
+   },
+   "verdict": {
+    "decision": "request-changes",
+    "summary": "s",
+    "submittedAt": 1,
+    "count": 2
+   },
+   "overview": "# The change\n\nIt rewrites the handler.\n\n## How it works\n\n```mermaid\n%% id: flow\nflowchart LR\n  A --> B\n```\n\n````md\n```\n# not a heading\n```\n## still in the outer fence\n````\n\n### Risks\n###### Six hashes stay\n#NoSpace\n"
+  },
+  "root": "/work/repo",
+  "parts": {
+   "patches": [],
+   "repository": "# Repository overview: repo\n\nBuilt from somewhere.\n\n## Start here\n\n- [main](src/main.ts)\n\n## Areas\n\n~~~\n## fenced\n~~~\n"
+  },
+  "expected": "# Synthetic review\n\n8 threads, first pass by Claude: 2 proposed, 4 open, 2 resolved. Round 2 submitted: request-changes. Accept or dismiss findings in the Review panel, open one with its link, or comment on this page.\n\n## Overview\n\nIt rewrites the handler.\n\n### How it works\n\n```mermaid\n%% id: flow\nflowchart LR\n  A --> B\n```\n\n````md\n```\n# not a heading\n```\n## still in the outer fence\n````\n\n#### Risks\n###### Six hashes stay\n#NoSpace\n\n## Findings and comments (8)\n\n### src (1)\n\n#### #1 Why a constant here?\n\n**low** · open · [src/db/store.ts:5](src/db/store.ts:5)\n\n```\n   const x = 1;\n```\n\n> **Ann:** Why a constant here?\n\n### Repository (4)\n\n#### #2 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n**medium** · resolved · [README.md](README.md)\n\n> **Ann:** xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n#### #4 Overall the structure is fine\n\nopen · the repository\n\n> **Ann:** ### Overall the structure is fine\n\n#### #5 Outside the root\n\nresolved · the repository\n\n> **Ann:** Outside the root\n\n#### #8 \n\nopen · [src](src)\n\n### API (2)\n\n#### #3 Missing **error** handling\n\n**high** · proposed — accept or dismiss it · [src/api/handler.ts:10-15](src/api/handler.ts:10-15) · `handle`\n\n````\nline 0 has ``` ticks\nline 1 has ``` ticks\nline 2 has ``` ticks\nline 3 has ``` ticks\nline 4 has ``` ticks\nline 5 has ``` ticks\nline 6 has ``` ticks\nline 7 has ``` ticks\nline 8 has ``` ticks\nline 9 has ``` ticks\nline 10 has ``` ticks\nline 11 has ``` ticks\n… 3 more lines\n````\n\n> **Claude:** ## Missing **error** handling\n> \n> The handler drops errors.\n> # A heading in a message\n\n> **Ann:** Agreed.\n> Let us fix it.\n\n#### #9 Second in API\n\nproposed — accept or dismiss it · [src/api/routes.ts:2](src/api/routes.ts:2)\n\n> **Claude:** Second in API\n\n### Database (1)\n\n#### #6 Encoded path, emoji 😀😀😀 ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé\n\nopen · [src/db/schema v2.sql:1](src/db/schema v2.sql:1)\n\n> **Ann:** Encoded path, emoji 😀😀😀 éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé\n\n## The repository\n\nBuilt from somewhere.\n\n### Start here\n\n- [main](src/main.ts)\n\n### Areas\n\n~~~\n## fenced\n~~~\n\n"
+ },
+ {
+  "name": "repository, one thread, approved",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [
+    {
+     "id": "t1",
+     "number": 1,
+     "location": {
+      "kind": "line",
+      "uri": "file:///work/repo/src/db/store.ts",
+      "range": {
+       "start": {
+        "line": 4,
+        "character": 0
+       },
+       "end": {
+        "line": 4,
+        "character": 4
+       }
+      },
+      "anchor": {
+       "text": "   const x = 1;   "
+      }
+     },
+     "messages": [
+      {
+       "id": "m4",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "Why a constant here?",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1,
+     "severity": "low"
+    }
+   ],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "verdict": {
+    "decision": "approve",
+    "summary": "",
+    "submittedAt": 1,
+    "count": 1
+   }
+  },
+  "root": "/work/repo/",
+  "parts": {
+   "patches": []
+  },
+  "expected": "# Synthetic review\n\n1 thread: 0 proposed, 1 open, 0 resolved. Round 1 submitted: approve. Accept or dismiss findings in the Review panel, open one with its link, or comment on this page.\n\n## Overview\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## Findings and comments (1)\n\n### src (1)\n\n#### #1 Why a constant here?\n\n**low** · open · [src/db/store.ts:5](src/db/store.ts:5)\n\n```\n   const x = 1;\n```\n\n> **Ann:** Why a constant here?\n"
+ },
+ {
+  "name": "repository, no findings, comment verdict",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "agent": {
+    "id": "codex",
+    "name": "Codex"
+   },
+   "verdict": {
+    "decision": "comment",
+    "summary": "",
+    "submittedAt": 1,
+    "count": 3
+   }
+  },
+  "root": "/work/repo",
+  "parts": {
+   "patches": [],
+   "building": true
+  },
+  "expected": "# Synthetic review\n\nNo findings yet. Round 3 submitted: comment.\n\n## Overview\n\n_Codex has not written an overview: what this does, how it works (a flow chart) and what else it affects._\n\n## Findings and comments (0)\n\nNone yet.\n\n## The repository\n\n_Co-Review is indexing the repository. Where to start, the areas of the code and how they connect appear here when it is ready._\n"
+ },
+ {
+  "name": "change, radius",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [
+    {
+     "id": "t1",
+     "number": 1,
+     "location": {
+      "kind": "patch",
+      "uri": "file:///work/reviews/change/change.patch",
+      "patchAnchor": {
+       "type": "code-line",
+       "path": "src/api/handler.ts",
+       "line": 12
+      }
+     },
+     "messages": [
+      {
+       "id": "m11",
+       "author": {
+        "id": "agent:claude",
+        "kind": "agent",
+        "name": "Claude"
+       },
+       "body": "Off by one",
+       "createdAt": 1
+      }
+     ],
+     "status": "proposed",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1,
+     "severity": "high"
+    },
+    {
+     "id": "t2",
+     "number": 2,
+     "location": {
+      "kind": "patch",
+      "uri": "file:///work/reviews/change/change.patch",
+      "patchAnchor": {
+       "type": "patch"
+      }
+     },
+     "messages": [
+      {
+       "id": "m12",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "Whole patch comment",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1
+    },
+    {
+     "id": "t3",
+     "number": 3,
+     "location": {
+      "kind": "patch",
+      "patchAnchor": {
+       "type": "code-range",
+       "path": "src/db/store.ts",
+       "startLine": 4,
+       "endLine": 9
+      }
+     },
+     "messages": [
+      {
+       "id": "m13",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "Range in the store",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1,
+     "labels": [
+      "Storage"
+     ]
+    },
+    {
+     "id": "t4",
+     "number": 4,
+     "location": {
+      "kind": "document",
+      "uri": "file:///work/reviews/change/PR.md",
+      "docAnchor": {
+       "type": "text",
+       "exact": "This pull request rewrites the handler and is a long sentence over sixty characters"
+      }
+     },
+     "messages": [
+      {
+       "id": "m14",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "On the PR text",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1
+    },
+    {
+     "id": "t5",
+     "number": 5,
+     "location": {
+      "kind": "document",
+      "uri": "file:///work/reviews/change/design.md",
+      "docAnchor": {
+       "type": "mermaid-node",
+       "blockId": "flow",
+       "nodeId": "B"
+      }
+     },
+     "messages": [
+      {
+       "id": "m15",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "On a diagram node",
+       "createdAt": 1
+      }
+     ],
+     "status": "resolved",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1
+    }
+   ],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   },
+   "agent": {
+    "id": "claude",
+    "name": "Claude"
+   },
+   "overview": "# The change\n\nIt rewrites the handler.\n\n## How it works\n\n```mermaid\n%% id: flow\nflowchart LR\n  A --> B\n```\n\n````md\n```\n# not a heading\n```\n## still in the outer fence\n````\n\n### Risks\n###### Six hashes stay\n#NoSpace\n"
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ],
+   "radius": {
+    "changed": [
+     {
+      "id": "a",
+      "label": "handle`Request`",
+      "file": "src/api/handler.ts",
+      "line": 10,
+      "area": "API"
+     },
+     {
+      "id": "b",
+      "label": "Store \"main\"",
+      "file": "src/db/store.ts"
+     }
+    ],
+    "affected": [
+     {
+      "id": "c",
+      "label": "router",
+      "file": "src/api/routes.ts",
+      "line": 3,
+      "area": "API",
+      "hops": 1,
+      "direction": "uses it"
+     },
+     {
+      "id": "d",
+      "label": "main",
+      "file": "src/main.ts",
+      "line": 1,
+      "hops": 2,
+      "direction": "uses it"
+     },
+     {
+      "id": "e",
+      "label": "query",
+      "file": "src/db/query.ts",
+      "line": 7,
+      "area": "Database",
+      "hops": 1,
+      "direction": "it uses"
+     },
+     {
+      "id": "f",
+      "label": "log",
+      "file": "src/log.ts",
+      "hops": 1,
+      "direction": "it uses"
+     }
+    ],
+    "edges": [
+     {
+      "from": "c",
+      "to": "a"
+     },
+     {
+      "from": "d",
+      "to": "c"
+     },
+     {
+      "from": "a",
+      "to": "e"
+     },
+     {
+      "from": "b",
+      "to": "f"
+     },
+     {
+      "from": "x",
+      "to": "a"
+     }
+    ],
+    "files": [
+     "src/api/routes.ts",
+     "src/main.ts",
+     "src/db/query.ts",
+     "src/log.ts"
+    ]
+   }
+  },
+  "expected": "# Synthetic review\n\n5 threads, first pass by Claude: 1 proposed, 3 open, 1 resolved. Accept or dismiss findings in the Review panel, open one with its link, or comment on this page.\n\n## What the change does\n\nIt rewrites the handler.\n\n### How it works\n\n```mermaid\n%% id: flow\nflowchart LR\n  A --> B\n```\n\n````md\n```\n# not a heading\n```\n## still in the outer fence\n````\n\n#### Risks\n###### Six hashes stay\n#NoSpace\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Blast radius\n\n**Changed** (2): [`handle'Request'`](src/api/handler.ts:10), [`Store \"main\"`](src/db/store.ts)\n\n**Affected** (4), by area: what uses the changed code (up to two steps away), and what it uses.\n\n- **API**: [`router`](src/api/routes.ts:3) (uses it)\n- **Other**: [`main`](src/main.ts:1) (uses it, 2 steps), [`log`](src/log.ts) (it uses)\n- **Database**: [`query`](src/db/query.ts:7) (it uses)\n\n```mermaid\n%% id: blast-radius\nflowchart LR\n    n0[\"handle`Request`\"]:::changed\n    n1[\"Store 'main'\"]:::changed\n    n2[\"router\"]\n    n3[\"main\"]\n    n4[\"query\"]\n    n5[\"log\"]\n    n2 --> n0\n    n3 --> n2\n    n0 --> n4\n    n1 --> n5\n    classDef changed stroke-width:3px\n```\n\n## Findings and comments (5)\n\n### src/api/handler.ts (1)\n\n#### #1 Off by one\n\n**high** · proposed — accept or dismiss it · src/api/handler.ts:12\n\n> **Claude:** Off by one\n\n### Repository (1)\n\n#### #2 Whole patch comment\n\nopen · change.patch\n\n> **Ann:** Whole patch comment\n\n### Storage (1)\n\n#### #3 Range in the store\n\nopen · src/db/store.ts:4\n\n> **Ann:** Range in the store\n\n### The document (2)\n\n#### #4 On the PR text\n\nopen · the document, “This pull request rewrites the handler and is a long sentenc…”\n\n> **Ann:** On the PR text\n\n#### #5 On a diagram node\n\nresolved · the document, diagram flow › B\n\n> **Ann:** On a diagram node\n"
+ },
+ {
+  "name": "change, wide radius",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ],
+   "radius": {
+    "changed": [
+     {
+      "id": "c0",
+      "label": "changed0",
+      "file": "src/c0.ts",
+      "line": 0,
+      "area": "Core"
+     },
+     {
+      "id": "c1",
+      "label": "changed1",
+      "file": "src/c1.ts",
+      "line": 1,
+      "area": "Core"
+     },
+     {
+      "id": "c2",
+      "label": "changed2",
+      "file": "src/c2.ts",
+      "line": 2,
+      "area": "Core"
+     },
+     {
+      "id": "c3",
+      "label": "changed3",
+      "file": "src/c3.ts",
+      "line": 3,
+      "area": "Core"
+     },
+     {
+      "id": "c4",
+      "label": "changed4",
+      "file": "src/c4.ts",
+      "line": 4,
+      "area": "Core"
+     },
+     {
+      "id": "c5",
+      "label": "changed5",
+      "file": "src/c5.ts",
+      "line": 5,
+      "area": "Core"
+     },
+     {
+      "id": "c6",
+      "label": "changed6",
+      "file": "src/c6.ts",
+      "line": 6,
+      "area": "Core"
+     },
+     {
+      "id": "c7",
+      "label": "changed7",
+      "file": "src/c7.ts",
+      "line": 7,
+      "area": "Core"
+     },
+     {
+      "id": "c8",
+      "label": "changed8",
+      "file": "src/c8.ts",
+      "line": 8,
+      "area": "Core"
+     },
+     {
+      "id": "c9",
+      "label": "changed9",
+      "file": "src/c9.ts",
+      "line": 9,
+      "area": "Core"
+     },
+     {
+      "id": "c10",
+      "label": "changed10",
+      "file": "src/c10.ts",
+      "line": 10,
+      "area": "Core"
+     },
+     {
+      "id": "c11",
+      "label": "changed11",
+      "file": "src/c11.ts",
+      "line": 11,
+      "area": "Core"
+     },
+     {
+      "id": "c12",
+      "label": "changed12",
+      "file": "src/c12.ts",
+      "line": 12,
+      "area": "Core"
+     },
+     {
+      "id": "c13",
+      "label": "changed13",
+      "file": "src/c13.ts",
+      "line": 13,
+      "area": "Core"
+     },
+     {
+      "id": "c14",
+      "label": "changed14",
+      "file": "src/c14.ts",
+      "line": 14,
+      "area": "Core"
+     },
+     {
+      "id": "c15",
+      "label": "changed15",
+      "file": "src/c15.ts",
+      "line": 15,
+      "area": "Core"
+     },
+     {
+      "id": "c16",
+      "label": "changed16",
+      "file": "src/c16.ts",
+      "line": 16,
+      "area": "Core"
+     },
+     {
+      "id": "c17",
+      "label": "changed17",
+      "file": "src/c17.ts",
+      "line": 17,
+      "area": "Core"
+     },
+     {
+      "id": "c18",
+      "label": "changed18",
+      "file": "src/c18.ts",
+      "line": 18,
+      "area": "Core"
+     },
+     {
+      "id": "c19",
+      "label": "changed19",
+      "file": "src/c19.ts",
+      "line": 19,
+      "area": "Core"
+     }
+    ],
+    "affected": [
+     {
+      "id": "a0",
+      "label": "affected0",
+      "file": "src/a0.ts",
+      "line": 1,
+      "hops": 1,
+      "direction": "it uses"
+     },
+     {
+      "id": "a1",
+      "label": "affected1",
+      "file": "src/a1.ts",
+      "line": 2,
+      "area": "Odd",
+      "hops": 2,
+      "direction": "uses it"
+     },
+     {
+      "id": "a2",
+      "label": "affected2",
+      "file": "src/a2.ts",
+      "line": 3,
+      "hops": 1,
+      "direction": "uses it"
+     },
+     {
+      "id": "a3",
+      "label": "affected3",
+      "file": "src/a3.ts",
+      "line": 4,
+      "area": "Odd",
+      "hops": 2,
+      "direction": "it uses"
+     },
+     {
+      "id": "a4",
+      "label": "affected4",
+      "file": "src/a4.ts",
+      "line": 5,
+      "hops": 1,
+      "direction": "uses it"
+     },
+     {
+      "id": "a5",
+      "label": "affected5",
+      "file": "src/a5.ts",
+      "line": 6,
+      "area": "Odd",
+      "hops": 2,
+      "direction": "uses it"
+     },
+     {
+      "id": "a6",
+      "label": "affected6",
+      "file": "src/a6.ts",
+      "line": 7,
+      "hops": 1,
+      "direction": "it uses"
+     },
+     {
+      "id": "a7",
+      "label": "affected7",
+      "file": "src/a7.ts",
+      "line": 8,
+      "area": "Odd",
+      "hops": 2,
+      "direction": "uses it"
+     },
+     {
+      "id": "a8",
+      "label": "affected8",
+      "file": "src/a8.ts",
+      "line": 9,
+      "hops": 1,
+      "direction": "uses it"
+     },
+     {
+      "id": "a9",
+      "label": "affected9",
+      "file": "src/a9.ts",
+      "line": 10,
+      "area": "Odd",
+      "hops": 2,
+      "direction": "it uses"
+     },
+     {
+      "id": "a10",
+      "label": "affected10",
+      "file": "src/a10.ts",
+      "line": 11,
+      "hops": 1,
+      "direction": "uses it"
+     },
+     {
+      "id": "a11",
+      "label": "affected11",
+      "file": "src/a11.ts",
+      "line": 12,
+      "area": "Odd",
+      "hops": 2,
+      "direction": "uses it"
+     },
+     {
+      "id": "a12",
+      "label": "affected12",
+      "file": "src/a12.ts",
+      "line": 13,
+      "hops": 1,
+      "direction": "it uses"
+     },
+     {
+      "id": "a13",
+      "label": "affected13",
+      "file": "src/a13.ts",
+      "line": 14,
+      "area": "Odd",
+      "hops": 2,
+      "direction": "uses it"
+     },
+     {
+      "id": "a14",
+      "label": "affected14",
+      "file": "src/a14.ts",
+      "line": 15,
+      "hops": 1,
+      "direction": "uses it"
+     },
+     {
+      "id": "a15",
+      "label": "affected15",
+      "file": "src/a15.ts",
+      "line": 16,
+      "area": "Odd",
+      "hops": 2,
+      "direction": "it uses"
+     },
+     {
+      "id": "a16",
+      "label": "affected16",
+      "file": "src/a16.ts",
+      "line": 17,
+      "hops": 1,
+      "direction": "uses it"
+     },
+     {
+      "id": "a17",
+      "label": "affected17",
+      "file": "src/a17.ts",
+      "line": 18,
+      "area": "Odd",
+      "hops": 2,
+      "direction": "uses it"
+     },
+     {
+      "id": "a18",
+      "label": "affected18",
+      "file": "src/a18.ts",
+      "line": 19,
+      "hops": 1,
+      "direction": "it uses"
+     },
+     {
+      "id": "a19",
+      "label": "affected19",
+      "file": "src/a19.ts",
+      "line": 20,
+      "area": "Odd",
+      "hops": 2,
+      "direction": "uses it"
+     }
+    ],
+    "edges": [
+     {
+      "from": "a0",
+      "to": "c0"
+     },
+     {
+      "from": "a1",
+      "to": "c7"
+     },
+     {
+      "from": "a2",
+      "to": "c14"
+     },
+     {
+      "from": "a3",
+      "to": "c1"
+     },
+     {
+      "from": "a4",
+      "to": "c8"
+     },
+     {
+      "from": "a5",
+      "to": "c15"
+     },
+     {
+      "from": "a6",
+      "to": "c2"
+     },
+     {
+      "from": "a7",
+      "to": "c9"
+     },
+     {
+      "from": "a8",
+      "to": "c16"
+     },
+     {
+      "from": "a9",
+      "to": "c3"
+     },
+     {
+      "from": "a10",
+      "to": "c10"
+     },
+     {
+      "from": "a11",
+      "to": "c17"
+     },
+     {
+      "from": "a12",
+      "to": "c4"
+     },
+     {
+      "from": "a13",
+      "to": "c11"
+     },
+     {
+      "from": "a14",
+      "to": "c18"
+     },
+     {
+      "from": "a15",
+      "to": "c5"
+     },
+     {
+      "from": "a16",
+      "to": "c12"
+     },
+     {
+      "from": "a17",
+      "to": "c19"
+     },
+     {
+      "from": "a18",
+      "to": "c6"
+     },
+     {
+      "from": "a19",
+      "to": "c13"
+     },
+     {
+      "from": "a0",
+      "to": "c0"
+     },
+     {
+      "from": "a1",
+      "to": "c7"
+     },
+     {
+      "from": "a2",
+      "to": "c14"
+     },
+     {
+      "from": "a3",
+      "to": "c1"
+     },
+     {
+      "from": "a4",
+      "to": "c8"
+     },
+     {
+      "from": "a5",
+      "to": "c15"
+     },
+     {
+      "from": "a6",
+      "to": "c2"
+     },
+     {
+      "from": "a7",
+      "to": "c9"
+     },
+     {
+      "from": "a8",
+      "to": "c16"
+     },
+     {
+      "from": "a9",
+      "to": "c3"
+     },
+     {
+      "from": "a10",
+      "to": "c10"
+     },
+     {
+      "from": "a11",
+      "to": "c17"
+     },
+     {
+      "from": "a12",
+      "to": "c4"
+     },
+     {
+      "from": "a13",
+      "to": "c11"
+     },
+     {
+      "from": "a14",
+      "to": "c18"
+     },
+     {
+      "from": "a15",
+      "to": "c5"
+     },
+     {
+      "from": "a16",
+      "to": "c12"
+     },
+     {
+      "from": "a17",
+      "to": "c19"
+     },
+     {
+      "from": "a18",
+      "to": "c6"
+     },
+     {
+      "from": "a19",
+      "to": "c13"
+     },
+     {
+      "from": "a0",
+      "to": "c0"
+     },
+     {
+      "from": "a1",
+      "to": "c7"
+     },
+     {
+      "from": "a2",
+      "to": "c14"
+     },
+     {
+      "from": "a3",
+      "to": "c1"
+     },
+     {
+      "from": "a4",
+      "to": "c8"
+     },
+     {
+      "from": "a5",
+      "to": "c15"
+     },
+     {
+      "from": "a6",
+      "to": "c2"
+     },
+     {
+      "from": "a7",
+      "to": "c9"
+     },
+     {
+      "from": "a8",
+      "to": "c16"
+     },
+     {
+      "from": "a9",
+      "to": "c3"
+     }
+    ],
+    "files": []
+   }
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Blast radius\n\n**Changed** (20): [`changed0`](src/c0.ts), [`changed1`](src/c1.ts:1), [`changed2`](src/c2.ts:2), [`changed3`](src/c3.ts:3), [`changed4`](src/c4.ts:4), [`changed5`](src/c5.ts:5), [`changed6`](src/c6.ts:6), [`changed7`](src/c7.ts:7), [`changed8`](src/c8.ts:8), [`changed9`](src/c9.ts:9), [`changed10`](src/c10.ts:10), [`changed11`](src/c11.ts:11), [`changed12`](src/c12.ts:12), [`changed13`](src/c13.ts:13), [`changed14`](src/c14.ts:14), [`changed15`](src/c15.ts:15), [`changed16`](src/c16.ts:16), [`changed17`](src/c17.ts:17), [`changed18`](src/c18.ts:18), [`changed19`](src/c19.ts:19)\n\n**Affected** (20), by area: what uses the changed code (up to two steps away), and what it uses.\n\n- **Other**: [`affected0`](src/a0.ts:1) (it uses), [`affected2`](src/a2.ts:3) (uses it), [`affected4`](src/a4.ts:5) (uses it), [`affected6`](src/a6.ts:7) (it uses), [`affected8`](src/a8.ts:9) (uses it), [`affected10`](src/a10.ts:11) (uses it), [`affected12`](src/a12.ts:13) (it uses), [`affected14`](src/a14.ts:15) (uses it), [`affected16`](src/a16.ts:17) (uses it), [`affected18`](src/a18.ts:19) (it uses)\n- **Odd**: [`affected1`](src/a1.ts:2) (uses it, 2 steps), [`affected3`](src/a3.ts:4) (it uses, 2 steps), [`affected5`](src/a5.ts:6) (uses it, 2 steps), [`affected7`](src/a7.ts:8) (uses it, 2 steps), [`affected9`](src/a9.ts:10) (it uses, 2 steps), [`affected11`](src/a11.ts:12) (uses it, 2 steps), [`affected13`](src/a13.ts:14) (uses it, 2 steps), [`affected15`](src/a15.ts:16) (it uses, 2 steps), [`affected17`](src/a17.ts:18) (uses it, 2 steps), [`affected19`](src/a19.ts:20) (uses it, 2 steps)\n\n```mermaid\n%% id: blast-radius\nflowchart LR\n    n0[\"changed0\"]:::changed\n    n1[\"changed1\"]:::changed\n    n2[\"changed2\"]:::changed\n    n3[\"changed3\"]:::changed\n    n4[\"changed4\"]:::changed\n    n5[\"changed5\"]:::changed\n    n6[\"changed6\"]:::changed\n    n7[\"changed7\"]:::changed\n    n8[\"changed8\"]:::changed\n    n9[\"changed9\"]:::changed\n    n10[\"changed10\"]:::changed\n    n11[\"changed11\"]:::changed\n    n12[\"changed12\"]:::changed\n    n13[\"changed13\"]:::changed\n    n14[\"changed14\"]:::changed\n    n15[\"changed15\"]:::changed\n    n16[\"changed16\"]:::changed\n    n17[\"changed17\"]:::changed\n    n18[\"changed18\"]:::changed\n    n19[\"changed19\"]:::changed\n    n20[\"affected0\"]\n    n21[\"affected1\"]\n    n22[\"affected2\"]\n    n23[\"affected3\"]\n    n24[\"affected4\"]\n    n25[\"affected5\"]\n    n26[\"affected6\"]\n    n27[\"affected7\"]\n    n28[\"affected8\"]\n    n29[\"affected9\"]\n    n20 --> n0\n    n21 --> n7\n    n22 --> n14\n    n23 --> n1\n    n24 --> n8\n    n25 --> n15\n    n26 --> n2\n    n27 --> n9\n    n28 --> n16\n    n29 --> n3\n    n20 --> n0\n    n21 --> n7\n    n22 --> n14\n    n23 --> n1\n    n24 --> n8\n    n25 --> n15\n    n26 --> n2\n    n27 --> n9\n    n28 --> n16\n    n29 --> n3\n    n20 --> n0\n    n21 --> n7\n    n22 --> n14\n    n23 --> n1\n    n24 --> n8\n    n25 --> n15\n    n26 --> n2\n    n27 --> n9\n    n28 --> n16\n    n29 --> n3\n    classDef changed stroke-width:3px\n```\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "change, no graph, two patches",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "patches": [
+    {
+     "name": "part-1",
+     "files": [
+      {
+       "path": "a.ts",
+       "added": 1,
+       "removed": 1
+      }
+     ]
+    },
+    {
+     "name": "part-2",
+     "files": [
+      {
+       "path": "b.ts",
+       "added": 0,
+       "removed": 5
+      },
+      {
+       "path": "c.ts",
+       "added": 2,
+       "removed": 0
+      }
+     ]
+    }
+   ],
+   "radius": "no graph"
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change: part-1\n\n1 file, +1 −1.\n\n- `a.ts` +1 −1\n\n## The change: part-2\n\n2 files, +2 −5.\n\n- `b.ts` +0 −5\n- `c.ts` +2 −0\n\n## Blast radius\n\n_With [Graphify](https://graphify.net) installed, this lists what else the change affects: what calls, imports or implements the code it changes._\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "change, radius without definitions",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ],
+   "radius": {
+    "changed": [],
+    "affected": [],
+    "edges": [],
+    "files": []
+   }
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Blast radius\n\nThe repository's code graph has no definitions in the changed lines.\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "change, radius without affected",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ],
+   "radius": {
+    "changed": [
+     {
+      "id": "a",
+      "label": "handle`Request`",
+      "file": "src/api/handler.ts",
+      "line": 10,
+      "area": "API"
+     },
+     {
+      "id": "b",
+      "label": "Store \"main\"",
+      "file": "src/db/store.ts"
+     }
+    ],
+    "affected": [],
+    "edges": [],
+    "files": []
+   }
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Blast radius\n\n**Changed** (2): [`handle'Request'`](src/api/handler.ts:10), [`Store \"main\"`](src/db/store.ts)\n\nNothing else in the repository's code graph calls, imports or implements them.\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "change, radius without edges",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ],
+   "radius": {
+    "changed": [
+     {
+      "id": "a",
+      "label": "handle`Request`",
+      "file": "src/api/handler.ts",
+      "line": 10,
+      "area": "API"
+     },
+     {
+      "id": "b",
+      "label": "Store \"main\"",
+      "file": "src/db/store.ts"
+     }
+    ],
+    "affected": [
+     {
+      "id": "c",
+      "label": "router",
+      "file": "src/api/routes.ts",
+      "line": 3,
+      "area": "API",
+      "hops": 1,
+      "direction": "uses it"
+     },
+     {
+      "id": "d",
+      "label": "main",
+      "file": "src/main.ts",
+      "line": 1,
+      "hops": 2,
+      "direction": "uses it"
+     },
+     {
+      "id": "e",
+      "label": "query",
+      "file": "src/db/query.ts",
+      "line": 7,
+      "area": "Database",
+      "hops": 1,
+      "direction": "it uses"
+     },
+     {
+      "id": "f",
+      "label": "log",
+      "file": "src/log.ts",
+      "hops": 1,
+      "direction": "it uses"
+     }
+    ],
+    "edges": [
+     {
+      "from": "zz",
+      "to": "a"
+     }
+    ],
+    "files": [
+     "src/api/routes.ts",
+     "src/main.ts",
+     "src/db/query.ts",
+     "src/log.ts"
+    ]
+   }
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Blast radius\n\n**Changed** (2): [`handle'Request'`](src/api/handler.ts:10), [`Store \"main\"`](src/db/store.ts)\n\n**Affected** (4), by area: what uses the changed code (up to two steps away), and what it uses.\n\n- **API**: [`router`](src/api/routes.ts:3) (uses it)\n- **Other**: [`main`](src/main.ts:1) (uses it, 2 steps), [`log`](src/log.ts) (it uses)\n- **Database**: [`query`](src/db/query.ts:7) (it uses)\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "change, building",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ],
+   "building": true
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Blast radius\n\n_Co-Review is building the code graph of the repository (Graphify). What else the change affects appears here when it is ready._\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "change without repository, building",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ],
+   "building": true
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "change, no patches",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "patches": []
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## Overview\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "pull request, full",
+  "review": {
+   "id": "r1",
+   "title": "PR #42: Rewrite",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [
+    {
+     "id": "t1",
+     "number": 1,
+     "location": {
+      "kind": "patch",
+      "uri": "file:///work/reviews/change/change.patch",
+      "patchAnchor": {
+       "type": "code-line",
+       "path": "src/api/handler.ts",
+       "line": 12
+      }
+     },
+     "messages": [
+      {
+       "id": "m11",
+       "author": {
+        "id": "agent:claude",
+        "kind": "agent",
+        "name": "Claude"
+       },
+       "body": "Off by one",
+       "createdAt": 1
+      }
+     ],
+     "status": "proposed",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1,
+     "severity": "high"
+    },
+    {
+     "id": "t2",
+     "number": 2,
+     "location": {
+      "kind": "patch",
+      "uri": "file:///work/reviews/change/change.patch",
+      "patchAnchor": {
+       "type": "patch"
+      }
+     },
+     "messages": [
+      {
+       "id": "m12",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "Whole patch comment",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1
+    },
+    {
+     "id": "t3",
+     "number": 3,
+     "location": {
+      "kind": "patch",
+      "patchAnchor": {
+       "type": "code-range",
+       "path": "src/db/store.ts",
+       "startLine": 4,
+       "endLine": 9
+      }
+     },
+     "messages": [
+      {
+       "id": "m13",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "Range in the store",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1,
+     "labels": [
+      "Storage"
+     ]
+    },
+    {
+     "id": "t4",
+     "number": 4,
+     "location": {
+      "kind": "document",
+      "uri": "file:///work/reviews/change/PR.md",
+      "docAnchor": {
+       "type": "text",
+       "exact": "This pull request rewrites the handler and is a long sentence over sixty characters"
+      }
+     },
+     "messages": [
+      {
+       "id": "m14",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "On the PR text",
+       "createdAt": 1
+      }
+     ],
+     "status": "open",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1
+    },
+    {
+     "id": "t5",
+     "number": 5,
+     "location": {
+      "kind": "document",
+      "uri": "file:///work/reviews/change/design.md",
+      "docAnchor": {
+       "type": "mermaid-node",
+       "blockId": "flow",
+       "nodeId": "B"
+      }
+     },
+     "messages": [
+      {
+       "id": "m15",
+       "author": {
+        "id": "human:ann@example.com",
+        "kind": "human",
+        "name": "Ann"
+       },
+       "body": "On a diagram node",
+       "createdAt": 1
+      }
+     ],
+     "status": "resolved",
+     "intent": "comment",
+     "createdAt": 1,
+     "updatedAt": 1
+    }
+   ],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "pr": {
+    "title": "Rewrite the handler",
+    "number": 42,
+    "branch": "feature/x",
+    "base": "main",
+    "commits": 3,
+    "url": "https://github.com/o/r/pull/42",
+    "body": "# Rewrite the handler\n\nThe handler now returns errors.\n\n## Testing\n\n- unit tests\n"
+   },
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ],
+   "radius": "no graph"
+  },
+  "expected": "# PR #42: Rewrite\n\n5 threads: 1 proposed, 3 open, 1 resolved. Accept or dismiss findings in the Review panel, open one with its link, or comment on this page.\n\n## The pull request\n\n[Rewrite the handler](https://github.com/o/r/pull/42) · `feature/x` into `main` · 3 commits\n\nThe handler now returns errors.\n\n### Testing\n\n- unit tests\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Blast radius\n\n_With [Graphify](https://graphify.net) installed, this lists what else the change affects: what calls, imports or implements the code it changes._\n\n## Findings and comments (5)\n\n### src/api/handler.ts (1)\n\n#### #1 Off by one\n\n**high** · proposed — accept or dismiss it · src/api/handler.ts:12\n\n> **Claude:** Off by one\n\n### Repository (1)\n\n#### #2 Whole patch comment\n\nopen · change.patch\n\n> **Ann:** Whole patch comment\n\n### Storage (1)\n\n#### #3 Range in the store\n\nopen · src/db/store.ts:4\n\n> **Ann:** Range in the store\n\n### The document (2)\n\n#### #4 On the PR text\n\nopen · the document, “This pull request rewrites the handler and is a long sentenc…”\n\n> **Ann:** On the PR text\n\n#### #5 On a diagram node\n\nresolved · the document, diagram flow › B\n\n> **Ann:** On a diagram node\n"
+ },
+ {
+  "name": "pull request, number only",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "pr": {
+    "number": 7,
+    "url": "https://github.com/o/r/pull/7",
+    "commits": 1,
+    "body": ""
+   },
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ]
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## The pull request\n\n[#7](https://github.com/o/r/pull/7) · 1 commit\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "pull request, title only",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "pr": {
+    "title": "Local branch",
+    "branch": "topic",
+    "commits": 0,
+    "body": "  \n"
+   },
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ]
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## The pull request\n\nLocal branch\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Findings and comments (0)\n\nNone yet.\n"
+ },
+ {
+  "name": "pull request, url only",
+  "review": {
+   "id": "r1",
+   "title": "Synthetic review",
+   "workspaceRoot": "file:///work/repo",
+   "scope": {
+    "kind": "repository"
+   },
+   "participants": [
+    {
+     "id": "human:ann@example.com",
+     "kind": "human",
+     "name": "Ann"
+    }
+   ],
+   "threads": [],
+   "activity": [],
+   "nextThreadNumber": 1,
+   "createdAt": 1,
+   "updatedAt": 1,
+   "bundle": {
+    "dir": "/work/reviews/change",
+    "repo": "/work/repo"
+   }
+  },
+  "root": "/work/reviews/change",
+  "parts": {
+   "pr": {
+    "url": "https://example.com/pr",
+    "body": "Body only"
+   },
+   "patches": [
+    {
+     "name": "change",
+     "files": [
+      {
+       "path": "src/api/handler.ts",
+       "added": 12,
+       "removed": 3
+      },
+      {
+       "path": "src/db/store.ts",
+       "added": 1,
+       "removed": 0
+      }
+     ]
+    }
+   ]
+  },
+  "expected": "# Synthetic review\n\nNo findings yet.\n\n## The pull request\n\n[#](https://example.com/pr)\n\nBody only\n\n## What the change does\n\n_The agent has not written an overview yet: what this does, how it works (a flow chart) and what else it affects._\n\n## The change\n\n2 files, +13 −3.\n\n- `src/api/handler.ts` +12 −3\n- `src/db/store.ts` +1 −0\n\n## Findings and comments (0)\n\nNone yet.\n"
+ }
+]

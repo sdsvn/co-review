@@ -1,0 +1,195 @@
+//! Conformance tests: replay fixtures recorded from the Theia app against the Rust implementation.
+//! Each fixture JSON contains input (markdown, fileName) and expected output from the TypeScript code.
+
+#![allow(clippy::unwrap_used)]
+
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+
+use pretty_assertions::assert_eq;
+use serde_json::Value;
+
+use review_design::{
+    document_format, sections_of, split_frontmatter, step_id, steps, DocumentFormat, Mode,
+    Section, Step,
+};
+
+fn fixtures_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+}
+
+/// Convert a Step tree to serde_json::Value matching the fixture format.
+fn steps_to_value(steps: &[Step]) -> Value {
+    Value::Array(
+        steps
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "text": s.text,
+                    "indent": s.indent,
+                    "depth": s.depth,
+                    "children": steps_to_value(&s.children),
+                })
+            })
+            .collect(),
+    )
+}
+
+/// Convert sections to serde_json::Value matching the fixture format.
+fn sections_to_value(sections: &[Section]) -> Value {
+    Value::Array(
+        sections
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "heading": s.heading,
+                    "key": s.key,
+                    "body": s.body,
+                })
+            })
+            .collect(),
+    )
+}
+
+fn format_to_value(format: &DocumentFormat) -> Value {
+    serde_json::json!({
+        "mode": match format.mode { Mode::Design => "design", Mode::Plain => "plain" },
+        "declared": format.declared,
+        "warnings": format.warnings,
+    })
+}
+
+#[test]
+fn replay_all_fixtures() {
+    let dir = fixtures_dir();
+    let mut entries: Vec<_> = fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("Cannot read fixtures dir {}: {e}", dir.display()))
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    assert!(!entries.is_empty(), "No fixture files found in {}", dir.display());
+
+    let mut passed = 0;
+    let mut failed = Vec::new();
+
+    for entry in &entries {
+        let path = entry.path();
+        let content = fs::read_to_string(&path).unwrap();
+        let fixture: Value = serde_json::from_str(&content).unwrap();
+
+        let name = fixture["name"].as_str().unwrap();
+        let markdown = fixture["input"]["markdown"].as_str().unwrap();
+        let file_name = fixture["input"]["fileName"].as_str().unwrap();
+        let expected = &fixture["expected"];
+
+        let mut case_ok = true;
+
+        // Test split_frontmatter
+        let fm = split_frontmatter(markdown);
+        let expected_data: HashMap<String, String> = expected["frontmatter"]["data"]
+            .as_object()
+            .map(|obj| {
+                obj.iter()
+                    .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let expected_body = expected["frontmatter"]["body"].as_str().unwrap();
+
+        if fm.data != expected_data {
+            eprintln!("FAIL [{name}] frontmatter.data: got {:?}, expected {:?}", fm.data, expected_data);
+            case_ok = false;
+        }
+        if fm.body != expected_body {
+            eprintln!("FAIL [{name}] frontmatter.body differs");
+            case_ok = false;
+        }
+
+        // Test sections_of
+        let sections_result = sections_of(&fm.body);
+        let expected_sections = &expected["sections"]["sections"];
+        let actual_sections = sections_to_value(&sections_result.sections);
+        if actual_sections != *expected_sections {
+            eprintln!("FAIL [{name}] sections differ");
+            eprintln!("  got:      {}", serde_json::to_string(&actual_sections).unwrap());
+            eprintln!("  expected: {}", serde_json::to_string(expected_sections).unwrap());
+            case_ok = false;
+        }
+
+        // Test document_format
+        let format = document_format(markdown, file_name);
+        let actual_format = format_to_value(&format);
+        let expected_format = &expected["format"];
+        if actual_format != *expected_format {
+            eprintln!("FAIL [{name}] format differs");
+            eprintln!("  got:      {}", serde_json::to_string(&actual_format).unwrap());
+            eprintln!("  expected: {}", serde_json::to_string(expected_format).unwrap());
+            case_ok = false;
+        }
+
+        // Test step trees
+        if let Some(step_trees) = expected["stepTrees"].as_object() {
+            for (key, expected_tree) in step_trees {
+                let section = sections_result.sections.iter().find(|s| s.key == *key);
+                let body = section.map(|s| s.body.as_str()).unwrap_or("");
+                let actual_tree = steps_to_value(&steps(body));
+                if actual_tree != *expected_tree {
+                    eprintln!("FAIL [{name}] stepTree[{key}] differs");
+                    eprintln!("  got:      {}", serde_json::to_string(&actual_tree).unwrap());
+                    eprintln!("  expected: {}", serde_json::to_string(expected_tree).unwrap());
+                    case_ok = false;
+                }
+            }
+        }
+
+        // Test step IDs
+        if let Some(expected_ids) = expected["stepIds"].as_array() {
+            let design_section = sections_result.sections.iter().find(|s| s.key == "design");
+            let design_body = design_section.map(|s| s.body.as_str()).unwrap_or("");
+            let design_steps = steps(design_body);
+            let mut all_steps = Vec::new();
+            fn collect(nodes: &[Step], out: &mut Vec<String>) {
+                for s in nodes {
+                    out.push(s.text.clone());
+                    collect(&s.children, out);
+                }
+            }
+            collect(&design_steps, &mut all_steps);
+
+            let actual_ids: Vec<String> = all_steps.iter().map(|t| step_id(t)).collect();
+            let expected_ids: Vec<String> = expected_ids
+                .iter()
+                .map(|v| v.as_str().unwrap().to_string())
+                .collect();
+
+            if actual_ids != expected_ids {
+                eprintln!("FAIL [{name}] stepIds differ");
+                for (i, (a, e)) in actual_ids.iter().zip(expected_ids.iter()).enumerate() {
+                    if a != e {
+                        eprintln!("  [{i}] got: {a:?}");
+                        eprintln!("  [{i}] exp: {e:?}");
+                    }
+                }
+                if actual_ids.len() != expected_ids.len() {
+                    eprintln!("  lengths differ: got {}, expected {}", actual_ids.len(), expected_ids.len());
+                }
+                case_ok = false;
+            }
+        }
+
+        if case_ok {
+            passed += 1;
+        } else {
+            failed.push(name.to_string());
+        }
+    }
+
+    eprintln!("\n{passed}/{} fixtures passed", entries.len());
+    if !failed.is_empty() {
+        eprintln!("Failed: {}", failed.join(", "));
+    }
+    assert_eq!(failed.len(), 0, "Some fixtures failed: {}", failed.join(", "));
+}

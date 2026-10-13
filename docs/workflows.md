@@ -38,11 +38,11 @@ sequenceDiagram
 ```
 
 1. **Prepared, not shown.** The agent creates the review with `open: false`. You don't see a half-built review, and
-   in the desktop app no window appears yet (an agent that connects starts Co-Review in the background).
+   no window appears yet (an agent that connects starts Co-Review in the background).
 2. **First pass.** The agent adds findings: the risks and non-obvious decisions it wants you to look at. They arrive
    *proposed*: you accept or dismiss each one.
-3. **Shown.** `open_review({ reviewId })` opens the review with the Review panel: a browser tab, or the repository's
-   window in the desktop app (focused if it's already open). A repository, diff or pull-request review
+3. **Shown.** `open_review({ reviewId })` opens the repository's window with the Review panel (focused if it's
+   already open). A repository, diff or pull-request review
    opens on its [overview page](#the-overview-page); a design on its document, with the findings inline. The
    agent tells you what it found.
 4. **Questions and answers.** Comment anywhere, or reply to a finding: the agent answers in the same thread. In Claude
@@ -56,8 +56,8 @@ sequenceDiagram
 |---|---|
 | Keep or drop a proposed finding | ✓ **Accept finding** / ⊘ **Dismiss finding** on the thread (the panel's **Proposed** tab lists them) |
 | Ask about a finding | Reply in its thread; the agent answers there |
-| Comment on code | **+** in the gutter (drag for several lines), or select and press `Cmd+Alt+M` |
-| Ask the agent about code | Select it and press `Cmd+Alt+A` (**Ask Agent**) |
+| Comment on code | **+** in the gutter (drag for several lines), or select it and click **Comment** on the bar under the selection (`Cmd+Alt+M`) |
+| Ask the agent about code | Select it and click **Ask Agent** on the bar under the selection (`Cmd+Alt+A`) |
 | Suggest an edit | In a comment on a patch line or document text, **Suggest a change** |
 | Move between threads | `Cmd+Alt+↓` / `Cmd+Alt+↑`, or click a thread in the panel |
 | Finish | **Submit review…** in the panel: **Approve**, **Request changes** or **Comment**, with a message |
@@ -204,7 +204,7 @@ For a change worth agreeing on first: a new component, data model, API, async fl
 1. Investigates the code and writes `design/<name>/index.markdown` in the [design-document format](design-docs.md).
 2. Checks it with `open_review({ dir, open: false })` and fixes every format warning Co-Review reports, so you never
    see a malformed document.
-3. Shows it and shares the link.
+3. Shows it and tells you it's open in Co-Review.
 4. Revises the document from your comments, keeping commented steps' wording stable so your threads stay anchored.
 5. Implements only after you approve. If the code has to depart from the design, it updates the design and asks again.
 
@@ -214,13 +214,11 @@ sends it back to revise.
 
 ## Tips
 
-- **Desktop app or browser.** Both work the same. In the desktop app, the window appears when the agent shows the
-  review, and closes once you approve it or the agent's session ends (when an agent started the app). In the
-  browser, the agent gives you a link.
+- **The window.** It appears when the agent shows the review. When the agent started Co-Review, the window closes
+  once you approve the review or the agent's session ends, unless you click **Keep open** or the agent comes back to
+  the review (a new session) during the countdown. Other windows stay open.
 - **Keep working while you review.** In Claude Code, *"keep answering my review while you fix the tests"* hands the
   review to the background `co-reviewer` subagent.
 - **Several reviews.** The switcher at the top of the Review panel lists them; archive the ones you're done with.
-- **Away from your desk.** **⋯ → Open mobile view** reads, replies and submits from a phone
-  ([over Tailscale](running-and-packaging.md#phone-view)).
 - **Without an agent.** Every review can be started by hand from the Review panel (**+**), and **⋯ → Connect agent…**
   brings in an agent for quick questions ([Agents](agents.md)).

@@ -1,0 +1,84 @@
+{
+  "id": "review-1",
+  "title": "Test Review",
+  "workspaceRoot": "/workspace",
+  "scope": {
+    "kind": "repository"
+  },
+  "participants": [
+    {
+      "id": "reviewer-1",
+      "kind": "human",
+      "name": "Reviewer"
+    },
+    {
+      "id": "agent-1",
+      "kind": "agent",
+      "name": "Agent"
+    }
+  ],
+  "threads": [
+    {
+      "id": "elsewhere-doc",
+      "number": 1,
+      "location": {
+        "kind": "document",
+        "docAnchor": {
+          "type": "document"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-16",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "The description is unclear.",
+          "createdAt": 1700000000016
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "elsewhere-patch",
+      "number": 2,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "patch"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-18",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "Overall the patch is too large.",
+          "createdAt": 1700000000018
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "activity": [],
+  "nextThreadNumber": 3,
+  "createdAt": 1700000000000,
+  "updatedAt": 1700000000000,
+  "verdict": {
+    "decision": "comment",
+    "summary": "Some general notes.",
+    "submittedAt": 1700000000000,
+    "count": 1
+  }
+}

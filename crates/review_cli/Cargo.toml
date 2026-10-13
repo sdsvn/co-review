@@ -1,0 +1,33 @@
+[package]
+name = "review_cli"
+# The app's version (Cargo.toml's workspace.package): `co-review version` prints it.
+version.workspace = true
+edition.workspace = true
+publish = false
+license = "EPL-2.0"
+
+[[bin]]
+name = "co-review"
+path = "src/main.rs"
+
+[lib]
+path = "src/review_cli.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+review_model.workspace = true
+review_store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Plain HTTP to the local app only: no TLS, so the `mcp` bridge stays small and starts fast.
+ureq = { version = "2.12.1", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.155"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

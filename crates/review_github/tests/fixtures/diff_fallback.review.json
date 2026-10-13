@@ -1,0 +1,61 @@
+{
+  "id": "review-1",
+  "title": "Test Review",
+  "workspaceRoot": "/workspace",
+  "scope": {
+    "kind": "repository"
+  },
+  "participants": [
+    {
+      "id": "reviewer-1",
+      "kind": "human",
+      "name": "Reviewer"
+    },
+    {
+      "id": "agent-1",
+      "kind": "agent",
+      "name": "Agent"
+    }
+  ],
+  "threads": [
+    {
+      "id": "diff-fb-1",
+      "number": 1,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/old.rs",
+          "line": 100,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-30",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "This line has a bug.",
+          "createdAt": 1700000000030
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "activity": [],
+  "nextThreadNumber": 2,
+  "createdAt": 1700000000000,
+  "updatedAt": 1700000000000,
+  "verdict": {
+    "decision": "comment",
+    "summary": "Found a bug.",
+    "submittedAt": 1700000000000,
+    "count": 1
+  }
+}

@@ -8,21 +8,33 @@
  * - Subagents and headless runs: `co_review_start`, then loop `co_review_wait` → investigate →
  *   `co_review_reply`. The blocking wait keeps the subagent resident as co-reviewer.
  *
- * Talks to the running Co-Review app over its local MCP endpoint (started on demand through the
- * `co-review` CLI), so neither harness needs MCP support. What differs per harness (schema builder,
- * how a question is delivered, which session is the main one) comes in as a `Harness`.
+ * Talks to Co-Review through `co-review mcp` (the stdio bridge every MCP harness uses: it starts Co-Review on the
+ * first tool call and reconnects when it restarts), in plain JSON-RPC lines, so neither harness needs MCP support and
+ * the package needs no dependencies. What differs per harness (schema builder, how a question is delivered, which
+ * session is the main one) comes in as a `Harness`.
  */
-import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// The installed `co-review` command (desktop app or checkout), else this checkout's CLI on the harness's runtime.
-const INSTALLED = [join("/usr/local/bin", "co-review"), join(homedir(), ".local", "bin", "co-review")].find(p => existsSync(p));
-const CLI = INSTALLED ? [INSTALLED] : [process.execPath, resolve(here, "..", "..", "bin", "co-review.mjs")];
-const HOME = process.env.CO_REVIEW_HOME || join(homedir(), ".co-review");
+// The `co-review` command: `$CO_REVIEW_CLI`, else the one that came with this package — bundled with the app it came
+// from (<resources>/app/integrations/shared → <resources>/app/bin) or built in this checkout — so the package always
+// talks to its own Co-Review, never to an older one still linked in ~/.local/bin; else the one installed (install.sh
+// links it), else `co-review` on PATH (the Windows installer puts its folder there).
+const EXE = process.platform === "win32" ? "co-review.exe" : "co-review";
+const CLI =
+	[
+		process.env.CO_REVIEW_CLI ?? "",
+		resolve(here, "..", "..", "bin", EXE),
+		resolve(here, "..", "..", "target", "debug", EXE),
+		resolve(here, "..", "..", "target", "release", EXE),
+		join("/usr/local/bin", EXE),
+		join(homedir(), ".local", "bin", EXE),
+	].find(p => p && existsSync(p)) ?? "co-review";
 
 /** The parts of the harness's extension context this extension uses (Pi and omp share them). */
 export interface Context {
@@ -75,42 +87,120 @@ interface Verdict {
 	acceptedSuggestions?: { path?: string; startLine?: number; before: string; after: string }[];
 }
 
-type McpClient = import("@modelcontextprotocol/sdk/client/index.js").Client;
+interface ToolResult {
+	content?: { type: string; text?: string }[];
+	isError?: boolean;
+}
 
-/** One connection to Co-Review (an MCP session) for one agent session. */
+interface Pending {
+	resolve(result: ToolResult): void;
+	reject(error: Error): void;
+}
+
+/** One connection to Co-Review (a `co-review mcp` bridge, so an MCP session) for one agent session. */
 class CoReviewConnection {
-	client: McpClient | undefined;
+	private bridge: ChildProcessWithoutNullStreams | undefined;
+	private ready: Promise<void> | undefined;
+	private readonly pending = new Map<number, Pending>();
+	private nextId = 0;
 	listening = false;
 	private stopped = false;
 
 	constructor(private readonly clientName: string) {}
 
-	async connect(root: string): Promise<void> {
-		if (this.client) {
+	get connected(): boolean {
+		return this.bridge !== undefined;
+	}
+
+	connect(root: string): Promise<void> {
+		this.ready ??= this.start(root).catch(error => {
+			this.drop(error as Error);
+			throw error;
+		});
+		return this.ready;
+	}
+
+	private async start(root: string): Promise<void> {
+		const bridge = spawn(CLI, ["mcp", root], { stdio: ["pipe", "pipe", "pipe"] });
+		this.bridge = bridge;
+		let stderr = "";
+		bridge.stderr.on("data", d => (stderr = (stderr + d).slice(-2000)));
+		bridge.on("error", error => this.drop(new Error(`co-review mcp did not start (${CLI}): ${error.message}`), bridge));
+		bridge.on("exit", code => this.drop(new Error(`co-review mcp ended (exit ${code})${stderr.trim() ? `: ${stderr.trim()}` : ""}`), bridge));
+		createInterface({ input: bridge.stdout }).on("line", line => this.receive(line));
+		await this.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: this.clientName, version: "1.0.0" } }, 120_000);
+		this.write({ jsonrpc: "2.0", method: "notifications/initialized" });
+	}
+
+	/** The bridge is gone (or this connection was closed): every waiting call fails, and the next call starts anew. */
+	private drop(error: Error, bridge?: ChildProcessWithoutNullStreams): void {
+		if (bridge && bridge !== this.bridge) {
 			return;
 		}
-		// Start Co-Review (or reuse a running desktop/browser instance) without opening a browser.
-		await new Promise<void>((ok, fail) => {
-			const child = spawn(CLI[0], [...CLI.slice(1), "--no-open", root], { stdio: ["ignore", "ignore", "pipe"] });
-			let err = "";
-			child.stderr.on("data", d => (err += d));
-			child.on("error", fail);
-			child.on("exit", code => (code === 0 ? ok() : fail(new Error(`co-review failed to start: ${err.trim()}`))));
+		this.bridge = undefined;
+		this.ready = undefined;
+		for (const pending of this.pending.values()) {
+			pending.reject(error);
+		}
+		this.pending.clear();
+	}
+
+	private write(message: unknown): void {
+		this.bridge?.stdin.write(`${JSON.stringify(message)}\n`);
+	}
+
+	private receive(line: string): void {
+		let message: { id?: number; result?: ToolResult; error?: { message?: string } };
+		try {
+			message = JSON.parse(line);
+		} catch {
+			return;
+		}
+		// Notifications (e.g. Claude Code's channel) are not for this extension: it waits with await_reviewer.
+		const pending = typeof message.id === "number" ? this.pending.get(message.id) : undefined;
+		if (!pending) {
+			return;
+		}
+		this.pending.delete(message.id as number);
+		if (message.error) {
+			pending.reject(new Error(message.error.message ?? "Co-Review failed"));
+		} else {
+			pending.resolve(message.result ?? {});
+		}
+	}
+
+	private request(method: string, params: unknown, timeoutMs: number, signal?: AbortSignal): Promise<ToolResult> {
+		if (!this.bridge) {
+			return Promise.reject(new Error("Not connected to Co-Review. Call co_review_start first."));
+		}
+		const id = ++this.nextId;
+		return new Promise<ToolResult>((ok, fail) => {
+			const finish = () => {
+				clearTimeout(timer);
+				signal?.removeEventListener("abort", abort);
+			};
+			const cancel = (reason: string) => {
+				if (this.pending.delete(id)) {
+					this.write({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: id, reason } });
+					fail(new Error(reason));
+				}
+				finish();
+			};
+			const abort = () => cancel("Cancelled");
+			const timer = setTimeout(() => cancel(`Co-Review did not answer ${method} in ${Math.round(timeoutMs / 1000)} s`), timeoutMs);
+			signal?.addEventListener("abort", abort, { once: true });
+			this.pending.set(id, {
+				resolve: result => (finish(), ok(result)),
+				reject: error => (finish(), fail(error))
+			});
+			this.write({ jsonrpc: "2.0", id, method, params });
 		});
-		const { url } = JSON.parse(readFileSync(join(HOME, "server.json"), "utf8")) as { url: string };
-		const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
-		const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
-		const client = new Client({ name: this.clientName, version: "1.0.0" });
-		await client.connect(new StreamableHTTPClientTransport(new URL(`${url}/mcp?root=${encodeURIComponent(root)}`)));
-		this.client = client;
 	}
 
 	async call<T = any>(name: string, args: Record<string, unknown>, timeoutMs = 120_000, signal?: AbortSignal): Promise<T> {
-		if (!this.client) {
-			throw new Error("Not connected to Co-Review. Call co_review_start first.");
-		}
-		const result = await this.client.callTool({ name, arguments: args }, undefined, { timeout: timeoutMs, signal });
-		const text = (result.content as { type: string; text?: string }[]).map(c => c.text ?? "").join("");
+		await this.ready;
+		const result = await this.request("tools/call", { name, arguments: args }, timeoutMs, signal);
+		const text = (result.content ?? []).map(c => c.text ?? "").join("");
 		if (result.isError) {
 			throw new Error(text);
 		}
@@ -167,9 +257,10 @@ class CoReviewConnection {
 
 	async close(): Promise<void> {
 		this.stopped = true;
-		const client = this.client;
-		this.client = undefined;
-		await client?.close().catch(() => undefined);
+		const bridge = this.bridge;
+		this.drop(new Error("Left the review."));
+		// Closing stdin ends the bridge's MCP session: Co-Review gives this agent's threads back.
+		bridge?.stdin.end();
 	}
 }
 
@@ -197,7 +288,7 @@ function formatVerdict(r: Verdict): string {
 		return r.threads.map(formatThread).join("\n\n---\n\n");
 	}
 	if (r.status === "closed") {
-		return `[Co-Review] ${(r.hint ?? "The reviewer closed the review.").replace(/open_review/g, "co_review_start")}`;
+		return `[Co-Review] ${ourTools(r.hint ?? "The reviewer closed the review.")}`;
 	}
 	if (r.status !== "submitted") {
 		return "Nothing from the reviewer yet. Call co_review_wait again to keep co-reviewing.";
@@ -209,6 +300,11 @@ function formatVerdict(r: Verdict): string {
 		comments && `Open comments:\n${comments}`,
 		suggestions && `Accepted suggestions (apply each as a commit):\n${suggestions}`
 	].filter(Boolean).join("\n\n");
+}
+
+/** Co-Review's notes name its MCP tools; this extension's tools have other names. */
+function ourTools(note: string): string {
+	return note.replace(/\bopen_review\b/g, "co_review_start").replace(/\bawait_reviewer\b/g, "co_review_wait").replace(/\badd_findings\b/g, "co_review_add_findings");
 }
 
 function text(value: string) {
@@ -292,7 +388,7 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 			const listen = ctx.hasUI && harness.isMain(ctx);
 			const opened = await start(ctx, { ...params, listen });
 			const warnings = opened.format?.warnings?.length ? `\nFix the design document, then call co_review_start again: ${opened.format.warnings.join(" ")}` : "";
-			const where = (opened.url ? `Reviewer URL: ${opened.url}` : opened.note ?? "") + warnings;
+			const where = ourTools((opened.url ? `Reviewer URL: ${opened.url}` : opened.note ?? "") + warnings);
 			return text(listen
 				? `Joined review ${opened.reviewId} (${opened.openThreads} open threads). ${where}\nReviewer questions will arrive as [Co-Review] messages; answer each with co_review_reply.`
 				: `Joined review ${opened.reviewId} (${opened.openThreads} open threads). ${where}\nNow loop: co_review_wait → investigate → co_review_reply, until the reviewer says the review is done.`);

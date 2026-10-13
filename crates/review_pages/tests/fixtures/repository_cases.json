@@ -1,0 +1,562 @@
+[
+ {
+  "name": "map with readme",
+  "directory": "with-readme",
+  "readme": "README.md",
+  "outlines": [
+   [
+    "README.md",
+    ""
+   ],
+   [
+    "build.rs",
+    "main"
+   ],
+   [
+    "cmd/tool/main.go",
+    "main, run, parseFlags"
+   ],
+   [
+    "docs/guide.md",
+    ""
+   ],
+   [
+    "index.ts",
+    "start"
+   ],
+   [
+    "lib/[weird] name.ts",
+    "Weird { a, b }"
+   ],
+   [
+    "src/api/handler.ts",
+    "Handler { handle, validate, respond, log, retry, close, open, a, b, c, d, e, … }, createHandler, helper"
+   ],
+   [
+    "src/api/routes.ts",
+    "routes, register"
+   ],
+   [
+    "src/app.TSX",
+    "App { render }"
+   ],
+   [
+    "src/db/store.ts",
+    "Store { get, set, delete }, connect, disconnect, migrate, seed"
+   ],
+   [
+    "src/server.js",
+    ""
+   ],
+   [
+    "src/cli.py",
+    "main, parse"
+   ],
+   [
+    "src/ünïcode/naïve.rs",
+    "Naive, other"
+   ],
+   [
+    "tools/x.rb",
+    "X { y }, Z"
+   ]
+  ],
+  "coverage": {
+   "total": 14,
+   "viewed": 3,
+   "areas": [
+    {
+     "path": ".",
+     "total": 3,
+     "viewed": 1,
+     "next": "build.rs"
+    },
+    {
+     "path": "cmd",
+     "total": 1,
+     "viewed": 1
+    },
+    {
+     "path": "docs",
+     "total": 1,
+     "viewed": 0,
+     "next": "docs/guide.md"
+    },
+    {
+     "path": "lib",
+     "total": 1,
+     "viewed": 0,
+     "next": "lib/[weird] name.ts"
+    },
+    {
+     "path": "src",
+     "total": 7,
+     "viewed": 1,
+     "next": "src/ünïcode/naïve.rs"
+    },
+    {
+     "path": "tools",
+     "total": 1,
+     "viewed": 0
+    },
+    {
+     "path": "empty",
+     "total": 0,
+     "viewed": 0
+    }
+   ]
+  },
+  "expected": "# Repository overview: with-readme\n\nBuilt from the Tree-sitter repo map: 14 source files. 3 of 14 viewed so far.\nFor calls, imports and clusters of related code, install [Graphify](https://graphify.net) (`uv tool install graphifyy` or `pipx install graphifyy`) and reopen this page: Co-Review builds the graph itself (code only, no LLM, seconds).\n\n## Start here\n\n- [README.md](README.md): what the project says about itself\n- [cmd/tool/main.go](cmd/tool/main.go): looks like an entry point\n- [index.ts](index.ts): looks like an entry point\n- [src/app.TSX](src/app.TSX): looks like an entry point\n- [src/server.js](src/server.js): looks like an entry point\n- [src/cli.py](src/cli.py): looks like an entry point\n- [src/api/handler.ts](src/api/handler.ts): one of the largest files (3 top-level definitions)\n- [src/db/store.ts](src/db/store.ts): one of the largest files (5 top-level definitions)\n- [lib/weird name.ts](lib/%5Bweird%5D%20name.ts): one of the largest files (1 top-level definitions)\n\n## Areas\n\nFolders, with what they define.\n\n- **(root)**: 3 files, 1 viewed. Defines main, start. Next: [build.rs](build.rs).\n- **cmd**: 1 file, 1 viewed. Defines main, run, parseFlags.\n- **docs**: 1 file, 0 viewed. Next: [guide.md](docs/guide.md).\n- **lib**: 1 file, 0 viewed. Defines Weird. Next: [weird name.ts](lib/%5Bweird%5D%20name.ts).\n- **src**: 7 files, 1 viewed. Defines Handler, createHandler, helper, routes, register, App. Next: [naïve.rs](src/%C3%BCn%C3%AFcode/na%C3%AFve.rs).\n- **tools**: 1 file, 0 viewed. Defines X, Z.\n- **empty**: 0 files, 0 viewed."
+ },
+ {
+  "name": "map, lowercase readme, graph missing",
+  "directory": "lower-readme",
+  "readme": "readme.md",
+  "outlines": [
+   [
+    "README.md",
+    ""
+   ],
+   [
+    "build.rs",
+    "main"
+   ],
+   [
+    "cmd/tool/main.go",
+    "main, run, parseFlags"
+   ],
+   [
+    "docs/guide.md",
+    ""
+   ],
+   [
+    "index.ts",
+    "start"
+   ],
+   [
+    "lib/[weird] name.ts",
+    "Weird { a, b }"
+   ],
+   [
+    "src/api/handler.ts",
+    "Handler { handle, validate, respond, log, retry, close, open, a, b, c, d, e, … }, createHandler, helper"
+   ],
+   [
+    "src/api/routes.ts",
+    "routes, register"
+   ],
+   [
+    "src/app.TSX",
+    "App { render }"
+   ],
+   [
+    "src/db/store.ts",
+    "Store { get, set, delete }, connect, disconnect, migrate, seed"
+   ],
+   [
+    "src/server.js",
+    ""
+   ],
+   [
+    "src/cli.py",
+    "main, parse"
+   ],
+   [
+    "src/ünïcode/naïve.rs",
+    "Naive, other"
+   ],
+   [
+    "tools/x.rb",
+    "X { y }, Z"
+   ]
+  ],
+  "coverage": {
+   "total": 14,
+   "viewed": 3,
+   "areas": [
+    {
+     "path": ".",
+     "total": 3,
+     "viewed": 1,
+     "next": "build.rs"
+    },
+    {
+     "path": "cmd",
+     "total": 1,
+     "viewed": 1
+    },
+    {
+     "path": "docs",
+     "total": 1,
+     "viewed": 0,
+     "next": "docs/guide.md"
+    },
+    {
+     "path": "lib",
+     "total": 1,
+     "viewed": 0,
+     "next": "lib/[weird] name.ts"
+    },
+    {
+     "path": "src",
+     "total": 7,
+     "viewed": 1,
+     "next": "src/ünïcode/naïve.rs"
+    },
+    {
+     "path": "tools",
+     "total": 1,
+     "viewed": 0
+    },
+    {
+     "path": "empty",
+     "total": 0,
+     "viewed": 0
+    }
+   ]
+  },
+  "graph": "missing",
+  "expected": "# Repository overview: lower-readme\n\nBuilt from the Tree-sitter repo map: 14 source files. 3 of 14 viewed so far.\nFor calls, imports and clusters of related code, install [Graphify](https://graphify.net) (`uv tool install graphifyy` or `pipx install graphifyy`) and reopen this page: Co-Review builds the graph itself (code only, no LLM, seconds).\n\n## Start here\n\n- [README.md](README.md): what the project says about itself\n- [cmd/tool/main.go](cmd/tool/main.go): looks like an entry point\n- [index.ts](index.ts): looks like an entry point\n- [src/app.TSX](src/app.TSX): looks like an entry point\n- [src/server.js](src/server.js): looks like an entry point\n- [src/cli.py](src/cli.py): looks like an entry point\n- [src/api/handler.ts](src/api/handler.ts): one of the largest files (3 top-level definitions)\n- [src/db/store.ts](src/db/store.ts): one of the largest files (5 top-level definitions)\n- [lib/weird name.ts](lib/%5Bweird%5D%20name.ts): one of the largest files (1 top-level definitions)\n\n## Areas\n\nFolders, with what they define.\n\n- **(root)**: 3 files, 1 viewed. Defines main, start. Next: [build.rs](build.rs).\n- **cmd**: 1 file, 1 viewed. Defines main, run, parseFlags.\n- **docs**: 1 file, 0 viewed. Next: [guide.md](docs/guide.md).\n- **lib**: 1 file, 0 viewed. Defines Weird. Next: [weird name.ts](lib/%5Bweird%5D%20name.ts).\n- **src**: 7 files, 1 viewed. Defines Handler, createHandler, helper, routes, register, App. Next: [naïve.rs](src/%C3%BCn%C3%AFcode/na%C3%AFve.rs).\n- **tools**: 1 file, 0 viewed. Defines X, Z.\n- **empty**: 0 files, 0 viewed."
+ },
+ {
+  "name": "map, no readme, graph failed",
+  "directory": "no-readme",
+  "outlines": [
+   [
+    "README.md",
+    ""
+   ],
+   [
+    "build.rs",
+    "main"
+   ],
+   [
+    "cmd/tool/main.go",
+    "main, run, parseFlags"
+   ],
+   [
+    "docs/guide.md",
+    ""
+   ],
+   [
+    "index.ts",
+    "start"
+   ],
+   [
+    "lib/[weird] name.ts",
+    "Weird { a, b }"
+   ],
+   [
+    "src/api/handler.ts",
+    "Handler { handle, validate, respond, log, retry, close, open, a, b, c, d, e, … }, createHandler, helper"
+   ],
+   [
+    "src/api/routes.ts",
+    "routes, register"
+   ],
+   [
+    "src/app.TSX",
+    "App { render }"
+   ],
+   [
+    "src/db/store.ts",
+    "Store { get, set, delete }, connect, disconnect, migrate, seed"
+   ],
+   [
+    "src/server.js",
+    ""
+   ],
+   [
+    "src/cli.py",
+    "main, parse"
+   ],
+   [
+    "src/ünïcode/naïve.rs",
+    "Naive, other"
+   ],
+   [
+    "tools/x.rb",
+    "X { y }, Z"
+   ]
+  ],
+  "coverage": {
+   "total": 14,
+   "viewed": 3,
+   "areas": [
+    {
+     "path": ".",
+     "total": 3,
+     "viewed": 1,
+     "next": "build.rs"
+    },
+    {
+     "path": "cmd",
+     "total": 1,
+     "viewed": 1
+    },
+    {
+     "path": "docs",
+     "total": 1,
+     "viewed": 0,
+     "next": "docs/guide.md"
+    },
+    {
+     "path": "lib",
+     "total": 1,
+     "viewed": 0,
+     "next": "lib/[weird] name.ts"
+    },
+    {
+     "path": "src",
+     "total": 7,
+     "viewed": 1,
+     "next": "src/ünïcode/naïve.rs"
+    },
+    {
+     "path": "tools",
+     "total": 1,
+     "viewed": 0
+    },
+    {
+     "path": "empty",
+     "total": 0,
+     "viewed": 0
+    }
+   ]
+  },
+  "graph": "failed",
+  "expected": "# Repository overview: no-readme\n\nBuilt from the Tree-sitter repo map: 14 source files. 3 of 14 viewed so far.\nBuilding the Graphify graph failed (see the Co-Review log); `graphify update .` in the repository shows why.\n\n## Start here\n\n- [cmd/tool/main.go](cmd/tool/main.go): looks like an entry point\n- [index.ts](index.ts): looks like an entry point\n- [src/app.TSX](src/app.TSX): looks like an entry point\n- [src/server.js](src/server.js): looks like an entry point\n- [src/cli.py](src/cli.py): looks like an entry point\n- [src/api/handler.ts](src/api/handler.ts): one of the largest files (3 top-level definitions)\n- [src/db/store.ts](src/db/store.ts): one of the largest files (5 top-level definitions)\n- [lib/weird name.ts](lib/%5Bweird%5D%20name.ts): one of the largest files (1 top-level definitions)\n\n## Areas\n\nFolders, with what they define.\n\n- **(root)**: 3 files, 1 viewed. Defines main, start. Next: [build.rs](build.rs).\n- **cmd**: 1 file, 1 viewed. Defines main, run, parseFlags.\n- **docs**: 1 file, 0 viewed. Next: [guide.md](docs/guide.md).\n- **lib**: 1 file, 0 viewed. Defines Weird. Next: [weird name.ts](lib/%5Bweird%5D%20name.ts).\n- **src**: 7 files, 1 viewed. Defines Handler, createHandler, helper, routes, register, App. Next: [naïve.rs](src/%C3%BCn%C3%AFcode/na%C3%AFve.rs).\n- **tools**: 1 file, 0 viewed. Defines X, Z.\n- **empty**: 0 files, 0 viewed."
+ },
+ {
+  "name": "map, empty repository",
+  "directory": "empty",
+  "outlines": [],
+  "coverage": {
+   "total": 0,
+   "viewed": 0,
+   "areas": []
+  },
+  "graph": "built",
+  "expected": "# Repository overview: empty\n\nBuilt from the Tree-sitter repo map: 0 source files. 0 of 0 viewed so far.\nFor calls, imports and clusters of related code, install [Graphify](https://graphify.net) (`uv tool install graphifyy` or `pipx install graphifyy`) and reopen this page: Co-Review builds the graph itself (code only, no LLM, seconds).\n\n## Start here\n\n\n## Areas\n\nFolders, with what they define.\n"
+ },
+ {
+  "name": "map, graph without definitions",
+  "directory": "empty-graph",
+  "graphText": "{\"nodes\":[],\"links\":[]}",
+  "outlines": [
+   [
+    "README.md",
+    ""
+   ],
+   [
+    "build.rs",
+    "main"
+   ],
+   [
+    "cmd/tool/main.go",
+    "main, run, parseFlags"
+   ],
+   [
+    "docs/guide.md",
+    ""
+   ],
+   [
+    "index.ts",
+    "start"
+   ],
+   [
+    "lib/[weird] name.ts",
+    "Weird { a, b }"
+   ],
+   [
+    "src/api/handler.ts",
+    "Handler { handle, validate, respond, log, retry, close, open, a, b, c, d, e, … }, createHandler, helper"
+   ],
+   [
+    "src/api/routes.ts",
+    "routes, register"
+   ],
+   [
+    "src/app.TSX",
+    "App { render }"
+   ],
+   [
+    "src/db/store.ts",
+    "Store { get, set, delete }, connect, disconnect, migrate, seed"
+   ],
+   [
+    "src/server.js",
+    ""
+   ],
+   [
+    "src/cli.py",
+    "main, parse"
+   ],
+   [
+    "src/ünïcode/naïve.rs",
+    "Naive, other"
+   ],
+   [
+    "tools/x.rb",
+    "X { y }, Z"
+   ]
+  ],
+  "coverage": {
+   "total": 14,
+   "viewed": 3,
+   "areas": [
+    {
+     "path": ".",
+     "total": 3,
+     "viewed": 1,
+     "next": "build.rs"
+    },
+    {
+     "path": "cmd",
+     "total": 1,
+     "viewed": 1
+    },
+    {
+     "path": "docs",
+     "total": 1,
+     "viewed": 0,
+     "next": "docs/guide.md"
+    },
+    {
+     "path": "lib",
+     "total": 1,
+     "viewed": 0,
+     "next": "lib/[weird] name.ts"
+    },
+    {
+     "path": "src",
+     "total": 7,
+     "viewed": 1,
+     "next": "src/ünïcode/naïve.rs"
+    },
+    {
+     "path": "tools",
+     "total": 1,
+     "viewed": 0
+    },
+    {
+     "path": "empty",
+     "total": 0,
+     "viewed": 0
+    }
+   ]
+  },
+  "graph": "built",
+  "expected": "# Repository overview: empty-graph\n\nBuilt from the Tree-sitter repo map: 14 source files. 3 of 14 viewed so far.\nFor calls, imports and clusters of related code, install [Graphify](https://graphify.net) (`uv tool install graphifyy` or `pipx install graphifyy`) and reopen this page: Co-Review builds the graph itself (code only, no LLM, seconds).\n\n## Start here\n\n- [cmd/tool/main.go](cmd/tool/main.go): looks like an entry point\n- [index.ts](index.ts): looks like an entry point\n- [src/app.TSX](src/app.TSX): looks like an entry point\n- [src/server.js](src/server.js): looks like an entry point\n- [src/cli.py](src/cli.py): looks like an entry point\n- [src/api/handler.ts](src/api/handler.ts): one of the largest files (3 top-level definitions)\n- [src/db/store.ts](src/db/store.ts): one of the largest files (5 top-level definitions)\n- [lib/weird name.ts](lib/%5Bweird%5D%20name.ts): one of the largest files (1 top-level definitions)\n\n## Areas\n\nFolders, with what they define.\n\n- **(root)**: 3 files, 1 viewed. Defines main, start. Next: [build.rs](build.rs).\n- **cmd**: 1 file, 1 viewed. Defines main, run, parseFlags.\n- **docs**: 1 file, 0 viewed. Next: [guide.md](docs/guide.md).\n- **lib**: 1 file, 0 viewed. Defines Weird. Next: [weird name.ts](lib/%5Bweird%5D%20name.ts).\n- **src**: 7 files, 1 viewed. Defines Handler, createHandler, helper, routes, register, App. Next: [naïve.rs](src/%C3%BCn%C3%AFcode/na%C3%AFve.rs).\n- **tools**: 1 file, 0 viewed. Defines X, Z.\n- **empty**: 0 files, 0 viewed."
+ },
+ {
+  "name": "graph",
+  "directory": "graph-repo",
+  "graphText": "{\"nodes\":[{\"id\":\"a\",\"label\":\"handle\",\"source_file\":\"src/api/handler.ts\",\"source_location\":\"L10\",\"community\":0,\"community_name\":\"API\"},{\"id\":\"b\",\"label\":\"routes\",\"source_file\":\"src/api/routes.ts\",\"source_location\":\"L1\",\"community\":0,\"community_name\":\"API\"},{\"id\":\"c\",\"label\":\"register\",\"source_file\":\"src/api/routes.ts\",\"source_location\":\"L5\",\"community\":0,\"community_name\":\"API\"},{\"id\":\"d\",\"label\":\"Store\",\"source_file\":\"src/db/store.ts\",\"source_location\":\"L3\",\"community\":1,\"community_name\":\"Database\"},{\"id\":\"e\",\"label\":\"connect\",\"source_file\":\"src/db/store.ts\",\"source_location\":\"L20\",\"community\":1,\"community_name\":\"Database\"},{\"id\":\"f\",\"label\":\"migrate\",\"source_file\":\"src/db/store.ts\",\"source_location\":\"L40\",\"community\":1,\"community_name\":\"Database\"}],\"links\":[{\"source\":\"a\",\"target\":\"d\",\"relation\":\"calls\"},{\"source\":\"b\",\"target\":\"a\",\"relation\":\"calls\"},{\"source\":\"c\",\"target\":\"e\",\"relation\":\"calls\"},{\"source\":\"e\",\"target\":\"f\",\"relation\":\"calls\"},{\"source\":\"b\",\"target\":\"c\",\"relation\":\"contains\"}]}",
+  "outlines": [
+   [
+    "README.md",
+    ""
+   ],
+   [
+    "build.rs",
+    "main"
+   ],
+   [
+    "cmd/tool/main.go",
+    "main, run, parseFlags"
+   ],
+   [
+    "docs/guide.md",
+    ""
+   ],
+   [
+    "index.ts",
+    "start"
+   ],
+   [
+    "lib/[weird] name.ts",
+    "Weird { a, b }"
+   ],
+   [
+    "src/api/handler.ts",
+    "Handler { handle, validate, respond, log, retry, close, open, a, b, c, d, e, … }, createHandler, helper"
+   ],
+   [
+    "src/api/routes.ts",
+    "routes, register"
+   ],
+   [
+    "src/app.TSX",
+    "App { render }"
+   ],
+   [
+    "src/db/store.ts",
+    "Store { get, set, delete }, connect, disconnect, migrate, seed"
+   ],
+   [
+    "src/server.js",
+    ""
+   ],
+   [
+    "src/cli.py",
+    "main, parse"
+   ],
+   [
+    "src/ünïcode/naïve.rs",
+    "Naive, other"
+   ],
+   [
+    "tools/x.rb",
+    "X { y }, Z"
+   ]
+  ],
+  "coverage": {
+   "total": 14,
+   "viewed": 3,
+   "areas": [
+    {
+     "path": ".",
+     "total": 3,
+     "viewed": 1,
+     "next": "build.rs"
+    },
+    {
+     "path": "cmd",
+     "total": 1,
+     "viewed": 1
+    },
+    {
+     "path": "docs",
+     "total": 1,
+     "viewed": 0,
+     "next": "docs/guide.md"
+    },
+    {
+     "path": "lib",
+     "total": 1,
+     "viewed": 0,
+     "next": "lib/[weird] name.ts"
+    },
+    {
+     "path": "src",
+     "total": 7,
+     "viewed": 1,
+     "next": "src/ünïcode/naïve.rs"
+    },
+    {
+     "path": "tools",
+     "total": 1,
+     "viewed": 0
+    },
+    {
+     "path": "empty",
+     "total": 0,
+     "viewed": 0
+    }
+   ]
+  },
+  "graph": "built",
+  "expected": "# Repository overview: graph-repo\n\nBuilt from the Graphify graph of this repository (`graphify-out/graph.json`: 6 definitions, 2 areas). 3 of 14 source files viewed so far. Graphify's own report, [GRAPH_REPORT.md](graphify-out/GRAPH_REPORT.md), adds the import cycles and the surprising connections between distant parts of the code.\n\n## Start here\n\nThe most connected code: what the rest of the repository calls, imports or implements.\n\n- [handle](src/api/handler.ts:10): 2 connections, in API\n- [connect](src/db/store.ts:20): 2 connections, in Database\n- [Store](src/db/store.ts:3): 1 connections, in Database\n- [routes](src/api/routes.ts): 1 connections, in API\n- [register](src/api/routes.ts:5): 1 connections, in API\n- [migrate](src/db/store.ts:40): 1 connections, in Database\n\n## Areas\n\nClusters of code that work together (Graphify communities), largest first, with their most used pieces.\n\n- **API** (2 files): [handle](src/api/handler.ts:10), [routes](src/api/routes.ts), [register](src/api/routes.ts:5)\n- **Database** (1 file): [connect](src/db/store.ts:20), [Store](src/db/store.ts:3), [migrate](src/db/store.ts:40)\n\n## How the areas connect\n\nLines are calls, references and imports between areas; thicker means more.\n\n```mermaid\n%% id: areas\nflowchart LR\n    a0[\"API (3)\"]\n    a1[\"Database (3)\"]\n    a0 ---|2| a1\n```"
+ }
+]

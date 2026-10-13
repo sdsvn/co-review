@@ -1,0 +1,49 @@
+{
+  "name": "pseudocode_detected",
+  "input": {
+    "markdown": "# Title\n## Design\n- Step one\n  - Sub step\n",
+    "fileName": "something.pseudocode.md"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {},
+      "body": "# Title\n## Design\n- Step one\n  - Sub step\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n  - Sub step\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": false,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": [
+            {
+              "text": "Sub step",
+              "indent": 2,
+              "depth": 2,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one",
+      "Sub step"
+    ]
+  }
+}

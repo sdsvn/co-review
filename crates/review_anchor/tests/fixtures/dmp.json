@@ -1,0 +1,819 @@
+[
+  {
+    "name": "match_found_far_after_loc_zero",
+    "input": {
+      "type": "match",
+      "text": "xxxxxxxxabcdx",
+      "pattern": "abce",
+      "loc": 0,
+      "threshold": 0.3,
+      "distance": 1000
+    },
+    "expected": {
+      "at": 8
+    }
+  },
+  {
+    "name": "match_found_after_small_loc",
+    "input": {
+      "type": "match",
+      "text": "zzaxxxxxxxxxxxabcdq",
+      "pattern": "abce",
+      "loc": 1,
+      "threshold": 0.3,
+      "distance": 1000
+    },
+    "expected": {
+      "at": 14
+    }
+  },
+  {
+    "name": "match_passes_loc_then_narrows",
+    "input": {
+      "type": "match",
+      "text": "abcxxxxxxxxxxxxxxxxxxabcxxx",
+      "pattern": "abd",
+      "loc": 12,
+      "threshold": 0.5,
+      "distance": 1000
+    },
+    "expected": {
+      "at": 21
+    }
+  },
+  {
+    "name": "match_two_near_matches",
+    "input": {
+      "type": "match",
+      "text": "qabxq qabyq qabzq",
+      "pattern": "qabwq",
+      "loc": 6,
+      "threshold": 0.5,
+      "distance": 100
+    },
+    "expected": {
+      "at": 6
+    }
+  },
+  {
+    "name": "match_exact_only_before_loc",
+    "input": {
+      "type": "match",
+      "text": "abcdef xxxxxxxxxxxxxxxx",
+      "pattern": "abcdef",
+      "loc": 10,
+      "threshold": 0.5,
+      "distance": 1000
+    },
+    "expected": {
+      "at": 0
+    }
+  },
+  {
+    "name": "match_exact_before_loc_tight",
+    "input": {
+      "type": "match",
+      "text": "abcdef xxxxxxxxxxxxxxxx",
+      "pattern": "abcdeg",
+      "loc": 10,
+      "threshold": 0.3,
+      "distance": 10
+    },
+    "expected": {
+      "at": null
+    }
+  },
+  {
+    "name": "match_no_match",
+    "input": {
+      "type": "match",
+      "text": "the quick brown fox",
+      "pattern": "zzzz",
+      "loc": 5,
+      "threshold": 0.3,
+      "distance": 1000
+    },
+    "expected": {
+      "at": null
+    }
+  },
+  {
+    "name": "match_fuzzy_middle",
+    "input": {
+      "type": "match",
+      "text": "I am the very model of a modern major general.",
+      "pattern": " that berry ",
+      "loc": 5,
+      "threshold": 0.7,
+      "distance": 1000
+    },
+    "expected": {
+      "at": 4
+    }
+  },
+  {
+    "name": "match_fuzzy_threshold",
+    "input": {
+      "type": "match",
+      "text": "abcdefghijk",
+      "pattern": "efxyhi",
+      "loc": 1,
+      "threshold": 0.5,
+      "distance": 1000
+    },
+    "expected": {
+      "at": 4
+    }
+  },
+  {
+    "name": "match_fuzzy_distance_short",
+    "input": {
+      "type": "match",
+      "text": "abcdefghijklmnopqrstuvwxyz",
+      "pattern": "abcdefg",
+      "loc": 24,
+      "threshold": 0.5,
+      "distance": 10
+    },
+    "expected": {
+      "at": null
+    }
+  },
+  {
+    "name": "match_fuzzy_distance_long",
+    "input": {
+      "type": "match",
+      "text": "abcdefghijklmnopqrstuvwxyz",
+      "pattern": "abcdefg",
+      "loc": 24,
+      "threshold": 0.5,
+      "distance": 1000
+    },
+    "expected": {
+      "at": 0
+    }
+  },
+  {
+    "name": "match_pattern_at_end",
+    "input": {
+      "type": "match",
+      "text": "abcdefghijklmnopqrstuvwxyz",
+      "pattern": "wxyzq",
+      "loc": 0,
+      "threshold": 0.3,
+      "distance": 1000
+    },
+    "expected": {
+      "at": 22
+    }
+  },
+  {
+    "name": "match_repeats",
+    "input": {
+      "type": "match",
+      "text": "abcabcabcabcabcabd",
+      "pattern": "abd",
+      "loc": 3,
+      "threshold": 0.5,
+      "distance": 1000
+    },
+    "expected": {
+      "at": 15
+    }
+  },
+  {
+    "name": "cleanup_ascii_space",
+    "input": {
+      "type": "cleanup",
+      "a": "The cat.",
+      "b": "The cow and the cat."
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "The "
+        ],
+        [
+          1,
+          "cow and the "
+        ],
+        [
+          0,
+          "cat."
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_nbsp",
+    "input": {
+      "type": "cleanup",
+      "a": "The cat.",
+      "b": "The cow and the cat."
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "The "
+        ],
+        [
+          1,
+          "cow and the "
+        ],
+        [
+          0,
+          "cat."
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_form_feed",
+    "input": {
+      "type": "cleanup",
+      "a": "The\fcat.",
+      "b": "The\fcow\fand\fthe\fcat."
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "The\f"
+        ],
+        [
+          1,
+          "cow\fand\fthe\f"
+        ],
+        [
+          0,
+          "cat."
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_vertical_tab",
+    "input": {
+      "type": "cleanup",
+      "a": "The\u000bcat.",
+      "b": "The\u000bcow\u000band\u000bthe\u000bcat."
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "The\u000b"
+        ],
+        [
+          1,
+          "cow\u000band\u000bthe\u000b"
+        ],
+        [
+          0,
+          "cat."
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_em_space",
+    "input": {
+      "type": "cleanup",
+      "a": "The cat.",
+      "b": "The cow and the cat."
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "The "
+        ],
+        [
+          1,
+          "cow and the "
+        ],
+        [
+          0,
+          "cat."
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_bom",
+    "input": {
+      "type": "cleanup",
+      "a": "The﻿cat.",
+      "b": "The﻿cow﻿and﻿the﻿cat."
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "The﻿"
+        ],
+        [
+          1,
+          "cow﻿and﻿the﻿"
+        ],
+        [
+          0,
+          "cat."
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_next_line",
+    "input": {
+      "type": "cleanup",
+      "a": "Thecat.",
+      "b": "Thecowandthecat."
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "The"
+        ],
+        [
+          1,
+          "cowandthe"
+        ],
+        [
+          0,
+          "cat."
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_accented",
+    "input": {
+      "type": "cleanup",
+      "a": "Thé café.",
+      "b": "Thé cow ané thé café."
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "Thé"
+        ],
+        [
+          1,
+          " cow ané thé"
+        ],
+        [
+          0,
+          " café."
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_accented_inner",
+    "input": {
+      "type": "cleanup",
+      "a": "xéyéz",
+      "b": "xéyéqéyéz"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "xéyé"
+        ],
+        [
+          1,
+          "qéyé"
+        ],
+        [
+          0,
+          "z"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_cjk",
+    "input": {
+      "type": "cleanup",
+      "a": "日本語の文",
+      "b": "日本語と日本語の文"
+    },
+    "expected": {
+      "diffs": [
+        [
+          1,
+          "日本語と"
+        ],
+        [
+          0,
+          "日本語の文"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_arabic_digits",
+    "input": {
+      "type": "cleanup",
+      "a": "a٣b٣c",
+      "b": "a٣b٣x٣b٣c"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "a٣b٣"
+        ],
+        [
+          1,
+          "x٣b٣"
+        ],
+        [
+          0,
+          "c"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_punct_then_space",
+    "input": {
+      "type": "cleanup",
+      "a": "One. Two. Three.",
+      "b": "One. Two. Four. Two. Three."
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "One. Two."
+        ],
+        [
+          1,
+          " Four. Two."
+        ],
+        [
+          0,
+          " Three."
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_blank_crlf_crlf",
+    "input": {
+      "type": "cleanup",
+      "a": "a\r\n\r\nb",
+      "b": "a\r\n\r\nc\r\n\r\nb"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "a\r\n\r\n"
+        ],
+        [
+          1,
+          "c\r\n\r\n"
+        ],
+        [
+          0,
+          "b"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_blank_lf_crlf",
+    "input": {
+      "type": "cleanup",
+      "a": "a\n\r\nb",
+      "b": "a\n\r\nc\n\r\nb"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "a\n\r\n"
+        ],
+        [
+          1,
+          "c\n\r\n"
+        ],
+        [
+          0,
+          "b"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_blank_crlf_lf",
+    "input": {
+      "type": "cleanup",
+      "a": "a\r\n\nb",
+      "b": "a\r\n\nc\r\n\nb"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "a\r\n\n"
+        ],
+        [
+          1,
+          "c\r\n\n"
+        ],
+        [
+          0,
+          "b"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_lf_cr_not_blank",
+    "input": {
+      "type": "cleanup",
+      "a": "a\n\rb",
+      "b": "a\n\rc\n\rb"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "a\n\r"
+        ],
+        [
+          1,
+          "c\n\r"
+        ],
+        [
+          0,
+          "b"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_crlf_not_blank",
+    "input": {
+      "type": "cleanup",
+      "a": "x\r\ny",
+      "b": "x\r\nz\r\ny"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "x\r\n"
+        ],
+        [
+          1,
+          "z\r\n"
+        ],
+        [
+          0,
+          "y"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_lf_lf",
+    "input": {
+      "type": "cleanup",
+      "a": "a\n\nb",
+      "b": "a\n\nc\n\nb"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "a\n\n"
+        ],
+        [
+          1,
+          "c\n\n"
+        ],
+        [
+          0,
+          "b"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_nbsp_vs_dash",
+    "input": {
+      "type": "cleanup",
+      "a": "a-b c",
+      "b": "a-b b-b c"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "a-b "
+        ],
+        [
+          1,
+          "b-b "
+        ],
+        [
+          0,
+          "c"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_dash_vs_nbsp",
+    "input": {
+      "type": "cleanup",
+      "a": "a b-c",
+      "b": "a b-b b-c"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "a "
+        ],
+        [
+          1,
+          "b-b "
+        ],
+        [
+          0,
+          "b-c"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_period_nbsp",
+    "input": {
+      "type": "cleanup",
+      "a": "Hi. Yo. There.",
+      "b": "Hi. Yo. Yo. There."
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "Hi. Yo."
+        ],
+        [
+          1,
+          " Yo."
+        ],
+        [
+          0,
+          " There."
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_form_feed_vs_dash",
+    "input": {
+      "type": "cleanup",
+      "a": "a-b\fc",
+      "b": "a-b\fb-b\fc"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "a-b\f"
+        ],
+        [
+          1,
+          "b-b\f"
+        ],
+        [
+          0,
+          "c"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "cleanup_nbsp_vs_comma",
+    "input": {
+      "type": "cleanup",
+      "a": "x,y z",
+      "b": "x,y y,y z"
+    },
+    "expected": {
+      "diffs": [
+        [
+          0,
+          "x,y "
+        ],
+        [
+          1,
+          "y,y "
+        ],
+        [
+          0,
+          "z"
+        ]
+      ]
+    }
+  },
+  {
+    "name": "snap_devanagari_vowel_sign",
+    "input": {
+      "type": "track",
+      "anchor": {
+        "version": "v1",
+        "from": 3,
+        "to": 13,
+        "status": "active",
+        "text": "abcdefghij",
+        "prefix": "zz ",
+        "suffix": " zz",
+        "original": "abcdefghij"
+      },
+      "before": "zz abcdefghij zz",
+      "after": "zz abcdXfghijेk zz",
+      "version": "v2"
+    },
+    "expected": {
+      "version": "v2",
+      "from": 3,
+      "to": 13,
+      "status": "modified",
+      "text": "abcdXfghij",
+      "prefix": "zz ",
+      "suffix": "ेk zz",
+      "original": "abcdefghij"
+    }
+  },
+  {
+    "name": "snap_combining_acute",
+    "input": {
+      "type": "track",
+      "anchor": {
+        "version": "v1",
+        "from": 3,
+        "to": 13,
+        "status": "active",
+        "text": "abcdefghij",
+        "prefix": "zz ",
+        "suffix": " zz",
+        "original": "abcdefghij"
+      },
+      "before": "zz abcdefghij zz",
+      "after": "zz abcdXfghij́k zz",
+      "version": "v2"
+    },
+    "expected": {
+      "version": "v2",
+      "from": 3,
+      "to": 13,
+      "status": "modified",
+      "text": "abcdXfghij",
+      "prefix": "zz ",
+      "suffix": "́k zz",
+      "original": "abcdefghij"
+    }
+  },
+  {
+    "name": "snap_roman_numeral",
+    "input": {
+      "type": "track",
+      "anchor": {
+        "version": "v1",
+        "from": 3,
+        "to": 13,
+        "status": "active",
+        "text": "abcdefghij",
+        "prefix": "zz ",
+        "suffix": " zz",
+        "original": "abcdefghij"
+      },
+      "before": "zz abcdefghij zz",
+      "after": "zz abcdXfghijⅫk zz",
+      "version": "v2"
+    },
+    "expected": {
+      "version": "v2",
+      "from": 3,
+      "to": 15,
+      "status": "modified",
+      "text": "abcdXfghijⅫk",
+      "prefix": "zz ",
+      "suffix": " zz",
+      "original": "abcdefghij"
+    }
+  }
+]

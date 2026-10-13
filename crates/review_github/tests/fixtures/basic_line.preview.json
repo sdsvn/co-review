@@ -1,0 +1,13 @@
+{
+  "event": "REQUEST_CHANGES",
+  "body": "A few issues found.",
+  "comments": [
+    {
+      "threadId": "basic-1",
+      "path": "src/main.rs",
+      "line": 42,
+      "side": "RIGHT",
+      "body": "This should use a constant."
+    }
+  ]
+}

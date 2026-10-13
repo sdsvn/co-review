@@ -1,0 +1,68 @@
+{
+  "name": "mermaid_plain",
+  "fileName": "diagram.md",
+  "markdown": "# Diagram\n\nBefore.\n\n```mermaid\n%% id: flow\nflowchart TD\n  a[Start] --> b[End]\n```\n\nBetween.\n```mermaid\nsequenceDiagram\n  A->>B: hi\n```\nAfter.\n",
+  "title": "Diagram",
+  "pseudocode": false,
+  "blocks": [
+    {
+      "id": "flow",
+      "code": "flowchart TD\n  a[Start] --> b[End]"
+    },
+    {
+      "id": "block-2",
+      "code": "sequenceDiagram\n  A->>B: hi"
+    }
+  ],
+  "format": {
+    "mode": "plain",
+    "declared": false,
+    "warnings": []
+  },
+  "text": "Diagram\nBefore.\nflow\nBetween.\nblock-2\nAfter.\n",
+  "selections": [
+    {
+      "text": "Before.\nflow",
+      "occurrence": 0,
+      "start": 7,
+      "end": 21,
+      "anchor": {
+        "type": "text",
+        "exact": "Before.\nflow",
+        "prefix": "Diagram\n",
+        "suffix": "\nBetween.\nblock-2\nAfter.\n",
+        "startOffsetHint": 8,
+        "endOffsetHint": 20
+      }
+    },
+    {
+      "text": "Between",
+      "occurrence": 0,
+      "start": 20,
+      "end": 28,
+      "anchor": {
+        "type": "text",
+        "exact": "Between",
+        "prefix": "Diagram\nBefore.\nflow\n",
+        "suffix": ".\nblock-2\nAfter.\n",
+        "startOffsetHint": 21,
+        "endOffsetHint": 28
+      }
+    },
+    {
+      "text": "After",
+      "occurrence": 0,
+      "start": 37,
+      "end": 43,
+      "anchor": {
+        "type": "text",
+        "exact": "After",
+        "prefix": "Diagram\nBefore.\nflow\nBetween.\nblock-2\n",
+        "suffix": ".\n",
+        "startOffsetHint": 38,
+        "endOffsetHint": 43
+      }
+    }
+  ],
+  "located": []
+}

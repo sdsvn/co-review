@@ -1,0 +1,50 @@
+{
+  "name": "em_dash_reason",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Save the order as \"payment pending\" — new `payment_outbox` table\n- Retry with backoff — provider forgets keys after 24 hours\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Save the order as \"payment pending\" — new `payment_outbox` table\n- Retry with backoff — provider forgets keys after 24 hours\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Save the order as \"payment pending\" — new `payment_outbox` table\n- Retry with backoff — provider forgets keys after 24 hours\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Save the order as \"payment pending\" — new `payment_outbox` table",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "Retry with backoff — provider forgets keys after 24 hours",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Save the order as \"payment pending\" — new payment_outbox table",
+      "Retry with backoff — provider forgets keys after 24 hours"
+    ]
+  }
+}

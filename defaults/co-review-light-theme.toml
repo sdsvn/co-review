@@ -1,0 +1,212 @@
+#:schema ../extra/schemas/color-theme.json
+# co-review: Co-Review's Light theme (desktop-app spec), the colours of the Theia app's Co-Review Light theme: ink and
+# indigo for the workbench, mint for the agent (and approval), as the logo (docs/assets/logo.svg). Generated from
+# Lapce's own Light theme with Co-Review's colours; `review.agent` marks agents' messages in threads.
+
+[color-theme]
+name = "Co-Review Light"
+
+[color-theme.base]
+black = "#1E1B4B"
+blue = "#1D4ED8"
+cyan = "#0E7490"
+green = "#047857"
+grey = "#E4E5F2"
+magenta = "#BE185D"
+orange = "#C2410C"
+purple = "#6D28D9"
+red = "#DC2626"
+white = "#FFFFFF"
+yellow = "#B45309"
+
+primary-background = "#FFFFFF"
+# Background for 'secondary' elements: panels, palette, status bar, completion, hover
+secondary-background = "#F6F6FB"
+current-background = "#E0E7FF"
+text = "#1E1B4B"
+dim-text = "#8B8BA7"
+
+[color-theme.syntax]
+"comment" = "$dim-text"
+"constant" = "$magenta"
+"type" = "$yellow"
+"typeAlias" = "$yellow"
+"number" = "$magenta"
+"enum" = "$yellow"
+"struct" = "$yellow"
+"structure" = "$yellow"
+"interface" = "$yellow"
+"attribute" = "$orange"
+"constructor" = "$yellow"
+
+"function" = "$blue"
+"method" = "$blue"
+"function.method" = "$blue"
+
+"keyword" = "$purple"
+"selfKeyword" = "$purple"
+
+"field" = "$orange"
+"property" = "$orange"
+"enumMember" = "$magenta"
+"enum-member" = "$magenta"
+
+"string" = "$green"
+"string.escape" = "$cyan"
+
+"type.builtin" = "$cyan"
+"builtinType" = "$cyan"
+"escape" = "$cyan"
+"embedded" = "$cyan"
+
+"punctuation.delimiter" = "#6B6B8A"
+"text.title" = "$orange"
+"text.uri" = "$cyan"
+"text.reference" = "$yellow"
+"variable" = "$text"
+"variable.other.member" = "$orange"
+"tag" = "#4338CA"
+
+"markup.heading" = "$purple"
+"markup.bold" = "$orange"
+"markup.italic" = "$orange"
+"markup.list" = "$orange"
+"markup.link.url" = "$blue"
+"markup.link.label" = "$purple"
+"markup.link.text" = "$purple"
+
+"bracket.color.1" = "$blue"
+"bracket.color.2" = "$yellow"
+"bracket.color.3" = "$purple"
+"bracket.unpaired" = "$red"
+
+[color-theme.ui]
+# co-review: agents' messages, questions and activity in reviews.
+"review.agent" = "#059669"
+
+"lapce.error" = "$red"
+"lapce.warn" = "#D97706"
+"lapce.dropdown_shadow" = "#1E1B4B33"
+"lapce.border" = "#E4E5F2"
+"lapce.scroll_bar" = "#6366F144"
+
+"lapce.button.primary.background" = "#4F46E5"
+"lapce.button.primary.foreground" = "#FFFFFF"
+
+# tab
+"lapce.tab.active.background" = "$primary-background"
+"lapce.tab.active.foreground" = "$text"
+"lapce.tab.active.underline" = "#6366F1"
+
+"lapce.tab.inactive.background" = "$secondary-background"
+"lapce.tab.inactive.foreground" = "#6E6C9E"
+"lapce.tab.inactive.underline" = "#6366F155"
+
+"lapce.tab.separator" = "#E4E5F2"
+
+"lapce.icon.active" = "$text"
+"lapce.icon.inactive" = "$dim-text"
+
+"lapce.remote.icon" = "$white"
+"lapce.remote.local" = "#4078F2"
+"lapce.remote.connected" = "#50A14F"
+"lapce.remote.connecting" = "#C18401"
+"lapce.remote.disconnected" = "#E45649"
+
+"lapce.plugin.name" = "$text"
+"lapce.plugin.description" = "$text"
+"lapce.plugin.author" = "#5B5A7E"
+
+"terminal.cursor" = "$text"
+"terminal.foreground" = "$text"
+"terminal.background" = "$primary-background"
+"terminal.white" = "$white"
+"terminal.black" = "$black"
+"terminal.red" = "$red"
+"terminal.blue" = "$blue"
+"terminal.green" = "$green"
+"terminal.yellow" = "$yellow"
+"terminal.cyan" = "$cyan"
+"terminal.magenta" = "$magenta"
+"terminal.bright_white" = "#1E1B4B"
+"terminal.bright_red" = "$red"
+"terminal.bright_blue" = "$blue"
+"terminal.bright_green" = "$green"
+"terminal.bright_yellow" = "$yellow"
+"terminal.bright_cyan" = "$cyan"
+"terminal.bright_magenta" = "$magenta"
+"terminal.bright_black" = "#8B8BA7"
+
+"editor.background" = "$primary-background"
+"editor.foreground" = "$text"
+"editor.dim" = "#6E6C9E"
+"editor.focus" = "#4F46E5"
+"editor.caret" = "#4F46E5"
+"editor.selection" = "#C7D2FE"
+"editor.current_line" = "#F5F6FF"
+"editor.debug_break_line" = "#6366F126"
+"editor.link" = "#4F46E5"
+"editor.visible_whitespace" = "#D6D8EE"
+"editor.indent_guide" = "#E4E5F2"
+"editor.drag_drop_background" = "#6366F133"
+"editor.drag_drop_tab_background" = "#0b0e1433"
+"editor.sticky_header_background" = "$primary-background"
+
+"inlay_hint.foreground" = "#5B5A7E"
+"inlay_hint.background" = "#6366F11A"
+
+"error_lens.error.foreground" = "$red"
+"error_lens.error.background" = "#EF444420"
+"error_lens.warning.foreground" = "$yellow"
+"error_lens.warning.background" = "#F59E0B20"
+"error_lens.other.foreground" = "$dim-text"
+"error_lens.other.background" = "#8B8BA720"
+
+"completion_lens.foreground" = "$dim-text"
+
+"source_control.added" = "#10B981CC"
+"source_control.removed" = "#EF4444CC"
+"source_control.modified" = "#6366F1CC"
+
+"tooltip.background" = "#FFFFFF"
+"tooltip.foreground" = "$text"
+
+"palette.background" = "$secondary-background"
+"palette.foreground" = "$text"
+"palette.current.background" = "$current-background"
+"palette.current.foreground" = "$text"
+
+"completion.background" = "$secondary-background"
+"completion.current" = "$current-background"
+
+"hover.background" = "$secondary-background"
+
+"activity.background" = "#EEEEF8"
+"activity.current" = "$secondary-background"
+
+"debug.breakpoint" = "$red"
+"debug.breakpoint.hover" = "#E4564966"
+
+"panel.background" = "$secondary-background"
+"panel.foreground" = "$text"
+"panel.foreground.dim" = "#5B5A7E"
+"panel.current.background" = "$current-background"
+"panel.current.foreground" = "$text"
+"panel.current.foreground.dim" = "#5B5A7E"
+"panel.hovered.background" = "#F1F2FC"
+"panel.hovered.active.background" = "#EEF0FF"
+"panel.hovered.foreground" = "$text"
+"panel.hovered.foreground.dim" = "#5B5A7E"
+
+"status.background" = "$black"
+"status.foreground" = "#E0E7FF"
+"status.modal.normal.background" = "#6366F1"
+"status.modal.normal.foreground" = "#FFFFFF"
+"status.modal.insert.background" = "$red"
+"status.modal.insert.foreground" = "$white"
+"status.modal.visual.background" = "$yellow"
+"status.modal.visual.foreground" = "$white"
+"status.modal.terminal.background" = "$purple"
+"status.modal.terminal.foreground" = "$white"
+
+"markdown.blockquote" = "#5B5A7E"

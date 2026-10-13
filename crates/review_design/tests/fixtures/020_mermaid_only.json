@@ -1,0 +1,48 @@
+{
+  "name": "mermaid_only",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Step one\n## Behaviour\n```mermaid\nsequenceDiagram\n  A->>B: Request\n```\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Step one\n## Behaviour\n```mermaid\nsequenceDiagram\n  A->>B: Request\n```\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n"
+        },
+        {
+          "heading": "Behaviour",
+          "key": "behaviour",
+          "body": "```mermaid\nsequenceDiagram\n  A->>B: Request\n```\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

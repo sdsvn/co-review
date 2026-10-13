@@ -1,0 +1,62 @@
+{
+  "name": "open_questions",
+  "input": {
+    "markdown": "---\nco-review: design\n---\n# Title\n## Design\n- Step one\n## Open Questions\n- Should we use feature flags?\n- What about backward compatibility?\n",
+    "fileName": "index.markdown"
+  },
+  "expected": {
+    "frontmatter": {
+      "data": {
+        "co-review": "design"
+      },
+      "body": "# Title\n## Design\n- Step one\n## Open Questions\n- Should we use feature flags?\n- What about backward compatibility?\n"
+    },
+    "sections": {
+      "preamble": "",
+      "sections": [
+        {
+          "heading": "Design",
+          "key": "design",
+          "body": "- Step one\n"
+        },
+        {
+          "heading": "Open Questions",
+          "key": "open questions",
+          "body": "- Should we use feature flags?\n- What about backward compatibility?\n\n"
+        }
+      ]
+    },
+    "format": {
+      "mode": "design",
+      "declared": true,
+      "warnings": []
+    },
+    "stepTrees": {
+      "design": [
+        {
+          "text": "Step one",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ],
+      "open questions": [
+        {
+          "text": "Should we use feature flags?",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        },
+        {
+          "text": "What about backward compatibility?",
+          "indent": 0,
+          "depth": 1,
+          "children": []
+        }
+      ]
+    },
+    "stepIds": [
+      "Step one"
+    ]
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "name": "pseudocode_file",
+  "fileName": "retry.pseudocode.md",
+  "markdown": "# Retry\n\nPreamble text.\n\n## Design\n- Retry `?` failures — they are transient\n  - Back off **exponentially** `⚠`\n    - Cap at *one hour* `✎`\n- Give up\n\n## Open Questions\n- Should we alert?\n\n## Notes\nFree text.\n",
+  "title": "Retry",
+  "pseudocode": true,
+  "blocks": [],
+  "format": {
+    "mode": "design",
+    "declared": false,
+    "warnings": []
+  },
+  "text": "RetryPreamble text.\nDesign L1L2L3Retry ? failures — they are transientBack off exponentially ⚠Cap at one hour ✎Give upOpen QuestionsShould we alert?NotesFree text.\n",
+  "selections": [
+    {
+      "text": "Retry ? failures",
+      "occurrence": 0,
+      "start": 33,
+      "end": 50,
+      "anchor": {
+        "type": "text",
+        "exact": "Retry ? failures",
+        "prefix": "RetryPreamble text.\nDesign L1L2L3",
+        "suffix": " — they are transientBack off exponentia",
+        "startOffsetHint": 33,
+        "endOffsetHint": 49
+      }
+    },
+    {
+      "text": "they are transient",
+      "occurrence": 0,
+      "start": 51,
+      "end": 70,
+      "anchor": {
+        "type": "text",
+        "exact": "they are transient",
+        "prefix": "e text.\nDesign L1L2L3Retry ? failures — ",
+        "suffix": "Back off exponentially ⚠Cap at one hour ",
+        "startOffsetHint": 52,
+        "endOffsetHint": 70
+      }
+    },
+    {
+      "text": "Back off exponentially",
+      "occurrence": 0,
+      "start": 70,
+      "end": 93,
+      "anchor": {
+        "type": "text",
+        "exact": "Back off exponentially",
+        "prefix": "2L3Retry ? failures — they are transient",
+        "suffix": " ⚠Cap at one hour ✎Give upOpen Questions",
+        "startOffsetHint": 70,
+        "endOffsetHint": 92
+      }
+    },
+    {
+      "text": "Should we alert",
+      "occurrence": 0,
+      "start": 132,
+      "end": 147,
+      "anchor": {
+        "type": "text",
+        "exact": "Should we alert",
+        "prefix": " ⚠Cap at one hour ✎Give upOpen Questions",
+        "suffix": "?NotesFree text.\n",
+        "startOffsetHint": 132,
+        "endOffsetHint": 147
+      }
+    },
+    {
+      "text": "Free text",
+      "occurrence": 0,
+      "start": 153,
+      "end": 162,
+      "anchor": {
+        "type": "text",
+        "exact": "Free text",
+        "prefix": "ve upOpen QuestionsShould we alert?Notes",
+        "suffix": ".\n",
+        "startOffsetHint": 153,
+        "endOffsetHint": 162
+      }
+    }
+  ],
+  "located": []
+}

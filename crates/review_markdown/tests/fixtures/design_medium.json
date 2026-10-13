@@ -1,0 +1,68 @@
+{
+  "name": "design_medium",
+  "fileName": "index.markdown",
+  "markdown": "---\nco-review: design\n---\n# Retry outbound webhooks\n\n## Context\nWebhooks are sent inside the API request (`WebhookSender`). When a customer's endpoint is down, the event is lost\nand the request slows down; about 2% of deliveries fail today. The service already runs durable background jobs on\nPostgres (`JobRunner`).\n\n## Design\n- Deliver each accepted webhook at least once\n  - Record the delivery and queue a delivery job in the request's transaction\n  - The job sends the event and marks the delivery done\n    - A crash can repeat a delivery, so every event carries a stable id that receivers can deduplicate on\n- Retry failures that can succeed later\n  - Retry timeouts, rate limiting and server errors with exponential backoff, for up to 24 hours\n  - Fail other client errors at once, without retrying\n    - When rate limited, wait as long as the endpoint asks\n- Show customers what happened\n  - List each event's attempts and final status in the existing webhook log\n\n## Alternatives\n\n### Keep sending inline and retry in the request\nNo new jobs, but a slow endpoint still slows the API, and retries can't span hours.\n\n### A dedicated message broker\nAdds infrastructure; the existing job runner already gives durable, scheduled retries.\n\nSelected: the existing job runner, because retries must be durable and delayed, and it's already in place.\n\n## Behaviour\n\n### Endpoint down for an hour\nRequest → delivery and job saved → failures, retried with backoff → success → delivered\n\n### Worker crashes after the endpoint accepted the event\nEndpoint gets the event → worker dies before marking it done → the job runs again → the endpoint gets it again,\nwith the same event id\n\n## Open Questions\n- After 24 hours of failures, should we stop delivering to that endpoint, or keep retrying new events?\n",
+  "title": "Retry outbound webhooks",
+  "pseudocode": true,
+  "blocks": [],
+  "format": {
+    "mode": "design",
+    "declared": true,
+    "warnings": []
+  },
+  "text": "Retry outbound webhooksContextWebhooks are sent inside the API request (WebhookSender). When a customer's endpoint is down, the event is lost\nand the request slows down; about 2% of deliveries fail today. The service already runs durable background jobs on\nPostgres (JobRunner).\nDesign L1L2L3Deliver each accepted webhook at least onceRecord the delivery and queue a delivery job in the request's transactionThe job sends the event and marks the delivery doneA crash can repeat a delivery, so every event carries a stable id that receivers can deduplicate onRetry failures that can succeed laterRetry timeouts, rate limiting and server errors with exponential backoff, for up to 24 hoursFail other client errors at once, without retryingWhen rate limited, wait as long as the endpoint asksShow customers what happenedList each event's attempts and final status in the existing webhook logAlternativesKeep sending inline and retry in the request\nNo new jobs, but a slow endpoint still slows the API, and retries can't span hours.\nA dedicated message broker\nAdds infrastructure; the existing job runner already gives durable, scheduled retries.\nSelected: the existing job runner, because retries must be durable and delayed, and it's already in place.\nBehaviourEndpoint down for an hour\nRequest → delivery and job saved → failures, retried with backoff → success → delivered\nWorker crashes after the endpoint accepted the event\nEndpoint gets the event → worker dies before marking it done → the job runs again → the endpoint gets it again,\nwith the same event id\nOpen QuestionsAfter 24 hours of failures, should we stop delivering to that endpoint, or keep retrying new events?",
+  "selections": [
+    {
+      "text": "at least once",
+      "occurrence": 0,
+      "start": 321,
+      "end": 335,
+      "anchor": {
+        "type": "text",
+        "exact": "at least once",
+        "prefix": "ign L1L2L3Deliver each accepted webhook ",
+        "suffix": "Record the delivery and queue a delivery",
+        "startOffsetHint": 322,
+        "endOffsetHint": 335
+      }
+    },
+    {
+      "text": "Endpoint down for an hour",
+      "occurrence": 0,
+      "start": 1259,
+      "end": 1285,
+      "anchor": {
+        "type": "text",
+        "exact": "Endpoint down for an hour",
+        "prefix": "ed, and it's already in place.\nBehaviour",
+        "suffix": "\nRequest → delivery and job saved → fail",
+        "startOffsetHint": 1259,
+        "endOffsetHint": 1284
+      }
+    },
+    {
+      "text": "job runner",
+      "occurrence": 1,
+      "start": 1165,
+      "end": 1176,
+      "anchor": {
+        "type": "text",
+        "exact": "job runner",
+        "prefix": "heduled retries.\nSelected: the existing ",
+        "suffix": ", because retries must be durable and de",
+        "startOffsetHint": 1166,
+        "endOffsetHint": 1176
+      }
+    }
+  ],
+  "located": [
+    {
+      "anchor": {
+        "type": "text",
+        "exact": "job",
+        "startOffsetHint": 900
+      },
+      "at": 952
+    }
+  ]
+}

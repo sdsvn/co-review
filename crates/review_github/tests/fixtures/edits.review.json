@@ -1,0 +1,119 @@
+{
+  "id": "review-1",
+  "title": "Test Review",
+  "workspaceRoot": "/workspace",
+  "scope": {
+    "kind": "repository"
+  },
+  "participants": [
+    {
+      "id": "reviewer-1",
+      "kind": "human",
+      "name": "Reviewer"
+    },
+    {
+      "id": "agent-1",
+      "kind": "agent",
+      "name": "Agent"
+    }
+  ],
+  "threads": [
+    {
+      "id": "edits-kept",
+      "number": 1,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/api.rs",
+          "line": 10,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-32",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "Original comment kept.",
+          "createdAt": 1700000000032
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "edits-changed",
+      "number": 2,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/api.rs",
+          "line": 25,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-34",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "Original comment to edit.",
+          "createdAt": 1700000000034
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "edits-emptied",
+      "number": 3,
+      "location": {
+        "kind": "patch",
+        "patchAnchor": {
+          "type": "code-line",
+          "path": "src/api.rs",
+          "line": 40,
+          "side": "new"
+        }
+      },
+      "messages": [
+        {
+          "id": "msg-36",
+          "author": {
+            "id": "reviewer-1",
+            "kind": "human",
+            "name": "Reviewer"
+          },
+          "body": "This comment will be emptied.",
+          "createdAt": 1700000000036
+        }
+      ],
+      "status": "open",
+      "intent": "comment",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "activity": [],
+  "nextThreadNumber": 4,
+  "createdAt": 1700000000000,
+  "updatedAt": 1700000000000,
+  "verdict": {
+    "decision": "request-changes",
+    "summary": "Original summary.",
+    "submittedAt": 1700000000000,
+    "count": 1
+  }
+}

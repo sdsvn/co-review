@@ -1,9 +1,8 @@
 #!/bin/sh
 # Claude Code SessionStart hook: tells the session about open Co-Review reviews of this project.
-# Asks a running Co-Review only (never starts it); prints nothing when there is nothing to say.
-registry="${CO_REVIEW_HOME:-$HOME/.co-review}/server.json"
-[ -f "$registry" ] || exit 0
-url=$(sed -n 's/.*"url": *"\([^"]*\)".*/\1/p' "$registry")
-[ -n "$url" ] || exit 0
-curl -sf --max-time 2 -G "$url/api/m/status" --data-urlencode "root=${CLAUDE_PROJECT_DIR:-$PWD}" --data "format=claude-hook" 2>/dev/null
+# Reads the review data through the co-review command (never starts Co-Review); prints nothing when there is nothing
+# to say, or when the command is missing or fails.
+command -v co-review >/dev/null 2>&1 || exit 0
+output=$(co-review status "${CLAUDE_PROJECT_DIR:-$PWD}" --claude-hook 2>/dev/null) || exit 0
+[ -n "$output" ] && printf '%s\n' "$output"
 exit 0
