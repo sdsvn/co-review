@@ -157,6 +157,9 @@ pub struct DocThreads {
     pub summaries: RwSignal<HashMap<ItemKey, String>>,
     /// Phantom rows of each unfolded item, from its measured height.
     pub rows: RwSignal<HashMap<ItemKey, usize>>,
+    /// The rows each editor on the file measured for each item (editors of other widths measure other heights):
+    /// `rows` has the most, so no editor's thread covers the code under it.
+    measured: RefCell<HashMap<ItemKey, HashMap<u64, usize>>>,
 }
 
 thread_local! {
@@ -191,6 +194,7 @@ fn doc_threads_or_new(path: &Path) -> Rc<DocThreads> {
                     items: cx.create_rw_signal(Vec::new()),
                     summaries: cx.create_rw_signal(HashMap::new()),
                     rows: cx.create_rw_signal(HashMap::new()),
+                    measured: RefCell::default(),
                 })
             })
             .clone()
@@ -421,9 +425,11 @@ impl DocThreads {
                 review_store::snapshots::snapshots_dir(&core.services.store.workspace_dir(&review.workspace_root))
             })
         });
-        self.live
-            .borrow_mut()
-            .retain(|key, _| entries.iter().any(|entry| &entry.key == key));
+        {
+            let mut live = self.live.borrow_mut();
+            live.retain(|key, _| entries.iter().any(|entry| &entry.key == key));
+            seed_from_drafts(&entries, &mut live);
+        }
         tracing::debug!(
             "{} review threads and drafts for {} (review {:?})",
             entries.len(),
@@ -492,19 +498,7 @@ impl DocThreads {
                 tracking.text = Some(after);
                 std::mem::take(&mut tracking.again)
             };
-            {
-                let entries = this.entries.borrow();
-                let mut live = this.live.borrow_mut();
-                for (key, placed) in placed {
-                    // Kept only while the entry is still there with the same stored target.
-                    if entries
-                        .iter()
-                        .any(|entry| entry.key == key && basis(&entry.location) == placed.basis)
-                    {
-                        live.insert(key, placed);
-                    }
-                }
-            }
+            keep_placed(&this.entries.borrow(), &mut this.live.borrow_mut(), placed);
             this.place();
             if again {
                 this.sync(None);
@@ -553,17 +547,42 @@ impl DocThreads {
         }
     }
 
-    /// The measured height of an item: its rows change (and the editor lays out again) when it needs other rows.
-    fn measured(&self, doc: &Doc, key: &ItemKey, height: f64, line_height: f64) {
+    /// The height of an item measured in the editor view `view`: its rows change (and the editor lays out again) when
+    /// it needs other rows.
+    fn measured(&self, doc: &Doc, key: &ItemKey, view: u64, height: f64, line_height: f64) {
         if height <= 0.0 || line_height <= 0.0 {
             return;
         }
-        let rows = ((height + GAP) / line_height).ceil() as usize;
+        let rows = {
+            let mut measured = self.measured.borrow_mut();
+            let views = measured.entry(key.clone()).or_default();
+            views.insert(view, ((height + GAP) / line_height).ceil() as usize);
+            views.values().copied().max().unwrap_or_default()
+        };
+        self.set_rows(doc, key, rows);
+    }
+
+    /// The editor view `view` no longer shows the item: the other views' heights decide its rows.
+    fn unmeasured(&self, doc: &Doc, key: &ItemKey, view: u64) {
+        let rows = {
+            let mut measured = self.measured.borrow_mut();
+            let Some(views) = measured.get_mut(key) else {
+                return;
+            };
+            views.remove(&view);
+            views.values().copied().max()
+        };
+        if let Some(rows) = rows {
+            self.set_rows(doc, key, rows);
+        }
+    }
+
+    fn set_rows(&self, doc: &Doc, key: &ItemKey, rows: usize) {
         let changed = self
             .rows
             .with_untracked(|current| current.get(key) != Some(&rows));
         if changed {
-            tracing::debug!("review thread {key:?} is {height}px high: {rows} rows");
+            tracing::debug!("review thread {key:?} needs {rows} rows");
             // Together, so the views place themselves once, on the layout with the new rows.
             floem::reactive::batch(|| {
                 self.rows.update(|current| {
@@ -571,6 +590,45 @@ impl DocThreads {
                 });
                 doc.clear_text_cache();
             });
+        }
+    }
+}
+
+/// Takes a background placement's results. One whose entry changed its stored target meanwhile is not taken (a
+/// placement for the new target was asked for and runs next), and the entry keeps its last line until then, so its
+/// view never leaves its place.
+fn keep_placed(entries: &[Entry], live: &mut HashMap<ItemKey, Live>, placed: Vec<(ItemKey, Live)>) {
+    for (key, placed) in placed {
+        if entries
+            .iter()
+            .any(|entry| entry.key == key && basis(&entry.location) == placed.basis)
+        {
+            live.insert(key, placed);
+        }
+    }
+}
+
+/// A thread just sent from a draft takes the draft's line until it is placed itself (its basis differs, so it is), so
+/// the comment shows in the same place throughout instead of disappearing while its first placement runs.
+fn seed_from_drafts(entries: &[Entry], live: &mut HashMap<ItemKey, Live>) {
+    for entry in entries {
+        if !matches!(entry.key, ItemKey::Thread { .. }) || live.contains_key(&entry.key) {
+            continue;
+        }
+        let line = entries
+            .iter()
+            .filter(|draft| matches!(draft.key, ItemKey::Draft(_)))
+            .filter(|draft| draft.location.range == entry.location.range)
+            .find_map(|draft| live.get(&draft.key).and_then(|live| live.line));
+        if let Some(line) = line {
+            live.insert(
+                entry.key.clone(),
+                Live {
+                    basis: String::new(),
+                    tracked: None,
+                    line: Some(line),
+                },
+            );
         }
     }
 }
@@ -655,6 +713,17 @@ fn live_range(location: &CodeLocation, text: &str, snapshots: Option<&Path>) -> 
 
 // ---- The overlay with the threads, over an editor's text ----
 
+/// A token for one item view in one editor, for its measured height.
+fn next_view_token() -> u64 {
+    thread_local! {
+        static NEXT: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    }
+    NEXT.with(|next| {
+        next.set(next.get() + 1);
+        next.get()
+    })
+}
+
 /// What places an item's view on its rows.
 struct ItemRows<'a> {
     /// Phantom rows under the item's line, for every item there.
@@ -675,26 +744,30 @@ enum Placed {
     /// The y of the item's first row.
     At(f64),
     OffScreen,
-    /// The layout or the screen lines don't have the item's rows yet (the editor is being laid out again).
-    Unsettled,
+    /// The line's layout doesn't have the item's rows yet (the editor is being laid out again): the view stays where
+    /// it was, or goes under the line's first visual line (`estimate`) when it has no place yet.
+    Unsettled { estimate: Option<f64> },
 }
 
-/// Where an item's view goes: on its first row, when its rows are on screen.
+/// Where an item's view goes: on its first row, whenever any visual line of its line is on screen. A line's visual
+/// lines are one line height apart, so the rows' place follows from any of them, also while the screen lines are from
+/// before the rows changed (a reply made the thread taller): the view is never hidden while its rows show.
 fn item_top(rows: ItemRows) -> Placed {
-    let Some(first_row) = rows.layout_lines.checked_sub(rows.rows_total) else {
-        return Placed::Unsettled;
+    let Some(&(index, y)) = rows.on_screen.first() else {
+        return Placed::OffScreen;
     };
-    let found = rows
-        .on_screen
-        .iter()
-        .find(|(index, _)| *index >= first_row)
-        .map(|(index, y)| y - (index - first_row) as f64 * rows.line_height);
-    match found {
-        Some(y) => Placed::At(y + rows.rows_before as f64 * rows.line_height),
-        // The line's text is on screen and the screen goes on after it, but its rows aren't there.
-        None if !rows.on_screen.is_empty() && !rows.line_ends_screen => Placed::Unsettled,
-        None => Placed::OffScreen,
+    let below = rows.rows_before as f64 * rows.line_height;
+    let Some(first_row) = rows.layout_lines.checked_sub(rows.rows_total) else {
+        return Placed::Unsettled {
+            estimate: Some(y + (1.0 - index as f64) * rows.line_height + below),
+        };
+    };
+    let reaches_rows = rows.on_screen.iter().any(|(index, _)| *index >= first_row);
+    if !reaches_rows && rows.line_ends_screen {
+        // The line's text ends the screen: its rows are below it.
+        return Placed::OffScreen;
     }
+    Placed::At(y + (first_row as f64 - index as f64) * rows.line_height + below)
 }
 
 /// The threads and drafts of the editor's file, on the rows reserved for them (`co-review:` hook in
@@ -704,9 +777,12 @@ pub fn editor_threads(window_tab: Rc<WindowTabData>, e_data: RwSignal<EditorData
     let origin = create_rw_signal(Point::ZERO);
     let size = create_rw_signal(Rect::ZERO);
     let bar = super::selection_bar::selection_bar(window_tab.clone(), e_data, origin, size);
+    // Only another file builds the threads again: a notification of the same document (or content) keeps every
+    // thread view, its place and its measured height.
+    let path = create_memo(move |_| doc_signal.with(|doc| doc.content.with(|content| content.path().cloned())));
     floem::views::stack((
         dyn_container(
-            move || doc_signal.with(|doc| doc.content.with(|content| content.path().cloned())),
+            move || path.get(),
             move |path| match path {
                 Some(path) => doc_overlay(window_tab.clone(), e_data, path, origin, size).into_any(),
                 None => empty().into_any(),
@@ -744,8 +820,14 @@ fn doc_overlay(
     {
         let threads = threads.clone();
         let review = window_tab.review.clone();
+        let path = path.clone();
         Scope::current().create_effect(move |_| {
             let doc = doc_signal.get();
+            // The editor moved to another file: this overlay is going away, and its threads must not be placed in
+            // that file's text.
+            if doc_path(&doc).as_deref() != Some(path.as_path()) {
+                return;
+            }
             doc.loaded.get();
             let active = review.active_review();
             let drafts: Vec<_> = review.drafts.get().into_iter().collect();
@@ -800,12 +882,18 @@ fn doc_overlay(
             };
             let measured_key = key.clone();
             let measure_threads = threads.clone();
+            let view = next_view_token();
+            let cleanup = (threads.clone(), key.clone(), doc_signal.get_untracked());
             let last_top = Rc::new(std::cell::Cell::new(None::<f64>));
             container(content)
                 .on_resize(move |rect| {
                     let line_height = config.get_untracked().editor.line_height() as f64;
                     let doc = doc_signal.get_untracked();
-                    measure_threads.measured(&doc, &measured_key, rect.height(), line_height);
+                    measure_threads.measured(&doc, &measured_key, view, rect.height(), line_height);
+                })
+                .on_cleanup(move || {
+                    let (threads, key, doc) = &cleanup;
+                    threads.unmeasured(doc, key, view);
                 })
                 .on_event_stop(EventListener::PointerDown, |_| {})
                 .style(move |s| {
@@ -855,7 +943,9 @@ fn doc_overlay(
                                 None
                             }
                             // The editor is being laid out again: where it was.
-                            Placed::Unsettled => last_top.get(),
+                            Placed::Unsettled { estimate } => last_top
+                                .get()
+                                .or_else(|| estimate.map(|y| y - viewport.y0 + GAP / 2.0)),
                         }
                     });
                     let left = (content_origin.x - origin.x).max(0.0) + 8.0;
@@ -1686,12 +1776,103 @@ mod tests {
         assert_eq!(item_top(rows(6, &screen, false)), Placed::At(120.0));
         // Scrolled so that only the last two rows show: the view starts above the screen.
         assert_eq!(item_top(rows(6, &screen[4..], false)), Placed::At(120.0));
-        // The layout doesn't have the rows yet, or the screen lines are from before them: not hidden.
-        assert_eq!(item_top(rows(1, &screen, false)), Placed::Unsettled);
-        assert_eq!(item_top(rows(6, &screen[..1], false)), Placed::Unsettled);
+        // The layout doesn't have the rows yet: where it was, or under the line's text.
+        assert_eq!(item_top(rows(1, &screen, false)), Placed::Unsettled { estimate: Some(120.0) });
         // Off screen: the line isn't there, or its rows are below the screen's end.
         assert_eq!(item_top(rows(6, &[], false)), Placed::OffScreen);
         assert_eq!(item_top(rows(6, &screen[..1], true)), Placed::OffScreen);
+    }
+
+    /// A reply makes the thread taller: its rows grow in the layout before the screen lines catch up. The thread
+    /// stays on its rows (never hidden, never moved), on the first line of the file too.
+    #[test]
+    fn a_taller_thread_keeps_its_place_while_the_screen_lines_catch_up() {
+        // Line 0 at the top of the file: its text and 5 rows on screen, from y 0.
+        let screen: Vec<(usize, f64)> = (0..6).map(|index| (index, index as f64 * 20.0)).collect();
+        let before = item_top(rows(6, &screen, false));
+        assert_eq!(before, Placed::At(20.0));
+        // Now 8 rows in the layout; the screen lines still have 5, or only the line's text.
+        let taller = |on_screen| ItemRows {
+            rows_total: 8,
+            rows_before: 0,
+            layout_lines: 9,
+            on_screen,
+            line_ends_screen: false,
+            line_height: 20.0,
+        };
+        assert_eq!(item_top(taller(&screen)), before);
+        assert_eq!(item_top(taller(&screen[..1])), before);
+        // The screen ends inside the thread's rows: still on them.
+        assert_eq!(item_top(ItemRows { line_ends_screen: true, ..taller(&screen) }), before);
+    }
+
+    fn thread_entry(thread_id: &str, line: u32) -> Entry {
+        Entry {
+            key: ItemKey::Thread { review_id: "r".to_string(), thread_id: thread_id.to_string() },
+            location: serde_json::from_value(serde_json::json!({
+                "kind": "line",
+                "uri": "file:///w/a.rs",
+                "range": { "start": { "line": line, "character": 0 }, "end": { "line": line, "character": 9 } },
+            }))
+            .unwrap(),
+            folded: false,
+            kind: MarkerKind::Comment,
+            summary: "First message".to_string(),
+        }
+    }
+
+    /// A reply changes a thread's messages, not where it is: every item of the file stays, on its line.
+    #[test]
+    fn a_reply_keeps_every_item_and_its_position() {
+        let entries = vec![thread_entry("t1", 0), thread_entry("t2", 3), thread_entry("t3", 6)];
+        let live: HashMap<ItemKey, Live> = entries
+            .iter()
+            .map(|entry| {
+                let line = entry.location.range.as_ref().map(|range| range.start.line as usize);
+                (entry.key.clone(), Live { basis: basis(&entry.location), tracked: None, line })
+            })
+            .collect();
+        let (before, _) = placed_items(&entries, &live);
+        // The store change after the reply: the entries are read again from the review, same threads, same targets.
+        let replied: Vec<Entry> = vec![thread_entry("t1", 0), thread_entry("t2", 3), thread_entry("t3", 6)];
+        let (after, _) = placed_items(&replied, &live);
+        assert_eq!(before, after);
+        assert_eq!(after.iter().map(|item| item.line).collect::<Vec<_>>(), vec![0, 3, 6]);
+    }
+
+    /// A placement made for a stored target that changed meanwhile isn't taken, and the thread keeps its last line
+    /// (the placement for the new target runs next): it never drops out of the file.
+    #[test]
+    fn a_stale_placement_keeps_the_last_line() {
+        let entry = thread_entry("t1", 4);
+        let mut live = HashMap::from([(
+            entry.key.clone(),
+            Live { basis: basis(&entry.location), tracked: None, line: Some(4) },
+        )]);
+        let stale = Live { basis: "an older target".to_string(), tracked: None, line: None };
+        keep_placed(std::slice::from_ref(&entry), &mut live, vec![(entry.key.clone(), stale)]);
+        let (items, _) = placed_items(std::slice::from_ref(&entry), &live);
+        assert_eq!(items.iter().map(|item| item.line).collect::<Vec<_>>(), vec![4]);
+        // The current target's placement is taken.
+        let current = Live { basis: basis(&entry.location), tracked: None, line: Some(5) };
+        keep_placed(std::slice::from_ref(&entry), &mut live, vec![(entry.key.clone(), current)]);
+        assert_eq!(live[&entry.key].line, Some(5));
+    }
+
+    /// A thread sent from a draft shows on the draft's line at once, and is placed itself afterwards.
+    #[test]
+    fn a_sent_draft_becomes_its_thread_in_place() {
+        let thread = thread_entry("t1", 7);
+        let mut draft = draft_entry("A comment");
+        draft.location = thread.location.clone();
+        let mut live = HashMap::from([(
+            draft.key.clone(),
+            Live { basis: basis(&draft.location), tracked: None, line: Some(9) },
+        )]);
+        let entries = vec![thread.clone(), draft];
+        seed_from_drafts(&entries, &mut live);
+        assert_eq!(live[&thread.key].line, Some(9));
+        assert_ne!(live[&thread.key].basis, basis(&thread.location), "placed again from its own target");
     }
 
     #[test]

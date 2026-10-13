@@ -221,7 +221,8 @@ pub fn discard(window_tab: &WindowTabData, draft_id: &str) {
 }
 
 /// Sends the draft as a new thread (a question when `intent` asks and the review has an agent), and asks the
-/// review's ACP agent when it should answer. The draft comes back if the thread could not be created.
+/// review's ACP agent when it should answer. The draft stays until its thread shows (so its place in the editor never
+/// goes empty in between), or stays put if the thread could not be created; sending it again meanwhile does nothing.
 pub fn submit(window_tab: &WindowTabData, draft_id: &str, intent: ThreadIntent) {
     let drafts = window_tab.review.drafts;
     let Some(draft) = drafts.with_untracked(|drafts| {
@@ -229,25 +230,69 @@ pub fn submit(window_tab: &WindowTabData, draft_id: &str, intent: ThreadIntent) 
     }) else {
         return;
     };
-    if draft.body.trim().is_empty() {
+    if draft.body.trim().is_empty() || !SENDING.with(|sending| sending.borrow_mut().insert(draft.id.clone())) {
         return;
     }
     let has_agent = super::thread::review_of(window_tab, &draft.review_id)
         .is_some_and(|review| review.agent.is_some());
     let intent = if has_agent { intent } else { ThreadIntent::Comment };
-    discard(window_tab, draft_id);
-    let restore = {
-        let draft = draft.clone();
-        create_ext_action(window_tab.scope, move |()| {
-            drafts.update(|drafts| drafts.push_back(draft));
+    let (reviews, scope) = (window_tab.review.reviews, window_tab.scope);
+    let sent = {
+        let draft_id = draft.id.clone();
+        create_ext_action(window_tab.scope, move |thread: Option<(String, String)>| {
+            let Some((review_id, thread_id)) = thread else {
+                SENDING.with(|sending| sending.borrow_mut().remove(&draft_id));
+                return;
+            };
+            let gone = Rc::new(Cell::new(false));
+            let remove = {
+                let (gone, draft_id) = (gone.clone(), draft_id.clone());
+                move || {
+                    if !gone.replace(true) {
+                        SENDING.with(|sending| sending.borrow_mut().remove(&draft_id));
+                        drafts.update(|drafts| drafts.retain(|draft| draft.id != draft_id));
+                    }
+                }
+            };
+            let watching = scope.create_child();
+            {
+                let remove = remove.clone();
+                watching.create_effect(move |_| {
+                    let shown = reviews.with(|reviews| {
+                        reviews.iter().any(|review| {
+                            review.id == review_id && review.threads.iter().any(|thread| thread.id == thread_id)
+                        })
+                    });
+                    if shown && !gone.get() {
+                        remove();
+                        exec_after(Duration::ZERO, move |_| watching.dispose());
+                    }
+                });
+            }
+            // A thread this window doesn't show (another workspace's review): the draft goes anyway.
+            exec_after(Duration::from_secs(5), move |_| {
+                remove();
+                watching.dispose();
+            });
         })
     };
     run(window_tab, "sending the comment", move |backend| {
-        backend
-            .start_thread(&draft.review_id, draft.location.clone(), draft.body.trim().to_string(), intent)
-            .map(drop)
-            .inspect_err(|_| restore(()))
+        match backend.start_thread(&draft.review_id, draft.location.clone(), draft.body.trim().to_string(), intent) {
+            Ok(thread) => {
+                sent(Some((draft.review_id.clone(), thread.id)));
+                Ok(())
+            }
+            Err(error) => {
+                sent(None);
+                Err(error)
+            }
+        }
     });
+}
+
+thread_local! {
+    /// Drafts being sent: shown until their thread is.
+    static SENDING: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
 }
 
 fn new_id() -> String {

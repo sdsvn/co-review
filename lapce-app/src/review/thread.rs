@@ -65,13 +65,15 @@ pub fn thread_view(
     let config = window_tab_data.common.config;
     let reviews = window_tab_data.review.reviews;
     let listening = ReviewCore::get().map(|core| core.listening);
+    // A thread missing from a reading of the reviews keeps showing as last read, rather than disappearing for a moment:
+    // a deleted thread's view is removed by whoever shows it.
     let found = {
         let (review_id, thread_id) = (review_id.clone(), thread_id.clone());
-        create_memo(move |_| {
+        create_memo(move |previous: Option<&Option<ThreadContext>>| {
             let listening = listening.is_some_and(|listening| {
                 listening.with(|listening| listening.get(&review_id).copied().unwrap_or(false))
             });
-            reviews.with(|reviews| {
+            let found = reviews.with(|reviews| {
                 let review = reviews.iter().find(|review| review.id == review_id)?;
                 let thread = review
                     .threads
@@ -89,7 +91,8 @@ pub fn thread_view(
                         .unwrap_or_default(),
                     thread,
                 })
-            })
+            });
+            found.or_else(|| previous.cloned().flatten())
         })
     };
     let thread = create_memo(move |_| found.with(|found| found.as_ref().map(|f| f.thread.clone())));
