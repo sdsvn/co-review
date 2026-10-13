@@ -63,7 +63,7 @@ jobs:
       - name: Test (review crates)
         run: cargo test --workspace --exclude lapce --exclude lapce-app --exclude lapce-core --exclude lapce-proxy --exclude lapce-rpc
       - name: Test (the app's review code)
-        run: cargo test -p lapce-app --lib review::
+        run: 'cargo test -p lapce-app --lib review::'
       - uses: actions/setup-node@v7
         with:
           node-version: 24
