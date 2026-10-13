@@ -30,6 +30,7 @@ use floem::{
     },
     style::CursorStyle,
     text::{Attrs, AttrsList, FamilyOwned, TextLayout},
+    unit::PxPctAuto,
     views::{
         Decorators, VirtualVector, container, dyn_container, empty, label,
         rich_text, scroll, stack, v_stack_from_iter, virtual_stack,
@@ -42,7 +43,7 @@ use review_model::{
 };
 
 use super::{
-    ReviewPage, code, drafts,
+    code, drafts,
     thread::{self, ThreadViewOptions},
     workspace::ReviewDraft,
 };
@@ -61,7 +62,7 @@ struct LoadedPatch {
     path: PathBuf,
     uri: String,
     name: String,
-    files: Vec<Rc<PatchFile>>,
+    files: Vec<Arc<PatchFile>>,
 }
 
 /// The review directory's patches and the pull request's metadata (`<patch>.md` or `PR.md`).
@@ -71,38 +72,7 @@ struct Loaded {
     lines: usize,
 }
 
-/// What the loader thread sends back (`Rc` isn't `Send`).
-struct LoadedParts {
-    meta: Option<PatchMeta>,
-    patches: Vec<(PathBuf, String, String, Vec<PatchFile>)>,
-}
-
-impl From<LoadedParts> for Loaded {
-    fn from(parts: LoadedParts) -> Self {
-        let patches: Vec<LoadedPatch> = parts
-            .patches
-            .into_iter()
-            .map(|(path, uri, name, files)| LoadedPatch {
-                path,
-                uri,
-                name,
-                files: files.into_iter().map(Rc::new).collect(),
-            })
-            .collect();
-        let lines = patches
-            .iter()
-            .flat_map(|patch| &patch.files)
-            .map(|file| file.rows.len())
-            .sum();
-        Self {
-            meta: parts.meta,
-            patches,
-            lines,
-        }
-    }
-}
-
-fn load(dir: &Path) -> LoadedParts {
+fn load(dir: &Path) -> Loaded {
     let mut meta = None;
     let mut patches = Vec::new();
     for patch in review_bundle::service::patches_of(dir) {
@@ -125,9 +95,15 @@ fn load(dir: &Path) -> LoadedParts {
                 .map(|text| parse_patch_meta(&text));
         }
         let uri = review_store::path_to_file_uri(&patch.to_string_lossy());
-        patches.push((patch, uri, name, parse_patch(&text)));
+        let files = parse_patch(&text).into_iter().map(Arc::new).collect();
+        patches.push(LoadedPatch { path: patch, uri, name, files });
     }
-    LoadedParts { meta, patches }
+    loaded(meta, patches)
+}
+
+fn loaded(meta: Option<PatchMeta>, patches: Vec<LoadedPatch>) -> Loaded {
+    let lines = patches.iter().flat_map(|patch| &patch.files).map(|file| file.rows.len()).sum();
+    Loaded { meta, patches, lines }
 }
 
 /// A comment being written on the page: one of the window's drafts (`drafts.rs`, kept per review and listed in the
@@ -139,7 +115,7 @@ struct Draft {
     anchor: PatchAnchor,
     /// The suggested replacement, one entry per line of the commented source, while suggesting (not kept: drafts
     /// carry no suggestion).
-    suggestion: RwSignal<Option<Vec<String>>>,
+    suggestion: Suggestion,
 }
 
 /// A draft's suggested replacement lines, while suggesting.
@@ -166,6 +142,20 @@ fn placed_drafts(drafts: &im::Vector<ReviewDraft>, review_id: &str) -> Vec<Place
             })
         })
         .collect()
+}
+
+/// An anchor of `anchor_type` on `path`, its lines and side left out.
+fn patch_anchor(anchor_type: PatchAnchorType, path: Option<String>) -> PatchAnchor {
+    PatchAnchor {
+        anchor_type,
+        path,
+        line: None,
+        start_line: None,
+        end_line: None,
+        side: None,
+        source: None,
+        extra: serde_json::Map::new(),
+    }
 }
 
 /// A draft's location: on the patch at `uri`, at `anchor`.
@@ -216,13 +206,13 @@ enum Row {
     Patch { patch: usize },
     File {
         patch: usize,
-        file: Rc<PatchFile>,
+        file: Arc<PatchFile>,
         collapsed: bool,
         threads: usize,
     },
     Code {
         patch: usize,
-        file: Rc<PatchFile>,
+        file: Arc<PatchFile>,
         index: usize,
         commented: bool,
     },
@@ -307,10 +297,10 @@ fn anchor_on<'a>(thread: &'a ReviewThread, patch: &LoadedPatch) -> Option<&'a Pa
     thread.location.patch_anchor.as_ref()
 }
 
-/// The diff line a line or range anchor ends on: `(path, side, line)`.
 /// A diff line: `(path, old side, line)`.
 type LineKey = (String, bool, u32);
 
+/// The diff line a line or range anchor ends on.
 fn end_of(anchor: &PatchAnchor) -> Option<LineKey> {
     let line = match anchor.anchor_type {
         PatchAnchorType::CodeLine => anchor.line?,
@@ -399,7 +389,7 @@ fn build_rows(
             let is_collapsed = collapsed.contains(&key);
             rows.push(Row::File {
                 patch: patch_index,
-                file: Rc::clone(file),
+                file: Arc::clone(file),
                 collapsed: is_collapsed,
                 threads: file_threads.len(),
             });
@@ -413,7 +403,7 @@ fn build_rows(
                     && line_key.as_ref().is_some_and(|key| covering.contains(key));
                 file_rows.push(Row::Code {
                     patch: patch_index,
-                    file: Rc::clone(file),
+                    file: Arc::clone(file),
                     index,
                     commented,
                 });
@@ -474,27 +464,6 @@ fn build_rows(
     rows
 }
 
-/// A request from elsewhere (the Review panel, Go to Comment) to show a thread on a review's pull-request page.
-type Reveal = RwSignal<Option<(String, String)>>;
-
-thread_local! {
-    static REVEAL: RefCell<Option<Reveal>> = const { RefCell::new(None) };
-}
-
-fn reveal_signal() -> Reveal {
-    REVEAL.with(|reveal| {
-        *reveal
-            .borrow_mut()
-            .get_or_insert_with(|| Scope::new().create_rw_signal(None))
-    })
-}
-
-/// Opens the review's pull-request page and scrolls to `thread_id` there (unfolding its file).
-pub fn reveal_thread(window_tab: &WindowTabData, review_id: &str, thread_id: &str) {
-    super::reveal_page(window_tab, ReviewPage::pull_request(review_id));
-    reveal_signal().set(Some((review_id.to_string(), thread_id.to_string())));
-}
-
 /// Whether the review has patches to show as a pull request (reads its review directory: off the UI thread).
 pub fn has_patches(review: &Review) -> bool {
     review.bundle.as_ref().is_some_and(|bundle| {
@@ -513,11 +482,7 @@ fn char_width(config: &LapceConfig) -> f64 {
     (layout.size().width / 10.0).max(1.0)
 }
 
-/// Tabs as four spaces, for display; `column_of` maps a displayed column back to the line's.
-fn display_text(text: &str) -> String {
-    text.replace('\t', "    ")
-}
-
+/// Maps a displayed column (tabs shown as four spaces) back to the line's.
 fn column_of(text: &str, displayed: usize) -> usize {
     let mut shown = 0;
     for (column, character) in text.chars().enumerate() {
@@ -708,14 +673,11 @@ impl Page {
             self.add_draft(
                 patch,
                 PatchAnchor {
-                    anchor_type: PatchAnchorType::CodeRange,
-                    path: Some(file.path.clone()),
-                    line: None,
                     start_line: Some(first),
                     end_line: Some(last),
                     side: Some(side),
                     source: Some(source),
-                    extra: serde_json::Map::new(),
+                    ..patch_anchor(PatchAnchorType::CodeRange, Some(file.path.clone()))
                 },
             );
             self.range_start.set(None);
@@ -726,14 +688,10 @@ impl Page {
         self.add_draft(
             patch,
             PatchAnchor {
-                anchor_type: PatchAnchorType::CodeLine,
-                path: Some(file.path.clone()),
                 line: Some(line),
-                start_line: None,
-                end_line: None,
                 side: Some(side),
                 source: Some(row.s.clone()),
-                extra: serde_json::Map::new(),
+                ..patch_anchor(PatchAnchorType::CodeLine, Some(file.path.clone()))
             },
         );
     }
@@ -840,8 +798,6 @@ pub fn pull_request_page(window_tab: Rc<WindowTabData>, review_id: String) -> im
             Rc::new(rows)
         })
     };
-    // Rows hold `Rc`s, which `Memo` can't compare cheaply: a new list is always a change.
-    let rows = RowsSignal(rows);
 
     let header = header_view(page.clone());
     let list = list_view(page.clone(), rows, opened);
@@ -864,9 +820,6 @@ pub fn pull_request_page(window_tab: Rc<WindowTabData>, review_id: String) -> im
     })
     .debug_name("Pull Request Page")
 }
-
-#[derive(Clone, Copy)]
-struct RowsSignal(Memo<Rc<Vec<Row>>>);
 
 impl PartialEq for Row {
     fn eq(&self, other: &Self) -> bool {
@@ -900,9 +853,8 @@ fn load_when_changed(page: &Page, opened: Instant) {
             return key;
         };
         let (loaded, collapsed, review) = (page.loaded, page.collapsed, page.review);
-        let send = floem::ext_event::create_ext_action(cx, move |parts: LoadedParts| {
+        let send = floem::ext_event::create_ext_action(cx, move |data: Loaded| {
             let read = opened.elapsed();
-            let data = Loaded::from(parts);
             // Large files start folded, unless a thread is on them.
             let threaded: HashSet<String> = review.with_untracked(|review| {
                 review
@@ -979,7 +931,7 @@ fn header_view(page: Page) -> impl View {
             let files: Vec<&PatchFile> = loaded
                 .patches
                 .iter()
-                .flat_map(|patch| patch.files.iter().map(Rc::as_ref))
+                .flat_map(|patch| patch.files.iter().map(Arc::as_ref))
                 .collect();
             let (added, removed) = files
                 .iter()
@@ -1007,48 +959,31 @@ fn header_view(page: Page) -> impl View {
             parts.join(" · ")
         })
     };
-    let body = {
-        let window_tab = page.window_tab.clone();
-        dyn_container(
-            move || {
-                loaded.with(|loaded| {
-                    loaded
-                        .as_ref()
-                        .and_then(|loaded| loaded.meta.as_ref())
-                        .map(|meta| meta.body.clone())
-                        .filter(|body| !body.trim().is_empty())
-                })
-            },
-            move |body| match body {
-                Some(body) => scroll(markdown_body(window_tab.common.config, body))
-                    .style(|s| s.width_full().max_height(220.0).margin_top(6.0))
-                    .into_any(),
-                None => empty().into_any(),
-            },
-        )
-        .style(|s| s.width_full())
-    };
+    let body = dyn_container(
+        move || {
+            loaded.with(|loaded| {
+                loaded
+                    .as_ref()
+                    .and_then(|loaded| loaded.meta.as_ref())
+                    .map(|meta| meta.body.clone())
+                    .filter(|body| !body.trim().is_empty())
+            })
+        },
+        move |body| match body {
+            Some(body) => scroll(markdown_body(config, body))
+                .style(|s| s.width_full().max_height(220.0).margin_top(6.0))
+                .into_any(),
+            None => empty().into_any(),
+        },
+    )
+    .style(|s| s.width_full());
     let actions = {
         let comment = {
             let page = page.clone();
             thread::text_button(
                 "Comment on the pull request".to_string(),
                 false,
-                move || {
-                    page.add_draft(
-                        0,
-                        PatchAnchor {
-                            anchor_type: PatchAnchorType::Patch,
-                            path: None,
-                            line: None,
-                            start_line: None,
-                            end_line: None,
-                            side: None,
-                            source: None,
-                            extra: serde_json::Map::new(),
-                        },
-                    )
-                },
+                move || page.add_draft(0, patch_anchor(PatchAnchorType::Patch, None)),
                 config,
             )
         };
@@ -1118,65 +1053,14 @@ fn header_view(page: Page) -> impl View {
 }
 
 /// The scrolling, virtual list of rows.
-fn list_view(page: Page, rows: RowsSignal, opened: Instant) -> impl View {
+fn list_view(page: Page, rows: Memo<Rc<Vec<Row>>>, opened: Instant) -> impl View {
     let config = page.config;
     let heights = page.heights;
-    let reveal_to = create_rw_signal(None::<Point>);
-    // A thread asked for from elsewhere: unfold its file, then scroll to its row once the rows have it.
-    {
-        let page = page.clone();
-        let reveal = reveal_signal();
-        let review_id = page.review_id.clone();
-        Scope::current().create_effect(move |_| {
-            let Some((review, thread_id)) = reveal.get() else {
-                return;
-            };
-            if review != review_id {
-                return;
-            }
-            let path = page.review.with_untracked(|review| {
-                review
-                    .as_ref()?
-                    .threads
-                    .iter()
-                    .find(|thread| thread.id == thread_id)?
-                    .location
-                    .patch_anchor
-                    .as_ref()?
-                    .path
-                    .clone()
-            });
-            if let Some(path) = path
-                && page.collapsed.with_untracked(|collapsed| {
-                    collapsed.iter().any(|(_, folded)| *folded == path)
-                })
-            {
-                page.collapsed
-                    .update(|collapsed| collapsed.retain(|(_, folded)| *folded != path));
-            }
-            let target = RowKey::Thread(thread_id.clone());
-            let line_height = config.get_untracked().editor.line_height() as f64;
-            let offset = rows.0.with(|rows| {
-                let mut offset = 0.0;
-                for row in rows.iter() {
-                    if row.key() == target {
-                        return Some(offset);
-                    }
-                    offset += heights.with_untracked(|heights| row_height(row, heights, line_height));
-                }
-                None
-            });
-            if let Some(offset) = offset {
-                reveal_to.set(Some(Point::new(0.0, (offset - 120.0).max(0.0))));
-                reveal.set(None);
-            }
-        });
-    }
     let first_layout = create_rw_signal(false);
     let view_page = page.clone();
     scroll(
         virtual_stack(
-            move || Rows(rows.0.get()),
+            move || Rows(rows.get()),
             Row::key,
             move |row| row_view(view_page.clone(), row),
         )
@@ -1186,21 +1070,17 @@ fn list_view(page: Page, rows: RowsSignal, opened: Instant) -> impl View {
         })
         .style(|s| s.flex_col().min_width_full().padding_bottom(40.0)),
     )
-    .scroll_to(move || reveal_to.get())
     .on_resize(move |_| {
-        if !first_layout.get_untracked() && rows.0.with_untracked(|rows| !rows.is_empty()) {
+        if !first_layout.get_untracked() && rows.with_untracked(|rows| !rows.is_empty()) {
             first_layout.set(true);
             tracing::info!(
                 "pull-request page: {} rows laid out {:?} after opening",
-                rows.0.with_untracked(|rows| rows.len()),
+                rows.with_untracked(|rows| rows.len()),
                 opened.elapsed()
             );
         }
     })
-    .on_event_cont(EventListener::PointerWheel, {
-        let page = page.clone();
-        move |_| page.hide_hover()
-    })
+    .on_event_cont(EventListener::PointerWheel, move |_| page.hide_hover())
     .style(|s| s.width_full().flex_grow(1.0_f32).flex_basis(0.0_f32))
 }
 
@@ -1301,7 +1181,7 @@ fn patch_view(page: Page, patch: usize) -> impl View {
     })
 }
 
-fn file_header(page: Page, patch: usize, file: Rc<PatchFile>, collapsed: bool, threads: usize) -> impl View {
+fn file_header(page: Page, patch: usize, file: Arc<PatchFile>, collapsed: bool, threads: usize) -> impl View {
     let config = page.config;
     let path = file.path.clone();
     let tag = file.tag.clone();
@@ -1320,7 +1200,7 @@ fn file_header(page: Page, patch: usize, file: Rc<PatchFile>, collapsed: bool, t
     };
     let open = {
         let page = page.clone();
-        let file = Rc::clone(&file);
+        let file = Arc::clone(&file);
         move || {
             let Some(review) = page.review_untracked() else {
                 return;
@@ -1331,7 +1211,7 @@ fn file_header(page: Page, patch: usize, file: Rc<PatchFile>, collapsed: bool, t
     };
     let compare = {
         let page = page.clone();
-        let file = Rc::clone(&file);
+        let file = Arc::clone(&file);
         move || {
             let Some(review) = page.review_untracked() else {
                 return;
@@ -1348,23 +1228,10 @@ fn file_header(page: Page, patch: usize, file: Rc<PatchFile>, collapsed: bool, t
         let page = page.clone();
         let path = path.clone();
         move || {
-            page.add_draft(
-                patch,
-                PatchAnchor {
-                    anchor_type: PatchAnchorType::CodeFile,
-                    path: Some(path.clone()),
-                    line: None,
-                    start_line: None,
-                    end_line: None,
-                    side: None,
-                    source: None,
-                    extra: serde_json::Map::new(),
-                },
-            );
-            page.collapsed
-                .update(|collapsed| {
-                    collapsed.remove(&(patch, path.clone()));
-                });
+            page.add_draft(patch, patch_anchor(PatchAnchorType::CodeFile, Some(path.clone())));
+            page.collapsed.update(|collapsed| {
+                collapsed.remove(&(patch, path.clone()));
+            });
         }
     };
     let deleted = tag == "deleted";
@@ -1421,7 +1288,7 @@ fn file_header(page: Page, patch: usize, file: Rc<PatchFile>, collapsed: bool, t
     })
 }
 
-fn code_row(page: Page, patch: usize, file: Rc<PatchFile>, index: usize, commented: bool) -> impl View {
+fn code_row(page: Page, patch: usize, file: Arc<PatchFile>, index: usize, commented: bool) -> impl View {
     let config = page.config;
     let Some(row) = file.rows.get(index).cloned() else {
         return empty().into_any();
@@ -1457,7 +1324,7 @@ fn code_row(page: Page, patch: usize, file: Rc<PatchFile>, index: usize, comment
     let new = number(row.n, PatchSide::New);
     let plus = {
         let page = page.clone();
-        let file = Rc::clone(&file);
+        let file = Arc::clone(&file);
         let row = row.clone();
         let is_hunk = kind == "hunk";
         label(|| "+".to_string())
@@ -1489,7 +1356,7 @@ fn code_row(page: Page, patch: usize, file: Rc<PatchFile>, index: usize, comment
         "hunk" => "",
         _ => " ",
     };
-    let shown = format!("{sign}{}", display_text(&row.s));
+    let shown = format!("{sign}{}", row.s.replace('\t', "    "));
     let text = {
         let page = page.clone();
         let hover_page = page.clone();
@@ -1541,9 +1408,7 @@ fn code_row(page: Page, patch: usize, file: Rc<PatchFile>, index: usize, comment
                     page.hide_hover();
                     return;
                 };
-                if page.hover.with_untracked(Option::is_some) {
-                    page.hover.set(None);
-                }
+                page.hide_hover();
                 let path = hover_path.clone();
                 let timer = page.hover_timer;
                 let token = exec_after(Duration::from_millis(600), move |token| {
@@ -1759,13 +1624,18 @@ fn describe(anchor: &PatchAnchor) -> String {
 /// Rendered Markdown (Lapce's renderer), for the pull request's description.
 fn markdown_body(config: ReadSignal<Arc<LapceConfig>>, body: String) -> impl View {
     let contents = crate::markdown::parse_markdown(&body, 1.5, &config.get_untracked());
-    markdown_contents(config, contents)
+    markdown_contents(config, contents, PxPctAuto::Pct(100.0)).style(|s| s.flex_col().width_full())
 }
 
-fn markdown_contents(config: ReadSignal<Arc<LapceConfig>>, contents: Vec<MarkdownContent>) -> impl View {
+/// Markdown as its paragraphs, each at most `max_width` wide; the caller styles the column.
+fn markdown_contents(
+    config: ReadSignal<Arc<LapceConfig>>,
+    contents: Vec<MarkdownContent>,
+    max_width: PxPctAuto,
+) -> floem::views::Stack {
     v_stack_from_iter(contents.into_iter().map(move |content| match content {
         MarkdownContent::Text(layout) => rich_text(move || layout.clone())
-            .style(|s| s.max_width_pct(100.0))
+            .style(move |s| s.max_width(max_width))
             .into_any(),
         MarkdownContent::Image { .. } => empty().into_any(),
         MarkdownContent::Separator => empty()
@@ -1777,7 +1647,6 @@ fn markdown_contents(config: ReadSignal<Arc<LapceConfig>>, contents: Vec<Markdow
             })
             .into_any(),
     }))
-    .style(|s| s.flex_col().width_full())
 }
 
 /// The language server's hover for the name under the pointer.
@@ -1790,36 +1659,23 @@ fn hover_view(page: Page) -> impl View {
             let Some((at, content)) = shown else {
                 return empty().into_any();
             };
-            v_stack_from_iter(content.into_iter().map(move |content| match content {
-                MarkdownContent::Text(layout) => rich_text(move || layout.clone())
-                    .style(|s| s.max_width(600.0))
-                    .into_any(),
-                MarkdownContent::Image { .. } => empty().into_any(),
-                MarkdownContent::Separator => empty()
-                    .style(move |s| {
-                        s.width_full()
-                            .margin_vert(5.0)
-                            .height(1.0)
-                            .background(config.get().color(LapceColor::LAPCE_BORDER))
-                    })
-                    .into_any(),
-            }))
-            .style(move |s| {
-                let config = config.get();
-                s.flex_col()
-                    .absolute()
-                    .inset_left(at.x as f32 + 8.0)
-                    .inset_top(at.y as f32 + 16.0)
-                    .max_width(620.0)
-                    .padding_horiz(10.0)
-                    .padding_vert(6.0)
-                    .border(1.0)
-                    .border_radius(6.0)
-                    .border_color(config.color(LapceColor::LAPCE_BORDER))
-                    .background(config.color(LapceColor::PANEL_BACKGROUND))
-                    .z_index(10)
-            })
-            .into_any()
+            markdown_contents(config, content, PxPctAuto::Px(600.0))
+                .style(move |s| {
+                    let config = config.get();
+                    s.flex_col()
+                        .absolute()
+                        .inset_left(at.x as f32 + 8.0)
+                        .inset_top(at.y as f32 + 16.0)
+                        .max_width(620.0)
+                        .padding_horiz(10.0)
+                        .padding_vert(6.0)
+                        .border(1.0)
+                        .border_radius(6.0)
+                        .border_color(config.color(LapceColor::LAPCE_BORDER))
+                        .background(config.color(LapceColor::PANEL_BACKGROUND))
+                        .z_index(10)
+                })
+                .into_any()
         },
     )
     .style(|s| s.absolute().size_full().pointer_events_none())
@@ -1830,15 +1686,15 @@ mod tests {
     use super::*;
 
     fn patch(text: &str) -> Loaded {
-        Loaded::from(LoadedParts {
-            meta: None,
-            patches: vec![(
-                PathBuf::from("/review/change.patch"),
-                "file:///review/change.patch".to_string(),
-                "change.patch".to_string(),
-                parse_patch(text),
-            )],
-        })
+        loaded(
+            None,
+            vec![LoadedPatch {
+                path: PathBuf::from("/review/change.patch"),
+                uri: "file:///review/change.patch".to_string(),
+                name: "change.patch".to_string(),
+                files: parse_patch(text).into_iter().map(Arc::new).collect(),
+            }],
+        )
     }
 
     // The patch's last line break leaves an empty context row, as the TypeScript parser does.
@@ -1864,14 +1720,9 @@ mod tests {
 
     fn line_anchor(line: u32, side: PatchSide) -> PatchAnchor {
         PatchAnchor {
-            anchor_type: PatchAnchorType::CodeLine,
-            path: Some("src/a.rs".to_string()),
             line: Some(line),
-            start_line: None,
-            end_line: None,
             side: Some(side),
-            source: None,
-            extra: serde_json::Map::new(),
+            ..patch_anchor(PatchAnchorType::CodeLine, Some("src/a.rs".to_string()))
         }
     }
 

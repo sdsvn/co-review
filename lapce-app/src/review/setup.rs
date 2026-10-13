@@ -15,8 +15,7 @@ use super::{
 
 /// The setup for this app: the files that ship with it and its bundled `co-review` command.
 fn agent_setup() -> AgentSetup {
-    let app = std::env::current_exe().unwrap_or_default();
-    AgentSetup::for_app(&app)
+    AgentSetup::for_app(&std::env::current_exe().unwrap_or_default())
 }
 
 /// Install Agent Skills…: copies the bundled skills into the chosen agent's skills directory.
@@ -101,27 +100,23 @@ pub fn add_to_harness(tab: &ReviewTab) {
     tab.later(
         || {
             let setup = agent_setup();
-            let harnesses = setup.harnesses(&setup.launch());
-            harnesses
+            setup
+                .harnesses(&setup.launch())
                 .into_iter()
-                .map(|harness| {
-                    let needs_command = setup.needs_command(&harness.id);
-                    (harness, needs_command)
-                })
+                .map(|harness| (setup.needs_command(&harness.id), harness))
                 .collect::<Vec<_>>()
         },
         move |harnesses| pick_harness(&tab_then, harnesses),
     );
 }
 
-fn pick_harness(tab: &ReviewTab, harnesses: Vec<(HarnessSetup, bool)>) {
+fn pick_harness(tab: &ReviewTab, harnesses: Vec<(bool, HarnessSetup)>) {
     let choices = harnesses
         .into_iter()
-        .map(|(harness, needs_command)| {
+        .map(|(needs_command, harness)| {
             let description = harness_description(&harness);
-            let label = harness.label.clone();
             let tab = tab.clone();
-            Choice::new(label, move || {
+            Choice::new(harness.label.clone(), move || {
                 if harness.kind == HarnessKind::Manual {
                     copy(&tab, &harness, None);
                 } else if needs_command {
@@ -137,7 +132,7 @@ fn pick_harness(tab: &ReviewTab, harnesses: Vec<(HarnessSetup, bool)>) {
 }
 
 /// What choosing a harness does, shown beside it.
-pub fn harness_description(harness: &HarnessSetup) -> String {
+fn harness_description(harness: &HarnessSetup) -> String {
     let file = harness
         .file
         .as_ref()

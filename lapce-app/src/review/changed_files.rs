@@ -44,8 +44,6 @@ pub struct ChangedFile {
 #[derive(Debug)]
 pub struct Change {
     pub review: Arc<Review>,
-    /// The code folder, as the review records it.
-    pub code: PathBuf,
     /// By repository-relative path.
     pub files: BTreeMap<String, ChangedFile>,
     /// Lines added and removed under each folder holding a changed file (repository-relative; `""` is the root).
@@ -53,7 +51,7 @@ pub struct Change {
 }
 
 impl Change {
-    fn new(review: Arc<Review>, code: PathBuf, patches: &[PatchFile]) -> Self {
+    fn new(review: Arc<Review>, patches: &[PatchFile]) -> Self {
         let mut files = BTreeMap::new();
         let mut folders: HashMap<String, (u32, u32)> = HashMap::new();
         for file in patches {
@@ -89,7 +87,6 @@ impl Change {
         }
         Self {
             review,
-            code,
             files,
             folders,
         }
@@ -187,23 +184,21 @@ impl ChangedFiles {
                     .and_then(|bundle| bundle.worktree)
                     .unwrap_or(false);
                 let has_files = !loaded.files.is_empty();
+                let only = has_files && choice.unwrap_or(default);
                 tracing::info!(
-                    "the explorer shows the change of review {} in {}: {} files, changed files only: {}",
+                    "the explorer shows the change of review {}: {} files, changed files only: {only}",
                     loaded.review.id,
-                    loaded.code.display(),
                     loaded.files.len(),
-                    has_files && choice.unwrap_or(default)
                 );
                 change.set(has_files.then(|| Rc::new(loaded)));
-                changed_only.set(has_files && choice.unwrap_or(default));
+                changed_only.set(only);
             });
             let loading = std::thread::Builder::new()
                 .name("ReviewChangedFiles".to_owned())
                 .spawn(move || {
-                    let code = code::code_folder(&review).unwrap_or_default();
                     let files = read_patches(&review);
                     let choice = read_choices().get(&review.id).copied();
-                    send((Change::new(review, code, &files), choice));
+                    send((Change::new(review, &files), choice));
                 });
             if let Err(error) = loading {
                 tracing::error!("could not read a change's files: {error}");
@@ -246,14 +241,10 @@ impl ChangedFiles {
 
     /// The explorer's rows: Lapce's tree, or with **Changed files only** the part of it holding the change.
     pub fn explorer_list(&self, root: FileNodeItem, naming: Naming) -> ExplorerList {
-        let narrowed = if self.changed_only.get() {
-            self.change.with(|change| {
-                change.as_ref().map(|change| changed_rows(&root, change))
-            })
-        } else {
-            None
-        };
-        match narrowed {
+        let narrowed = self.changed_only.get().then(|| {
+            self.change.with(|change| change.as_ref().map(|change| changed_rows(&root, change)))
+        });
+        match narrowed.flatten() {
             Some(rows) => ExplorerList::Changed(rows),
             None => ExplorerList::All(FileNodeVirtualList::new(root, naming)),
         }
@@ -300,9 +291,7 @@ impl VirtualVector<FileNodeViewData> for ExplorerList {
             ExplorerList::All(list) => list.slice(range).collect(),
             ExplorerList::Changed(rows) => {
                 let end = range.end.min(rows.len());
-                rows.get(range.start.min(end)..end)
-                    .map(<[FileNodeViewData]>::to_vec)
-                    .unwrap_or_default()
+                rows[range.start.min(end)..end].to_vec()
             }
         };
         rows.into_iter()
@@ -398,13 +387,7 @@ pub fn explorer_section(
     }
     let shown = changed.change;
     let changed_only = changed.changed_only;
-    let switch = label(move || {
-        if changed_only.get() {
-            "Changed files only".to_string()
-        } else {
-            "All files".to_string()
-        }
-    })
+    let switch = label(move || if changed_only.get() { "Changed files only" } else { "All files" })
     .on_click_stop(move |_| {
         changed.set_changed_only(!changed.changed_only.get_untracked());
     })
@@ -542,7 +525,7 @@ pub fn open_changed_file(window_tab: &WindowTabData, path: &Path) -> bool {
 }
 
 /// The patches of a review's directory, parsed.
-pub fn read_patches(review: &Review) -> Vec<PatchFile> {
+fn read_patches(review: &Review) -> Vec<PatchFile> {
     let Some(bundle) = review.bundle.as_ref() else {
         return Vec::new();
     };

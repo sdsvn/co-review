@@ -20,6 +20,8 @@ use super::{
 };
 use crate::{config::color::LapceColor, settings::checkbox, window_tab::WindowTabData};
 
+/// The line under the submit bar: its text, a GitHub link, and whether it is an error.
+type Note = RwSignal<Option<(String, Option<String>, bool)>>;
 
 pub fn decision_label(decision: ReviewDecision) -> &'static str {
     match decision {
@@ -52,7 +54,7 @@ pub fn post_from_menu(tab: &ReviewTab) {
 pub fn submit_section(window_tab_data: Rc<WindowTabData>) -> impl View {
     let review = window_tab_data.review.clone();
     let submitting = review.submitting;
-    let note: RwSignal<Option<(String, Option<String>, bool)>> = create_rw_signal(None);
+    let note: Note = create_rw_signal(None);
     let shown = move || {
         review
             .active_review()
@@ -69,10 +71,7 @@ pub fn submit_section(window_tab_data: Rc<WindowTabData>) -> impl View {
     .style(|s| s.width_full())
 }
 
-fn submit_bar(
-    window_tab_data: Rc<WindowTabData>,
-    note: RwSignal<Option<(String, Option<String>, bool)>>,
-) -> impl View {
+fn submit_bar(window_tab_data: Rc<WindowTabData>, note: Note) -> impl View {
     let config = window_tab_data.common.config;
     let review = window_tab_data.review.clone();
     let submitting = review.submitting;
@@ -157,10 +156,7 @@ struct PostPreview {
     comments: Vec<(String, RwSignal<String>)>,
 }
 
-fn submit_form(
-    window_tab_data: Rc<WindowTabData>,
-    note: RwSignal<Option<(String, Option<String>, bool)>>,
-) -> impl View {
+fn submit_form(window_tab_data: Rc<WindowTabData>, note: Note) -> impl View {
     let config = window_tab_data.common.config;
     let tab = ReviewTab::of(&window_tab_data);
     let submitting = tab.review.submitting;
@@ -342,7 +338,7 @@ fn preview_view(
     decision: ReviewDecision,
     summary: String,
     preview: RwSignal<Option<PostPreview>>,
-    note: RwSignal<Option<(String, Option<String>, bool)>>,
+    note: Note,
     busy: RwSignal<bool>,
 ) -> impl View {
     let config = window_tab_data.common.config;
@@ -455,7 +451,7 @@ fn submit_review(
     decision: ReviewDecision,
     summary: String,
     github: Option<(GitHubTarget, GitHubEdits)>,
-    note: RwSignal<Option<(String, Option<String>, bool)>>,
+    note: Note,
     busy: RwSignal<bool>,
 ) {
     let Some(core) = ReviewCore::get() else {
@@ -517,16 +513,11 @@ fn submit_review(
         },
         move |result| {
             busy.set(false);
-            match result {
-                Ok(posted) => {
-                    submitting.set(false);
-                    note.set(posted.map(|(text, url)| (text, url, false)));
-                }
-                Err(error) => {
-                    submitting.set(false);
-                    note.set(Some((error, None, true)));
-                }
-            }
+            submitting.set(false);
+            note.set(match result {
+                Ok(posted) => posted.map(|(text, url)| (text, url, false)),
+                Err(error) => Some((error, None, true)),
+            });
         },
     );
 }

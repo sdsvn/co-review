@@ -4,10 +4,7 @@
 
 use std::{path::PathBuf, rc::Rc, sync::Arc};
 
-use floem::{
-    ext_event::create_ext_action,
-    reactive::SignalGet,
-};
+use floem::{ext_event::create_ext_action, reactive::SignalGet};
 use lapce_rpc::proxy::ProxyResponse;
 use lapce_xi_rope::Rope;
 use lsp_types::{GotoDefinitionResponse, HoverContents, MarkedString, Position};
@@ -35,28 +32,40 @@ pub fn code_folder(review: &Review) -> Option<PathBuf> {
 }
 
 /// The head file of a repository-relative `file`.
-pub fn head_path(review: &Review, file: &str) -> Option<PathBuf> {
+fn head_path(review: &Review, file: &str) -> Option<PathBuf> {
     code_folder(review).map(|code| code.join(file))
+}
+
+pub fn editor_location(path: PathBuf, position: Option<EditorPosition>) -> EditorLocation {
+    EditorLocation {
+        path,
+        position,
+        scroll_offset: None,
+        ignore_unconfirmed: false,
+        same_editor_tab: false,
+    }
+}
+
+/// `line` (1-based) and `column` (0-based) as a language server position.
+fn position(line: u32, column: u32) -> Position {
+    Position {
+        line: line.saturating_sub(1),
+        character: column,
+    }
+}
+
+fn line_position(line: u32) -> Option<EditorPosition> {
+    Some(EditorPosition::Line(line.saturating_sub(1) as usize))
 }
 
 /// The head file at `line` (1-based) and `column` (0-based), in the editor.
 pub fn open_head(main_split: &MainSplitData, review: &Review, file: &str, line: u32, column: u32) {
-    let Some(path) = head_path(review, file) else {
-        return;
-    };
-    main_split.jump_to_location(
-        EditorLocation {
-            path,
-            position: Some(EditorPosition::Position(Position {
-                line: line.saturating_sub(1),
-                character: column,
-            })),
-            scroll_offset: None,
-            ignore_unconfirmed: false,
-            same_editor_tab: false,
-        },
-        None,
-    );
+    if let Some(path) = head_path(review, file) {
+        main_split.jump_to_location(
+            editor_location(path, Some(EditorPosition::Position(position(line, column)))),
+            None,
+        );
+    }
 }
 
 /// The base version of `file` at `line` (1-based), read-only. Read from git off the UI thread.
@@ -84,17 +93,7 @@ pub fn open_base(window_tab: &WindowTabData, review: Arc<Review>, file: String, 
         if let EditorTabChild::Editor(editor_id) = child
             && let Some(editor) = shown.editors.editor_untracked(editor_id)
         {
-            editor.go_to_location(
-                EditorLocation {
-                    path: head,
-                    position: Some(EditorPosition::Line(line.saturating_sub(1) as usize)),
-                    scroll_offset: None,
-                    ignore_unconfirmed: false,
-                    same_editor_tab: false,
-                },
-                false,
-                None,
-            );
+            editor.go_to_location(editor_location(head, line_position(line)), false, None);
         }
     });
 }
@@ -123,17 +122,7 @@ pub fn compare(window_tab: &WindowTabData, review: Arc<Review>, file: String, li
                 .get(&diff_editor_id)
                 .cloned()
         {
-            diff_editor.right.go_to_location(
-                EditorLocation {
-                    path: head,
-                    position: Some(EditorPosition::Line(line.saturating_sub(1) as usize)),
-                    scroll_offset: None,
-                    ignore_unconfirmed: false,
-                    same_editor_tab: false,
-                },
-                new_doc,
-                None,
-            );
+            diff_editor.right.go_to_location(editor_location(head, line_position(line)), new_doc, None);
         }
     });
 }
@@ -206,11 +195,7 @@ pub fn go_to_definition(window_tab: &WindowTabData, review: Arc<Review>, file: S
     let proxy = window_tab.common.proxy.clone();
     let asked = path.clone();
     with_loaded_head(window_tab, path, move || {
-        let position = Position {
-            line: line.saturating_sub(1),
-            character: column,
-        };
-        proxy.get_definition(0, asked, position, move |result| {
+        proxy.get_definition(0, asked, position(line, column), move |result| {
             let location = match result {
                 Ok(ProxyResponse::GetDefinitionResponse { definition, .. }) => match definition {
                     GotoDefinitionResponse::Scalar(location) => Some((location.uri, location.range.start)),
@@ -225,12 +210,8 @@ pub fn go_to_definition(window_tab: &WindowTabData, review: Arc<Review>, file: S
                 },
                 _ => None,
             };
-            send(location.map(|(uri, start)| EditorLocation {
-                path: path_from_url(&uri),
-                position: Some(EditorPosition::Position(start)),
-                scroll_offset: None,
-                ignore_unconfirmed: false,
-                same_editor_tab: false,
+            send(location.map(|(uri, start)| {
+                editor_location(path_from_url(&uri), Some(EditorPosition::Position(start)))
             }));
         });
     });
@@ -259,11 +240,7 @@ pub fn hover(
     let proxy = window_tab.common.proxy.clone();
     let asked = path.clone();
     with_loaded_head(window_tab, path, move || {
-        let position = Position {
-            line: line.saturating_sub(1),
-            character: column,
-        };
-        proxy.get_hover(0, asked, position, move |result| {
+        proxy.get_hover(0, asked, position(line, column), move |result| {
             if let Ok(ProxyResponse::HoverResponse { hover, .. }) = result {
                 send(hover);
             }

@@ -22,7 +22,7 @@ use super::{
 };
 use crate::{
     command::{InternalCommand, LapceWorkbenchCommand},
-    editor::location::{EditorLocation, EditorPosition},
+    editor::location::EditorPosition,
     main_split::MainSplitData,
     palette::PaletteData,
     panel::{data::PanelData, kind::PanelKind},
@@ -119,9 +119,9 @@ impl ReviewTab {
         );
     }
 
-    fn uri(&self) -> Option<String> {
-        let root = self.review.root.as_ref()?;
-        Some(review_store::path_to_file_uri(&root.to_string_lossy()))
+    fn active_file(&self) -> Option<PathBuf> {
+        let editor = self.main_split.active_editor.get_untracked()?;
+        editor.doc().content.get_untracked().path().cloned()
     }
 }
 
@@ -151,11 +151,7 @@ pub fn run(window_tab: &WindowTabData, command: &LapceWorkbenchCommand) {
         ReviewStartOnSelection => {
             let selected = match window_tab.file_explorer.select.get_untracked() {
                 Some(lapce_rpc::file::FileNodeViewKind::Path(path)) => Some(path),
-                _ => tab
-                    .main_split
-                    .active_editor
-                    .get_untracked()
-                    .and_then(|editor| editor.doc().content.get_untracked().path().cloned()),
+                _ => tab.active_file(),
             };
             match selected {
                 Some(path) => review_paths(&tab, vec![path]),
@@ -176,27 +172,18 @@ pub fn new_review(tab: &ReviewTab) {
         tab.info("Open a repository folder before starting a review.");
         return;
     };
-    let current_file = tab
-        .main_split
-        .active_editor
-        .get_untracked()
-        .and_then(|editor| editor.doc().content.get_untracked().path().cloned())
-        .filter(|path| tab.review.relative_path(path).is_some());
-    let git_root = root.clone();
+    let current_file = tab.active_file().filter(|path| tab.review.relative_path(path).is_some());
     let tab_then = tab.clone();
-    tab.later(
-        move || git_info(&git_root),
-        move |git| pick_scope(&tab_then, root, current_file, git),
-    );
+    tab.later(move || git_info(&root), move |git| pick_scope(&tab_then, current_file, git));
 }
 
 /// **Start Review of Selection**: a review of these files and folders (the repository's own folder: of the whole
 /// repository), after its title.
 pub fn review_paths(tab: &ReviewTab, paths: Vec<PathBuf>) {
-    let Some(root) = tab.review.root.clone() else {
+    if tab.review.root.is_none() {
         tab.info("Open a repository folder before starting a review.");
         return;
-    };
+    }
     let paths: Vec<(PathBuf, String)> = paths
         .into_iter()
         .filter_map(|path| Some((tab.review.relative_path(&path)?, path)))
@@ -216,7 +203,7 @@ pub fn review_paths(tab: &ReviewTab, paths: Vec<PathBuf>) {
                 .collect(),
         }
     };
-    ask_title(tab, &root, scope);
+    ask_title(tab, scope);
 }
 
 /// The repository's branches and current branch; `None` outside a git repository.
@@ -260,26 +247,19 @@ fn git_info(root: &std::path::Path) -> Option<GitInfo> {
     Some(GitInfo { current, branches })
 }
 
-fn pick_scope(
-    tab: &ReviewTab,
-    root: PathBuf,
-    current_file: Option<PathBuf>,
-    repository: Option<GitInfo>,
-) {
+fn pick_scope(tab: &ReviewTab, current_file: Option<PathBuf>, repository: Option<GitInfo>) {
     let mut choices = vec![{
-        let (tab, root) = (tab.clone(), root.clone());
-        Choice::new("Entire repository", move || {
-            ask_title(&tab, &root, ReviewScope::Repository)
-        })
-        .described("Review everything, independent of Git")
+        let tab = tab.clone();
+        Choice::new("Entire repository", move || ask_title(&tab, ReviewScope::Repository))
+            .described("Review everything, independent of Git")
     }];
     if let Some(file) = current_file {
-        let (tab, root) = (tab.clone(), root.clone());
+        let tab = tab.clone();
         let relative = tab.review.relative_path(&file).unwrap_or_default();
         choices.push(
             Choice::new("Current file", move || {
                 let uri = review_store::path_to_file_uri(&file.to_string_lossy());
-                ask_title(&tab, &root, ReviewScope::Paths { uris: vec![uri] })
+                ask_title(&tab, ReviewScope::Paths { uris: vec![uri] })
             })
             .described(relative),
         );
@@ -287,13 +267,13 @@ fn pick_scope(
     if let Some(repository) = repository {
         let info = Rc::new(repository);
         {
-            let (tab, root, info) = (tab.clone(), root.clone(), info.clone());
+            let tab = tab.clone();
             choices.push(
-                Choice::new("Branch", move || pick_branch(&tab, root, info))
+                Choice::new("Branch", move || pick_branch(&tab, info))
                     .described("Compare a branch against a base"),
             );
         }
-        let (tab, root) = (tab.clone(), root.clone());
+        let tab = tab.clone();
         choices.push(
             Choice::new("Commit", move || {
                 let tab_then = tab.clone();
@@ -306,18 +286,15 @@ fn pick_scope(
                         if reference.is_empty() {
                             return;
                         }
-                        let git_root = root.clone();
+                        let Some(root) = tab_then.review.root.clone() else {
+                            return;
+                        };
                         let shown = reference.clone();
                         let tab = tab_then.clone();
                         tab_then.later(
-                            move || {
-                                git(
-                                    &git_root,
-                                    &["rev-parse", "--verify", &format!("{reference}^{{commit}}")],
-                                )
-                            },
+                            move || git(&root, &["rev-parse", "--verify", &format!("{reference}^{{commit}}")]),
                             move |sha| match sha {
-                                Some(sha) => ask_title(&tab, &root, ReviewScope::Commit { sha }),
+                                Some(sha) => ask_title(&tab, ReviewScope::Commit { sha }),
                                 None => tab.error(format!(
                                     "'{shown}' is not a commit in this repository."
                                 )),
@@ -332,13 +309,13 @@ fn pick_scope(
     tab.pick(Picker::choose("What do you want to review?", choices));
 }
 
-fn pick_branch(tab: &ReviewTab, root: PathBuf, git: Rc<GitInfo>) {
+fn pick_branch(tab: &ReviewTab, git: Rc<GitInfo>) {
     let choices = git
         .branches
         .iter()
         .map(|head| {
             let description = if *head == git.current { "current" } else { "" };
-            let (tab, root, git, head) = (tab.clone(), root.clone(), git.clone(), head.clone());
+            let (tab, git, head) = (tab.clone(), git.clone(), head.clone());
             Choice::new(head.clone(), move || {
                 let default_base = ["main", "master"]
                     .into_iter()
@@ -349,11 +326,8 @@ fn pick_branch(tab: &ReviewTab, root: PathBuf, git: Rc<GitInfo>) {
                 let choices = bases
                     .into_iter()
                     .map(|base| {
-                        let (tab, root, head, base) =
-                            (tab.clone(), root.clone(), head.clone(), base.clone());
-                        Choice::new(base.clone(), move || {
-                            ask_title(&tab, &root, ReviewScope::Branch { base, head })
-                        })
+                        let (tab, head, base) = (tab.clone(), head.clone(), base.clone());
+                        Choice::new(base.clone(), move || ask_title(&tab, ReviewScope::Branch { base, head }))
                     })
                     .collect();
                 tab.pick(Picker::choose("Base to compare the branch against", choices));
@@ -378,13 +352,15 @@ pub fn scope_label(scope: &ReviewScope, review: &ReviewWorkspaceData) -> String 
             .collect::<Vec<_>>()
             .join(", "),
         ReviewScope::Branch { base, head } => format!("{base}...{head}"),
-        ReviewScope::Commit { sha } => {
-            format!("Commit {}", sha.get(..10).unwrap_or(sha))
-        }
+        ReviewScope::Commit { sha } => format!("Commit {}", sha.get(..10).unwrap_or(sha)),
     }
 }
 
-fn ask_title(tab: &ReviewTab, root: &std::path::Path, scope: ReviewScope) {
+fn ask_title(tab: &ReviewTab, scope: ReviewScope) {
+    let Some(root) = tab.review.root.clone() else {
+        return;
+    };
+    let uri = review_store::path_to_file_uri(&root.to_string_lossy());
     let default_title = match &scope {
         ReviewScope::Repository => format!(
             "Review of {}",
@@ -394,10 +370,7 @@ fn ask_title(tab: &ReviewTab, root: &std::path::Path, scope: ReviewScope) {
         ),
         other => scope_label(other, &tab.review),
     };
-    let Some(uri) = tab.uri() else {
-        return;
-    };
-    let (tab_then, root) = (tab.clone(), root.to_path_buf());
+    let tab_then = tab.clone();
     tab.pick(Picker::prompt(
         "Review title",
         default_title.clone(),
@@ -592,53 +565,37 @@ fn actions_menu(
             })
         })
     };
-    let mut choices = Vec::new();
-    if let Some(github) = github {
-        let tab = tab.clone();
-        choices.push(Choice::new(
-            format!("Post review to GitHub ({}#{})…", github.repo, github.number),
-            move || super::submit::post_from_menu(&tab),
-        ));
-    }
-    choices.push(
-        action("Overview", LapceWorkbenchCommand::ReviewOpenOverview)
-            .described("the change or repository, and every finding"),
-    );
-    choices.push(action("Submit review…", LapceWorkbenchCommand::ReviewSubmit));
-    choices.push(action("Go to comment…", LapceWorkbenchCommand::ReviewGoToComment));
-    choices.push(action(
-        "Comment on the repository",
-        LapceWorkbenchCommand::ReviewCommentRepository,
-    ));
-    choices.push(action(
-        if review.agent.is_some() { "Change agent…" } else { "Connect agent…" },
-        LapceWorkbenchCommand::ReviewConnectAgent,
-    ));
-    if is_acp(review.agent.as_ref()) {
-        choices.push(action(
-            "Choose agent model…",
-            LapceWorkbenchCommand::ReviewChooseAgentModel,
-        ));
-    }
-    choices.push(action(
-        "Add Co-Review to an agent harness (MCP)…",
-        LapceWorkbenchCommand::ReviewSetupHarness,
-    ));
-    choices.push(action("Install agent skills…", LapceWorkbenchCommand::ReviewInstallSkills));
-    choices.push(action("New review…", LapceWorkbenchCommand::ReviewNew));
-    choices.push(action("Rename review…", LapceWorkbenchCommand::ReviewRename));
-    choices.push(action("Archive review", LapceWorkbenchCommand::ReviewArchive));
-    if !tab.review.archived_reviews().is_empty() {
-        choices.push(action(
-            "Show archived reviews…",
-            LapceWorkbenchCommand::ReviewShowArchived,
-        ));
-    }
-    choices.push(action("Delete review…", LapceWorkbenchCommand::ReviewDelete));
-    tab.pick(Picker::choose(
-        "Review actions",
-        choices,
-    ));
+    let choices = [
+        github.map(|github| {
+            let tab = tab.clone();
+            Choice::new(
+                format!("Post review to GitHub ({}#{})…", github.repo, github.number),
+                move || super::submit::post_from_menu(&tab),
+            )
+        }),
+        Some(
+            action("Overview", LapceWorkbenchCommand::ReviewOpenOverview)
+                .described("the change or repository, and every finding"),
+        ),
+        Some(action("Submit review…", LapceWorkbenchCommand::ReviewSubmit)),
+        Some(action("Go to comment…", LapceWorkbenchCommand::ReviewGoToComment)),
+        Some(action("Comment on the repository", LapceWorkbenchCommand::ReviewCommentRepository)),
+        Some(action(
+            if review.agent.is_some() { "Change agent…" } else { "Connect agent…" },
+            LapceWorkbenchCommand::ReviewConnectAgent,
+        )),
+        is_acp(review.agent.as_ref())
+            .then(|| action("Choose agent model…", LapceWorkbenchCommand::ReviewChooseAgentModel)),
+        Some(action("Add Co-Review to an agent harness (MCP)…", LapceWorkbenchCommand::ReviewSetupHarness)),
+        Some(action("Install agent skills…", LapceWorkbenchCommand::ReviewInstallSkills)),
+        Some(action("New review…", LapceWorkbenchCommand::ReviewNew)),
+        Some(action("Rename review…", LapceWorkbenchCommand::ReviewRename)),
+        Some(action("Archive review", LapceWorkbenchCommand::ReviewArchive)),
+        (!tab.review.archived_reviews().is_empty())
+            .then(|| action("Show archived reviews…", LapceWorkbenchCommand::ReviewShowArchived)),
+        Some(action("Delete review…", LapceWorkbenchCommand::ReviewDelete)),
+    ];
+    tab.pick(Picker::choose("Review actions", choices.into_iter().flatten().collect()));
 }
 
 // ---- Threads ----
@@ -712,13 +669,7 @@ pub fn open_thread(tab: &ReviewTab, review: &Review, thread: &ReviewThread) {
         .filter(|(path, _)| path.is_file());
     match file {
         Some((path, line)) => tab.common.internal_command.send(InternalCommand::JumpToLocation {
-            location: EditorLocation {
-                path,
-                position: line.map(EditorPosition::Line),
-                scroll_offset: None,
-                ignore_unconfirmed: false,
-                same_editor_tab: false,
-            },
+            location: super::code::editor_location(path, line.map(EditorPosition::Line)),
         }),
         None => tab.show_panel(),
     }
@@ -814,12 +765,7 @@ pub fn toggle_viewed(tab: &ReviewTab) {
     if review.bundle.is_some() {
         return;
     }
-    let Some(path) = tab
-        .main_split
-        .active_editor
-        .get_untracked()
-        .and_then(|editor| editor.doc().content.get_untracked().path().cloned())
-    else {
+    let Some(path) = tab.active_file() else {
         return;
     };
     let Some(relative) = tab.review.relative_path(&path) else {
@@ -836,13 +782,6 @@ pub fn toggle_viewed(tab: &ReviewTab) {
         move |store| Ok(store.set_viewed(&id, &[relative], !viewed)?),
         |_| {},
     );
-}
-
-/// Whether the active review counts `path` as viewed (marked, whatever happened since).
-pub fn is_marked_viewed(workspace: &ReviewWorkspaceData, review: &Review, path: &std::path::Path) -> bool {
-    workspace
-        .relative_path(path)
-        .is_some_and(|relative| review.viewed.as_ref().is_some_and(|viewed| viewed.contains_key(&relative)))
 }
 
 // ---- Agents ----

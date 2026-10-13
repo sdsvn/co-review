@@ -4,15 +4,16 @@
 //! The palette filters its items on a background thread, so an item only carries an index into the picker that is
 //! open; the picker itself (with its actions) stays on the UI thread here.
 
-use std::{cell::RefCell, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    sync::Arc,
+};
 
 use floem::{
-    peniko::Color,
-    reactive::{ReadSignal, SignalGet},
+    reactive::{ReadSignal, SignalGet, SignalUpdate},
     style::AlignItems,
     views::{Container, Decorators, container, label, stack},
 };
-use floem::reactive::SignalUpdate;
 use lapce_xi_rope::Rope;
 
 use crate::{
@@ -102,59 +103,50 @@ impl Picker {
 struct OpenPicker {
     id: u64,
     placeholder: &'static str,
+    items: im::Vector<PaletteItem>,
     actions: Vec<Option<PickerAction>>,
 }
 
 thread_local! {
     static OPEN: RefCell<Option<OpenPicker>> = const { RefCell::new(None) };
-    static NEXT_ID: RefCell<u64> = const { RefCell::new(0) };
+    static NEXT_ID: Cell<u64> = const { Cell::new(0) };
 }
 
 /// Shows `picker` in the window tab's palette.
 pub fn open(palette: &PaletteData, picker: Picker) {
     let id = NEXT_ID.with(|next| {
-        let mut next = next.borrow_mut();
-        *next += 1;
-        *next
+        next.set(next.get() + 1);
+        next.get()
     });
-    let mut actions = Vec::new();
+    let entries = picker
+        .prompt
+        .map(|(hint, action)| (hint, None, true, action))
+        .into_iter()
+        .chain(picker.choices.into_iter().map(|choice| (choice.label, choice.description, false, choice.action)));
     let mut items = im::Vector::new();
-    if let Some((hint, action)) = picker.prompt {
+    let mut actions = Vec::new();
+    for (index, (filter_text, description, always_shown, action)) in entries.enumerate() {
         items.push_back(PaletteItem {
             content: PaletteItemContent::Review(PickerItem {
                 picker: id,
-                index: actions.len(),
-                description: None,
-                always_shown: true,
+                index,
+                description,
+                always_shown,
             }),
-            filter_text: hint,
+            filter_text,
             score: 0,
             indices: Vec::new(),
         });
         actions.push(Some(action));
     }
-    for choice in picker.choices {
-        items.push_back(PaletteItem {
-            content: PaletteItemContent::Review(PickerItem {
-                picker: id,
-                index: actions.len(),
-                description: choice.description,
-                always_shown: false,
-            }),
-            filter_text: choice.label,
-            score: 0,
-            indices: Vec::new(),
-        });
-        actions.push(Some(choice.action));
-    }
     OPEN.with(|open| {
         *open.borrow_mut() = Some(OpenPicker {
             id,
             placeholder: picker.placeholder,
+            items,
             actions,
         })
     });
-    ITEMS.with(|pending| *pending.borrow_mut() = items);
     palette.run(PaletteKind::Review);
     if !picker.value.is_empty() {
         let length = picker.value.len();
@@ -165,13 +157,9 @@ pub fn open(palette: &PaletteData, picker: Picker) {
     }
 }
 
-thread_local! {
-    static ITEMS: RefCell<im::Vector<PaletteItem>> = RefCell::new(im::Vector::new());
-}
-
 /// The open picker's items, for the palette (`PaletteKind::Review`).
 pub fn palette_items() -> im::Vector<PaletteItem> {
-    ITEMS.with(|items| items.borrow().clone())
+    OPEN.with(|open| open.borrow().as_ref().map(|open| open.items.clone()).unwrap_or_default())
 }
 
 /// The open picker's placeholder.
@@ -201,7 +189,6 @@ pub fn palette_item_view(
     let indices = item.indices.clone();
     let description = picker_item.description.clone().unwrap_or_default();
     let has_description = !description.is_empty();
-    let dim = move || -> Color { config.get().color(LapceColor::EDITOR_DIM) };
     container(
         stack((
             focus_text(
@@ -211,7 +198,7 @@ pub fn palette_item_view(
             )
             .style(|s| s.margin_right(8.0).max_width_full()),
             label(move || description.clone()).style(move |s| {
-                s.color(dim())
+                s.color(config.get().color(LapceColor::EDITOR_DIM))
                     .min_width(0.0)
                     .flex_grow(1.0f32)
                     .flex_basis(0.0)
