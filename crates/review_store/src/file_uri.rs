@@ -175,12 +175,11 @@ mod tests {
         assert_eq!(file_uri_to_path(&uri).unwrap(), path);
     }
 
+    // /tmp on macOS is a symlink to /private/tmp; elsewhere there is nothing to resolve.
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_real_path_existing() {
-        // /tmp on macOS is a symlink to /private/tmp
-        let resolved = real_path(Path::new("/tmp"));
-        #[cfg(target_os = "macos")]
-        assert_eq!(resolved, PathBuf::from("/private/tmp"));
+        assert_eq!(real_path(Path::new("/tmp")), PathBuf::from("/private/tmp"));
     }
 
     #[test]
