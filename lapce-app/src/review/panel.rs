@@ -9,7 +9,7 @@ use floem::{
     IntoView, View,
     reactive::{
         Memo, ReadSignal, SignalGet, SignalUpdate, SignalWith,
-        create_memo, create_rw_signal,
+        create_effect, create_memo, create_rw_signal,
     },
     style::CursorStyle,
     views::{
@@ -36,7 +36,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum Filter {
+pub(super) enum Filter {
     Open,
     Proposed,
     Resolved,
@@ -65,6 +65,12 @@ impl Filter {
             Filter::Resolved => thread.status == ThreadStatus::Resolved,
         }
     }
+}
+
+/// The filter the panel starts on: **Proposed** while the review has proposed findings (an agent's first pass, to
+/// triage), else **Open**.
+pub(super) fn pick_filter(proposed: usize) -> Filter {
+    if proposed > 0 { Filter::Proposed } else { Filter::Open }
 }
 
 type Config = ReadSignal<Arc<LapceConfig>>;
@@ -578,8 +584,7 @@ fn drafts_view(window_tab_data: Rc<WindowTabData>, active: Memo<Option<Arc<Revie
 /// The filters, By area, and the threads in their groups.
 fn threads_view(window_tab_data: Rc<WindowTabData>, active: Memo<Option<Arc<Review>>>) -> impl View {
     let config = window_tab_data.common.config;
-    let filter = create_rw_signal(Filter::Open);
-    let filter_chosen = create_rw_signal(false);
+    let filter = window_tab_data.review.panel_filter;
     let by_area = create_rw_signal(false);
     let counts = create_memo(move |_| {
         active.with(|review| {
@@ -594,18 +599,29 @@ fn threads_view(window_tab_data: Rc<WindowTabData>, active: Memo<Option<Arc<Revi
                 .collect::<BTreeMap<&'static str, usize>>()
         })
     });
-    // Until the reviewer picks a filter, a review with only proposed findings (an agent's first pass) shows those.
+    // Until the reviewer picks a filter (and again whenever a review is shown), the panel picks it.
     let effective = create_memo(move |_| {
-        let chosen = filter.get();
-        if !filter_chosen.get() && chosen == Filter::Open {
-            let counts = counts.get();
-            let count = |name| counts.get(name).copied().unwrap_or(0);
-            if count("Open") == 0 && count("Proposed") > 0 {
-                return Filter::Proposed;
-            }
-        }
-        chosen
+        filter.get().unwrap_or_else(|| {
+            counts.with(|counts| {
+                let count = |name| counts.get(name).copied().unwrap_or(0);
+                pick_filter(count("Proposed"))
+            })
+        })
     });
+    {
+        let root = window_tab_data.review.root.clone();
+        create_effect(move |shown: Option<Filter>| {
+            let now = effective.get();
+            if shown != Some(now) {
+                tracing::info!(
+                    "the Review panel of {} shows {} threads",
+                    root.as_deref().map(|root| root.display().to_string()).unwrap_or_default(),
+                    now.name()
+                );
+            }
+            now
+        });
+    }
     let has_labels = move || {
         active.with(|review| {
             review.as_ref().is_some_and(|review| {
@@ -616,8 +632,7 @@ fn threads_view(window_tab_data: Rc<WindowTabData>, active: Memo<Option<Arc<Revi
     let filter_button = move |choice: Filter, hide_when_empty: bool| {
         label(move || format!("{} {}", choice.name(), counts.with(|c| c.get(choice.name()).copied().unwrap_or(0))))
             .on_click_stop(move |_| {
-                filter.set(choice);
-                filter_chosen.set(true);
+                filter.set(Some(choice));
             })
             .style(move |s| {
                 let config = config.get();
@@ -826,4 +841,15 @@ fn group_view(
         .style(|s| s.width_full().flex_col()),
     ))
     .style(|s| s.width_full().flex_col())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_panel_starts_on_proposed_findings_while_there_are_any() {
+        assert_eq!(pick_filter(3), Filter::Proposed);
+        assert_eq!(pick_filter(0), Filter::Open);
+    }
 }

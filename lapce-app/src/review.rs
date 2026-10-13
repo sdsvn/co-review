@@ -254,10 +254,12 @@ pub fn connect(core: Rc<ReviewCore>, app_data: AppData) {
             };
             // The workspace's unsent comments, kept across restarts (once per window tab).
             floem::reactive::untrack(|| drafts::keep(&window_tab));
+            // A review an agent showed opens now; otherwise the window opens on its latest review once loaded.
             let pending = core.pending_pages.borrow_mut().remove(&root);
-            for page in pending.into_iter().flatten() {
-                reveal_page(&window_tab, page);
-            }
+            floem::reactive::untrack(|| match pending {
+                Some(pages) => show_review(&window_tab, pages),
+                None => open_on_review(&window_tab),
+            });
             workspaces.insert(root);
         }
         // Started in the background (by an agent): with no window left, the app quits.
@@ -300,10 +302,104 @@ pub fn reveal_page(window_tab: &WindowTabData, page: ReviewPage) {
     window_tab.main_split.open_review_page(page);
 }
 
-/// "Review: Open Review Overview": the overview of the workspace's most recently updated open review, or the Review
+/// Puts a review in front: opens its `pages` with the first one the focused tab (opened after the editors Lapce
+/// restored, so in front of them), shows the Review panel with the filter the panel picks, and moves the keyboard
+/// focus to the page.
+pub(crate) fn show_review(window_tab: &WindowTabData, pages: Vec<ReviewPage>) {
+    let Some(front) = pages.first().cloned() else {
+        return;
+    };
+    window_tab.review.shown.set(true);
+    window_tab.review.panel_filter.set(None);
+    for page in &pages {
+        reveal_page(window_tab, page.clone());
+    }
+    if pages.len() > 1 {
+        reveal_page(window_tab, front.clone());
+    }
+    window_tab.common.focus.set(crate::window_tab::Focus::Workbench);
+    let in_front = window_tab.main_split.active_editor_tab.get_untracked().and_then(|id| {
+        window_tab.main_split.editor_tabs.with_untracked(|tabs| {
+            tabs.get(&id).and_then(|tab| {
+                tab.with_untracked(|tab| match tab.children.get(tab.active) {
+                    Some((_, _, crate::editor_tab::EditorTabChild::Review(_, page))) => {
+                        Some((page.kind, tab.active, tab.children.len()))
+                    }
+                    _ => None,
+                })
+            })
+        })
+    });
+    tracing::info!(
+        "review {} in front in {}: pages {:?}, focused tab (page, index, tabs) {:?}",
+        front.review_id,
+        window_tab.review.root.as_deref().map(|root| root.display().to_string()).unwrap_or_default(),
+        pages.iter().map(|page| page.kind).collect::<Vec<_>>(),
+        in_front
+    );
+}
+
+/// A window opening on a workspace with an open review (the reviewer's launch, Open Folder, a restored session) opens
+/// on it, once its reviews are loaded: its front page in front of the restored editors, the panel beside it. Once per
+/// window; a workspace without open reviews opens as it was. A review an agent shows meanwhile wins.
+fn open_on_review(window_tab: &Rc<WindowTabData>) {
+    if window_tab.review.opening.replace(true) || window_tab.review.root.is_none() {
+        return;
+    }
+    let loaded = window_tab.review.loaded;
+    let window_tab = Rc::clone(window_tab);
+    let cx = window_tab.scope;
+    cx.create_effect(move |done: Option<bool>| {
+        if done == Some(true) || !loaded.get() {
+            return done.unwrap_or(false);
+        }
+        floem::reactive::untrack(|| {
+            let data = &window_tab.review;
+            let reviews: Vec<Arc<review_model::Review>> =
+                data.reviews.with_untracked(|reviews| reviews.iter().cloned().collect());
+            let Some(review) = pick_review(data.active.get_untracked().as_deref(), &reviews) else {
+                return;
+            };
+            if data.shown.get() {
+                return;
+            }
+            let shown = Rc::clone(&data.shown);
+            let window_tab = Rc::clone(&window_tab);
+            let send = floem::ext_event::create_ext_action(cx, move |pages: Vec<ReviewPage>| {
+                if !shown.get() {
+                    show_review(&window_tab, pages);
+                }
+            });
+            // The pages depend on the review directory's files: read off the UI thread.
+            let read = std::thread::Builder::new()
+                .name("ReviewFrontPages".to_owned())
+                .spawn(move || send(windows::front_pages(&review.id, Some(&review))));
+            if let Err(error) = read {
+                tracing::error!("the window will not open on its review: {error}");
+            }
+        });
+        true
+    });
+}
+
+/// The review a window opens on: its active review when that is open (one an agent just showed), else the open one
+/// last worked on; `None` when every review is archived or there is none.
+fn pick_review(
+    active: Option<&str>,
+    reviews: &[Arc<review_model::Review>],
+) -> Option<Arc<review_model::Review>> {
+    reviews
+        .iter()
+        .find(|review| review.archived_at.is_none() && Some(review.id.as_str()) == active)
+        .or_else(|| workspace::latest_open(reviews.iter()))
+        .cloned()
+}
+
+/// "Review: Open Review Overview": the overview of the workspace's open review last worked on, or the Review
 /// panel (which says there is none) when it has none.
 pub fn open_overview(window_tab: &WindowTabData) {
-    let latest = window_tab.review.open_reviews().into_iter().next();
+    let reviews = window_tab.review.open_reviews();
+    let latest = workspace::latest_open(reviews.iter()).cloned();
     match latest {
         Some(review) => reveal_page(window_tab, ReviewPage::overview(&review.id)),
         None => window_tab.show_panel(PanelKind::Review),
@@ -406,6 +502,38 @@ fn presence_signal(services: &Services) -> RwSignal<im::HashMap<String, bool>> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    /// A review created at `created`, its file last written at `updated`.
+    fn review(id: &str, archived: bool, created: u64, updated: u64) -> Arc<review_model::Review> {
+        let mut review = serde_json::json!({
+            "id": id, "title": "T", "workspaceRoot": "file:///w", "scope": { "kind": "repository" },
+            "participants": [], "threads": [], "activity": [], "nextThreadNumber": 1,
+            "createdAt": created, "updatedAt": updated,
+        });
+        if archived {
+            review["archivedAt"] = serde_json::json!(1);
+        }
+        Arc::new(serde_json::from_value(review).unwrap())
+    }
+
+    #[test]
+    fn a_window_opens_on_its_active_review_or_the_open_one_last_worked_on() {
+        // "older" was written last only because its window closed (`closed`): "latest" was worked on last.
+        let reviews = [
+            review("older", false, 10, 90),
+            review("archived", true, 50, 50),
+            review("latest", false, 20, 30),
+        ];
+        let picked = |active| super::pick_review(active, &reviews).map(|review| review.id.clone());
+        assert_eq!(picked(Some("older")).as_deref(), Some("older"));
+        assert_eq!(picked(None).as_deref(), Some("latest"));
+        assert_eq!(picked(Some("archived")).as_deref(), Some("latest"));
+        assert_eq!(picked(Some("gone")).as_deref(), Some("latest"));
+        assert!(super::pick_review(None, &[review("archived", true, 1, 1)]).is_none());
+        assert!(super::pick_review(None, &[]).is_none());
+    }
+
     #[test]
     fn remote_development_is_not_in_the_palette() {
         let commands = crate::command::lapce_internal_commands();

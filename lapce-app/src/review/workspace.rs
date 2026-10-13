@@ -48,6 +48,13 @@ pub struct ReviewWorkspaceData {
     pub submitting: RwSignal<bool>,
     /// The change shown in the file explorer, when the window is on a change review's code folder.
     pub change: super::changed_files::ChangedFiles,
+    /// The Review panel's thread filter as the reviewer picked it; `None` until they pick one (or after a review is
+    /// shown), when the panel picks it ([`super::panel::pick_filter`]).
+    pub(super) panel_filter: RwSignal<Option<super::panel::Filter>>,
+    /// Whether the window waits for its reviews to open on one ([`super::open_on_review`]), and whether a review has
+    /// been put in front: once per window, never again on later store changes.
+    pub(super) opening: Rc<Cell<bool>>,
+    pub(super) shown: Rc<Cell<bool>>,
 }
 
 /// A comment being written: where it goes, its text so far and whether it asks the agent.
@@ -88,6 +95,9 @@ impl ReviewWorkspaceData {
             closing: cx.create_rw_signal(None),
             selected_thread: cx.create_rw_signal(None),
             submitting: cx.create_rw_signal(false),
+            panel_filter: cx.create_rw_signal(None),
+            opening: Rc::default(),
+            shown: Rc::default(),
         };
         if let (Some(core), Some(root)) = (ReviewCore::get(), data.root.clone()) {
             data.load(cx, &core, root.clone());
@@ -137,7 +147,8 @@ impl ReviewWorkspaceData {
         Some(parts.join("/"))
     }
 
-    /// Keeps a review active: the first open one when the active one is gone (deleted, or never chosen).
+    /// Keeps a review active: the latest open one ([`latest_open`]) when the active one is gone (deleted, or never
+    /// chosen).
     fn keep_active(&self, cx: Scope) {
         let (reviews, loaded, active) = (self.reviews, self.loaded, self.active);
         cx.create_effect(move |_| {
@@ -152,12 +163,7 @@ impl ReviewWorkspaceData {
                 if present {
                     return None;
                 }
-                Some(
-                    reviews
-                        .iter()
-                        .find(|review| review.archived_at.is_none())
-                        .map(|review| review.id.clone()),
-                )
+                Some(latest_open(reviews.iter()).map(|review| review.id.clone()))
             });
             if let Some(replacement) = replacement
                 && replacement != current
@@ -307,6 +313,24 @@ impl ReviewWorkspaceData {
             });
         });
     }
+}
+
+/// When a review was last worked on: created, an activity, or a thread changed. Not `updated_at`, which also moves
+/// when its window opens or closes (`closed`), so every restart would reorder a workspace's reviews.
+pub(super) fn last_worked_on(review: &Review) -> u64 {
+    let activity = review.activity.iter().map(|activity| activity.at);
+    let threads = review.threads.iter().map(|thread| thread.updated_at);
+    activity.chain(threads).fold(review.created_at, u64::max)
+}
+
+/// The open review last worked on ([`last_worked_on`]); on a tie the first of `reviews`.
+pub(super) fn latest_open<'a>(reviews: impl Iterator<Item = &'a Arc<Review>>) -> Option<&'a Arc<Review>> {
+    reviews
+        .filter(|review| review.archived_at.is_none())
+        .fold(None, |latest: Option<&Arc<Review>>, review| match latest {
+            Some(latest) if last_worked_on(latest) >= last_worked_on(review) => Some(latest),
+            _ => Some(review),
+        })
 }
 
 /// Whether a window of the workspace `uri` shows `review` (the rule of `ReviewStore::list_for_window`).

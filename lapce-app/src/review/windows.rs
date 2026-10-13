@@ -1,6 +1,6 @@
 //! The app's windows for the MCP server ([`review_mcp::ReviewWindows`]): showing a review opens its workspace's
 //! window, or focuses the one already open, with the review's overview page in front (a change review's pull-request
-//! page in front of it; a design's or knowledge bundle's document instead of an overview).
+//! page beside it; a design's or knowledge bundle's document instead of an overview).
 
 use std::{
     collections::{HashMap, HashSet},
@@ -18,13 +18,13 @@ use review_mcp::{ReviewWindows, SHOWN_NOTE};
 use parking_lot::Mutex;
 use review_store::ReviewStore;
 
-use super::{ReviewCore, ReviewPage, reveal_page};
+use super::{ReviewCore, ReviewPage};
 use crate::{app::AppData, window::WindowData, window_tab::WindowTabData};
 
 /// What the MCP server asks of the app's windows, handled on the UI thread.
 #[derive(Clone, Debug)]
 pub enum WindowRequest {
-    /// Show `review_id`'s `pages` (the last in front, see [`pages_to_show`]) in the window of `workspace` (resolved
+    /// Show `review_id`'s `pages` (the first in front, see [`front_pages`]) in the window of `workspace` (resolved
     /// through symbolic links).
     Show {
         review_id: String,
@@ -86,7 +86,7 @@ impl ReviewWindows for AppWindows {
             self.shown_by.lock().entry(key).or_default().insert(session_id.to_string());
         }
         // Read here, off the UI thread: the review, its patches and its document decide the pages.
-        let pages = pages_to_show(review_id, self.store.get(review_id).as_ref());
+        let pages = front_pages(review_id, self.store.get(review_id).as_ref());
         self.send(WindowRequest::Show {
             review_id: review_id.to_string(),
             workspace: review_store::real_path(workspace),
@@ -196,11 +196,11 @@ pub(super) fn handle(core: &ReviewCore, app_data: &AppData, request: WindowReque
     });
 }
 
-/// The pages showing a review opens, the last in front: a change review's overview and its pull-request page; a
-/// review directory without patches (a design, a knowledge bundle) its document, which is its front page, titled
-/// after it (the review's title is the document's); any other
-/// review its overview. Reads the review directory, so it runs off the UI thread.
-fn pages_to_show(review_id: &str, review: Option<&review_model::Review>) -> Vec<ReviewPage> {
+/// The pages showing a review opens, the first in front: a change review's overview with its pull-request page beside
+/// it; a review directory without patches (a design, a knowledge bundle) its document, which is its front page,
+/// titled after it (the review's title is the document's); any other review its overview. Reads the review
+/// directory, so it runs off the UI thread.
+pub(super) fn front_pages(review_id: &str, review: Option<&review_model::Review>) -> Vec<ReviewPage> {
     let overview = ReviewPage::overview(review_id);
     let Some(review) = review else {
         return vec![overview];
@@ -217,7 +217,7 @@ fn pages_to_show(review_id: &str, review: Option<&review_model::Review>) -> Vec<
 }
 
 /// Opens or focuses the window of `workspace` (a folder, opened as a local workspace) and opens `pages` in it, the
-/// last in front.
+/// first in front.
 fn show_pages(
     core: &ReviewCore,
     app_data: &AppData,
@@ -240,9 +240,7 @@ fn show_pages(
                 tracing::info!("the window of {} stays open: a review is shown in it", workspace.display());
                 window_tab.review.closing.set(None);
             }
-            for page in pages {
-                reveal_page(&window_tab, page);
-            }
+            super::show_review(&window_tab, pages);
             focus(&window);
         }
         None => {
@@ -251,7 +249,7 @@ fn show_pages(
                 page.review_id,
                 workspace.display()
             );
-            // The page opens once the new window's workspace appears (see `review::connect`).
+            // The pages open once the new window's workspace appears (see `review::connect`).
             core.pending_pages
                 .borrow_mut()
                 .insert(workspace.clone(), pages);
@@ -396,7 +394,7 @@ mod tests {
         let design = scratch.path().join("design");
         std::fs::create_dir_all(&design).unwrap();
         std::fs::write(design.join("index.md"), "# Design\n").unwrap();
-        let pages = pages_to_show("r1", Some(&review(Some(&design))));
+        let pages = front_pages("r1", Some(&review(Some(&design))));
         assert_eq!(pages, vec![ReviewPage::document("r1", &design.join("index.md"))]);
         assert_eq!(pages[0].title.as_deref(), Some("T"));
 
@@ -404,12 +402,12 @@ mod tests {
         std::fs::create_dir_all(&change).unwrap();
         std::fs::write(change.join("change.patch"), "diff --git a/x b/x\n").unwrap();
         assert_eq!(
-            pages_to_show("r1", Some(&review(Some(&change)))),
+            front_pages("r1", Some(&review(Some(&change)))),
             vec![ReviewPage::overview("r1"), ReviewPage::pull_request("r1")]
         );
 
-        assert_eq!(pages_to_show("r1", Some(&review(None))), vec![ReviewPage::overview("r1")]);
-        assert_eq!(pages_to_show("r1", None), vec![ReviewPage::overview("r1")]);
+        assert_eq!(front_pages("r1", Some(&review(None))), vec![ReviewPage::overview("r1")]);
+        assert_eq!(front_pages("r1", None), vec![ReviewPage::overview("r1")]);
     }
 
     #[test]
