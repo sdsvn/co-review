@@ -368,5 +368,8 @@ async fn the_same_change_in_two_repositories_is_two_reviews() {
         assert_eq!(bundle.repo.as_deref(), Some(repo.as_str()));
         opened.push(id);
     }
-    assert_ne!(opened[0], opened[1], "each repository's change has its own review");
+    assert_ne!(
+        opened[0], opened[1],
+        "each repository's change has its own review"
+    );
 }

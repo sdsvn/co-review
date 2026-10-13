@@ -647,7 +647,11 @@ fn a_stateless_discovery_probe_is_refused_as_unknown_without_starting_co_review(
     )
     .expect("handshake");
     let app = home.path().join("app.sh");
-    fs::write(&app, "#!/bin/sh\necho \"$@\" > \"$CO_REVIEW_HOME/started\"\n").expect("app");
+    fs::write(
+        &app,
+        "#!/bin/sh\necho \"$@\" > \"$CO_REVIEW_HOME/started\"\n",
+    )
+    .expect("app");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -656,8 +660,10 @@ fn a_stateless_discovery_probe_is_refused_as_unknown_without_starting_co_review(
     let app = app.display().to_string();
     let mut agent = Agent::start(home.path(), &[&here()], &[("CO_REVIEW_APP", &app)]);
     // As Claude Code 2.1 sends it, before `initialize`.
-    agent.write(&json!({ "jsonrpc": "2.0", "id": "server-discover-probe-1", "method": "server/discover",
-        "params": { "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } } }));
+    agent.write(
+        &json!({ "jsonrpc": "2.0", "id": "server-discover-probe-1", "method": "server/discover",
+        "params": { "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } } }),
+    );
     let reply = agent.wait_for("the probe's answer", |message| {
         message.get("id") == Some(&json!("server-discover-probe-1"))
     });

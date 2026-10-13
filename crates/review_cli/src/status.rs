@@ -180,12 +180,13 @@ pub struct OpenReview {
     pub root: String,
     pub open: usize,
     pub proposed: usize,
-    /// Open threads whose last message is the reviewer's.
+    /// Open or proposed threads whose last message is the reviewer's (a question on a proposed finding waits too).
     pub needs_reply: usize,
 }
 
-/// The reviews among `reviews` that are of `root` (a real path) or of a review directory inside it, not archived,
-/// with an open or proposed thread.
+/// The reviews among `reviews` that are of `root` (a real path), of a review directory inside it, or of a change to
+/// it (a diff review: its pages are kept outside the repository, under Co-Review's home), not archived, with an open
+/// or proposed thread.
 pub fn open_reviews(reviews: &[Review], root: &str) -> Vec<OpenReview> {
     let inside = format!("{root}{}", std::path::MAIN_SEPARATOR);
     reviews
@@ -193,6 +194,7 @@ pub fn open_reviews(reviews: &[Review], root: &str) -> Vec<OpenReview> {
         .filter(|review| review.archived_at.is_none())
         .filter_map(|review| {
             let directory = match &review.bundle {
+                Some(bundle) if bundle.repo.as_deref() == Some(root) => root.to_string(),
                 Some(bundle) => bundle.dir.clone(),
                 None => file_uri_to_path(&review.workspace_root)?,
             };
@@ -214,7 +216,7 @@ pub fn open_reviews(reviews: &[Review], root: &str) -> Vec<OpenReview> {
                 .threads
                 .iter()
                 .filter(|thread| {
-                    thread.status == ThreadStatus::Open
+                    thread.status != ThreadStatus::Resolved
                         && thread
                             .messages
                             .last()
@@ -241,8 +243,8 @@ pub fn claude_hook_output(reviews: &[OpenReview], root: &str) -> Option<String> 
     let mut lines = vec!["Co-Review has open reviews for this repository:".to_string()];
     for review in reviews {
         let mut line = format!(
-            "- \"{}\": {} question(s) waiting for an answer, {} open thread(s)",
-            review.title, review.needs_reply, review.open
+            "- \"{}\" (reviewId {}): {} question(s) waiting for an answer, {} open thread(s)",
+            review.title, review.id, review.needs_reply, review.open
         );
         if review.proposed > 0 {
             line.push_str(&format!(", {} proposed finding(s)", review.proposed));
@@ -256,8 +258,8 @@ pub fn claude_hook_output(reviews: &[OpenReview], root: &str) -> Option<String> 
         lines.push(line);
     }
     lines.push(
-        "If the user wants to continue reviewing, rejoin with the co-review skill (open_review with this repository, \
-         or its `dir`), answer the waiting questions, and wait for their verdict."
+        "If the user wants to continue reviewing, rejoin with the co-review skill (open_review({ reviewId })), answer \
+         the waiting questions, and wait for their verdict."
             .to_string(),
     );
     let output = serde_json::json!({
@@ -406,6 +408,35 @@ mod tests {
     }
 
     #[test]
+    fn a_change_review_kept_under_the_home_is_a_review_of_its_repository() {
+        let root = root();
+        let mut change = review(
+            "change",
+            "/home/.co-review/inline/abc",
+            true,
+            false,
+            &[("proposed", false)],
+        );
+        if let Some(bundle) = &mut change.bundle {
+            bundle.repo = Some(root.clone());
+        }
+        let mut elsewhere = change.clone();
+        elsewhere.title = "of another repository".to_string();
+        if let Some(bundle) = &mut elsewhere.bundle {
+            bundle.repo = Some(store_path(&std::env::temp_dir().join("other")));
+        }
+        let open = open_reviews(&[change, elsewhere], &root);
+        assert_eq!(
+            open.iter()
+                .map(|review| (review.title.as_str(), review.root.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("change", root.as_str())]
+        );
+        let output = claude_hook_output(&open, &root).expect("output");
+        assert!(output.contains(r#"- \"change\" (reviewId id-change): 0 question(s) waiting for an answer, 0 open thread(s), 1 proposed finding(s)\nIf"#), "{output}");
+    }
+
+    #[test]
     fn counts_open_proposed_and_open_threads_waiting_for_an_answer() {
         let root = root();
         let reviews = vec![review(
@@ -430,7 +461,7 @@ mod tests {
                 root: root.clone(),
                 open: 3,
                 proposed: 2,
-                needs_reply: 2,
+                needs_reply: 3,
             }]
         );
     }
@@ -460,9 +491,9 @@ mod tests {
             parsed,
             json!({ "hookSpecificOutput": { "hookEventName": "SessionStart", "additionalContext": ([
                 "Co-Review has open reviews for this repository:",
-                "- \"Repository\": 1 question(s) waiting for an answer, 2 open thread(s)",
-                "- \"Change\": 1 question(s) waiting for an answer, 2 open thread(s), 3 proposed finding(s) (review directory review)",
-                "If the user wants to continue reviewing, rejoin with the co-review skill (open_review with this repository, or its `dir`), answer the waiting questions, and wait for their verdict.",
+                "- \"Repository\" (reviewId Repository): 1 question(s) waiting for an answer, 2 open thread(s)",
+                "- \"Change\" (reviewId Change): 1 question(s) waiting for an answer, 2 open thread(s), 3 proposed finding(s) (review directory review)",
+                "If the user wants to continue reviewing, rejoin with the co-review skill (open_review({ reviewId })), answer the waiting questions, and wait for their verdict.",
             ].join("\n")) } })
         );
         assert!(!output.contains('\n'), "one line, as express wrote it");

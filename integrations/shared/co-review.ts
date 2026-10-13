@@ -8,14 +8,16 @@
  * - Subagents and headless runs: `co_review_start`, then loop `co_review_wait` → investigate →
  *   `co_review_reply`. The blocking wait keeps the subagent resident as co-reviewer.
  *
- * Talks to the running Co-Review app over its local MCP endpoint (started on demand through the
- * `co-review` CLI), so neither harness needs MCP support. What differs per harness (schema builder,
- * how a question is delivered, which session is the main one) comes in as a `Harness`.
+ * Talks to Co-Review through `co-review mcp` (the stdio bridge every MCP harness uses: it starts Co-Review on the
+ * first tool call and reconnects when it restarts), in plain JSON-RPC lines, so neither harness needs MCP support and
+ * the package needs no dependencies. What differs per harness (schema builder, how a question is delivered, which
+ * session is the main one) comes in as a `Harness`.
  */
-import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,7 +35,6 @@ const CLI =
 		join("/usr/local/bin", EXE),
 		join(homedir(), ".local", "bin", EXE),
 	].find(p => p && existsSync(p)) ?? "co-review";
-const HOME = process.env.CO_REVIEW_HOME || join(homedir(), ".co-review");
 
 /** The parts of the harness's extension context this extension uses (Pi and omp share them). */
 export interface Context {
@@ -86,42 +87,120 @@ interface Verdict {
 	acceptedSuggestions?: { path?: string; startLine?: number; before: string; after: string }[];
 }
 
-type McpClient = import("@modelcontextprotocol/sdk/client/index.js").Client;
+interface ToolResult {
+	content?: { type: string; text?: string }[];
+	isError?: boolean;
+}
 
-/** One connection to Co-Review (an MCP session) for one agent session. */
+interface Pending {
+	resolve(result: ToolResult): void;
+	reject(error: Error): void;
+}
+
+/** One connection to Co-Review (a `co-review mcp` bridge, so an MCP session) for one agent session. */
 class CoReviewConnection {
-	client: McpClient | undefined;
+	private bridge: ChildProcessWithoutNullStreams | undefined;
+	private ready: Promise<void> | undefined;
+	private readonly pending = new Map<number, Pending>();
+	private nextId = 0;
 	listening = false;
 	private stopped = false;
 
 	constructor(private readonly clientName: string) {}
 
-	async connect(root: string): Promise<void> {
-		if (this.client) {
+	get connected(): boolean {
+		return this.bridge !== undefined;
+	}
+
+	connect(root: string): Promise<void> {
+		this.ready ??= this.start(root).catch(error => {
+			this.drop(error as Error);
+			throw error;
+		});
+		return this.ready;
+	}
+
+	private async start(root: string): Promise<void> {
+		const bridge = spawn(CLI, ["mcp", root], { stdio: ["pipe", "pipe", "pipe"] });
+		this.bridge = bridge;
+		let stderr = "";
+		bridge.stderr.on("data", d => (stderr = (stderr + d).slice(-2000)));
+		bridge.on("error", error => this.drop(new Error(`co-review mcp did not start (${CLI}): ${error.message}`), bridge));
+		bridge.on("exit", code => this.drop(new Error(`co-review mcp ended (exit ${code})${stderr.trim() ? `: ${stderr.trim()}` : ""}`), bridge));
+		createInterface({ input: bridge.stdout }).on("line", line => this.receive(line));
+		await this.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: this.clientName, version: "1.0.0" } }, 120_000);
+		this.write({ jsonrpc: "2.0", method: "notifications/initialized" });
+	}
+
+	/** The bridge is gone (or this connection was closed): every waiting call fails, and the next call starts anew. */
+	private drop(error: Error, bridge?: ChildProcessWithoutNullStreams): void {
+		if (bridge && bridge !== this.bridge) {
 			return;
 		}
-		// Start Co-Review (or reuse a running one) without opening a window.
-		await new Promise<void>((ok, fail) => {
-			const child = spawn(CLI, ["--no-open", root], { stdio: ["ignore", "ignore", "pipe"] });
-			let err = "";
-			child.stderr.on("data", d => (err += d));
-			child.on("error", fail);
-			child.on("exit", code => (code === 0 ? ok() : fail(new Error(`co-review failed to start: ${err.trim()}`))));
+		this.bridge = undefined;
+		this.ready = undefined;
+		for (const pending of this.pending.values()) {
+			pending.reject(error);
+		}
+		this.pending.clear();
+	}
+
+	private write(message: unknown): void {
+		this.bridge?.stdin.write(`${JSON.stringify(message)}\n`);
+	}
+
+	private receive(line: string): void {
+		let message: { id?: number; result?: ToolResult; error?: { message?: string } };
+		try {
+			message = JSON.parse(line);
+		} catch {
+			return;
+		}
+		// Notifications (e.g. Claude Code's channel) are not for this extension: it waits with await_reviewer.
+		const pending = typeof message.id === "number" ? this.pending.get(message.id) : undefined;
+		if (!pending) {
+			return;
+		}
+		this.pending.delete(message.id as number);
+		if (message.error) {
+			pending.reject(new Error(message.error.message ?? "Co-Review failed"));
+		} else {
+			pending.resolve(message.result ?? {});
+		}
+	}
+
+	private request(method: string, params: unknown, timeoutMs: number, signal?: AbortSignal): Promise<ToolResult> {
+		if (!this.bridge) {
+			return Promise.reject(new Error("Not connected to Co-Review. Call co_review_start first."));
+		}
+		const id = ++this.nextId;
+		return new Promise<ToolResult>((ok, fail) => {
+			const finish = () => {
+				clearTimeout(timer);
+				signal?.removeEventListener("abort", abort);
+			};
+			const cancel = (reason: string) => {
+				if (this.pending.delete(id)) {
+					this.write({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: id, reason } });
+					fail(new Error(reason));
+				}
+				finish();
+			};
+			const abort = () => cancel("Cancelled");
+			const timer = setTimeout(() => cancel(`Co-Review did not answer ${method} in ${Math.round(timeoutMs / 1000)} s`), timeoutMs);
+			signal?.addEventListener("abort", abort, { once: true });
+			this.pending.set(id, {
+				resolve: result => (finish(), ok(result)),
+				reject: error => (finish(), fail(error))
+			});
+			this.write({ jsonrpc: "2.0", id, method, params });
 		});
-		const { url } = JSON.parse(readFileSync(join(HOME, "server.json"), "utf8")) as { url: string };
-		const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
-		const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
-		const client = new Client({ name: this.clientName, version: "1.0.0" });
-		await client.connect(new StreamableHTTPClientTransport(new URL(`${url}/mcp?root=${encodeURIComponent(root)}`)));
-		this.client = client;
 	}
 
 	async call<T = any>(name: string, args: Record<string, unknown>, timeoutMs = 120_000, signal?: AbortSignal): Promise<T> {
-		if (!this.client) {
-			throw new Error("Not connected to Co-Review. Call co_review_start first.");
-		}
-		const result = await this.client.callTool({ name, arguments: args }, undefined, { timeout: timeoutMs, signal });
-		const text = (result.content as { type: string; text?: string }[]).map(c => c.text ?? "").join("");
+		await this.ready;
+		const result = await this.request("tools/call", { name, arguments: args }, timeoutMs, signal);
+		const text = (result.content ?? []).map(c => c.text ?? "").join("");
 		if (result.isError) {
 			throw new Error(text);
 		}
@@ -178,9 +257,10 @@ class CoReviewConnection {
 
 	async close(): Promise<void> {
 		this.stopped = true;
-		const client = this.client;
-		this.client = undefined;
-		await client?.close().catch(() => undefined);
+		const bridge = this.bridge;
+		this.drop(new Error("Left the review."));
+		// Closing stdin ends the bridge's MCP session: Co-Review gives this agent's threads back.
+		bridge?.stdin.end();
 	}
 }
 

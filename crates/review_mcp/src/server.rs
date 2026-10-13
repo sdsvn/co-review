@@ -6,6 +6,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use anyhow::{Context as _, Result, anyhow};
 use axum::extract::Request;
@@ -167,6 +168,17 @@ pub fn start(options: ServerOptions, services: Services) -> Result<ServerHandle>
     })
 }
 
+/// The longest `timeoutSec` a waiting tool (await_reviewer, ask_reviewer) takes.
+const MAX_WAIT_SECONDS: u64 = 3600;
+
+/// rmcp ends a session after 5 minutes without a message either way, but a session waiting for the reviewer sends
+/// none: it must outlive the longest wait (and then some), or an agent's wait fails after 5 minutes.
+fn session_manager() -> LocalSessionManager {
+    let mut sessions = LocalSessionManager::default();
+    sessions.session_config.keep_alive = Some(Duration::from_secs(MAX_WAIT_SECONDS + 300));
+    sessions
+}
+
 fn router(reviewer: Arc<CoReviewer>, cancel: CancellationToken) -> axum::Router {
     let mut config = StreamableHttpServerConfig::default();
     config.cancellation_token = cancel.child_token();
@@ -179,7 +191,7 @@ fn router(reviewer: Arc<CoReviewer>, cancel: CancellationToken) -> axum::Router 
                     session: Arc::new(Session::new(Arc::clone(&reviewer))),
                 })
             },
-            Default::default(),
+            Arc::new(session_manager()),
             config,
         );
     axum::Router::new()
@@ -419,9 +431,10 @@ fn parse<Arguments: DeserializeOwned>(
 
 fn check_timeout(tool: &str, timeout: Option<u64>) -> Result<(), ToolOutput> {
     match timeout {
-        Some(seconds) if !(1..=3600).contains(&seconds) => {
-            Err(invalid(tool, "timeoutSec: between 1 and 3600"))
-        }
+        Some(seconds) if !(1..=MAX_WAIT_SECONDS).contains(&seconds) => Err(invalid(
+            tool,
+            &format!("timeoutSec: between 1 and {MAX_WAIT_SECONDS}"),
+        )),
         _ => Ok(()),
     }
 }
@@ -444,6 +457,17 @@ mod tests {
         );
         assert_eq!(root_parameter("x=1"), None);
         assert_eq!(root_parameter("root=100%").as_deref(), Some("100%"));
+    }
+
+    #[test]
+    fn a_session_outlives_the_longest_wait_for_the_reviewer() {
+        let keep_alive = session_manager().session_config.keep_alive;
+        assert!(
+            keep_alive.is_some_and(|keep_alive| keep_alive > Duration::from_secs(MAX_WAIT_SECONDS)),
+            "{keep_alive:?}"
+        );
+        assert!(check_timeout("await_reviewer", Some(MAX_WAIT_SECONDS)).is_ok());
+        assert!(check_timeout("await_reviewer", Some(MAX_WAIT_SECONDS + 1)).is_err());
     }
 
     #[test]

@@ -103,7 +103,7 @@ pub fn build_prompt(
             review.title
         ),
         format!("A reviewer asked you about {place} in review thread #{}.", thread.number),
-        "Look at the code you need, then answer in the thread. A map of the repository follows; use it to go straight to the right files.".to_string(),
+        "Look at the code you need, then answer: what you write is posted in the thread as your reply, so don't post it with a tool. A map of the repository follows; use it to go straight to the right files.".to_string(),
         "Do not modify files unless the reviewer explicitly asks you to change code.".to_string(),
         String::new(),
         review_mcp::ANSWER_STYLE.to_string(),

@@ -2,7 +2,7 @@
 #
 #   make build          the app and the `co-review` command (debug build, target/debug)
 #   make run            run the app on $(REPO), through the `co-review` command
-#   make test           version check, prompt check, and the review crates' tests
+#   make test           version check, prompt check, the review crates' tests and the Pi / omp extension's
 #   make package        the release asset for this OS in target/package (Co-Review-mac-arm64.zip, …)
 #   make install-app    package and install it with install.sh (the app + the `co-review` command)
 #   make install-cli    the `co-review` command built in this checkout, into PATH
@@ -38,8 +38,9 @@ check-prompts: ## Fail if a copy of the shared agent prompts is out of date
 check-versions: ## Fail if the plugin manifests or the Pi/omp packages differ from the app's version (Cargo.toml)
 	node bin/check-versions.mjs
 
-test: check-versions check-prompts ## Run the checks and the review crates' tests
+test: check-versions check-prompts ## Run the checks, the review crates' tests and the Pi / Oh My Pi extension's
 	cargo test --workspace $(LAPCE_CRATES)
+	node --experimental-transform-types --test integrations/shared/co-review.test.ts
 
 lint: ## Clippy: the review crates with warnings as errors, Lapce's as upstream does
 	cargo clippy --workspace $(LAPCE_CRATES) --all-targets -- -D warnings
