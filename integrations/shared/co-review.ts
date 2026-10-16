@@ -247,7 +247,7 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 	pi.on("session_start", async (_event: unknown, ctx: C) => {
 		if (pi.getFlag("co-review") && harness.isMain(ctx)) {
 			const opened = await start(ctx, { listen: ctx.hasUI });
-			ctx.ui.notify(`Co-Review: co-reviewing ${opened.url ?? "(desktop app)"}`, "info");
+			ctx.ui.notify("Co-Review: co-reviewing, open in Co-Review", "info");
 		}
 	});
 
@@ -265,7 +265,7 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 				return;
 			}
 			const opened = await start(ctx, { listen: true, title: args.trim() || undefined });
-			ctx.ui.notify(`Co-Review: co-reviewing ${opened.url ?? "(shown in the desktop app)"} — ${opened.openThreads} open threads`, "info");
+			ctx.ui.notify(`Co-Review: co-reviewing, open in Co-Review — ${opened.openThreads} open threads`, "info");
 		}
 	});
 
@@ -292,7 +292,7 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 			const listen = ctx.hasUI && harness.isMain(ctx);
 			const opened = await start(ctx, { ...params, listen });
 			const warnings = opened.format?.warnings?.length ? `\nFix the design document, then call co_review_start again: ${opened.format.warnings.join(" ")}` : "";
-			const where = (opened.url ? `Reviewer URL: ${opened.url}` : opened.note ?? "") + warnings;
+			const where = (opened.note ?? "") + warnings;
 			return text(listen
 				? `Joined review ${opened.reviewId} (${opened.openThreads} open threads). ${where}\nReviewer questions will arrive as [Co-Review] messages; answer each with co_review_reply.`
 				: `Joined review ${opened.reviewId} (${opened.openThreads} open threads). ${where}\nNow loop: co_review_wait → investigate → co_review_reply, until the reviewer says the review is done.`);

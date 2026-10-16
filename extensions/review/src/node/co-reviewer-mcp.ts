@@ -12,7 +12,7 @@ import * as path from 'path';
 import { z } from 'zod';
 import { CodeLocation, Participant, Review, ReviewThread, Severity, waitsForAgent } from '../common/review-model';
 import { SyntaxSymbol } from '../common/syntax-protocol';
-import { AgentPresenceTracker, ReviewWindows, HumanDecisions } from './agent-coordination';
+import { AgentPresenceTracker, ReviewWindow, ReviewWindows, HumanDecisions } from './agent-coordination';
 import { coReviewHome, realPath, ReviewStore } from './review-store';
 import { SyntaxServiceImpl } from './syntax-service-impl';
 import { BundleService } from './bundle-service';
@@ -102,20 +102,23 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     @postConstruct()
     protected init(): void {
         // The reviewer closed a review's window: its agents are told (await_reviewer), also after Co-Review restarts.
-        this.windows.onDidClose(({ workspaceRoot, by }) => by === 'reviewer' && this.markClosed(workspaceRoot));
+        this.windows.onDidClose(({ by, ...window }) => by === 'reviewer' && this.markClosed(window));
         // Open again: not closed any more (and nothing to tell if no agent heard yet).
-        this.windows.onDidOpen(workspaceRoot => this.markClosed(workspaceRoot, false));
+        this.windows.onDidOpen(window => this.markClosed(window, false));
     }
 
-    protected markClosed(workspaceRoot: string, closed = true): void {
-        const work = this.doMarkClosed(workspaceRoot, closed).catch(error => console.error('[co-review] recording a closed window failed', error));
+    protected markClosed(window: ReviewWindow, closed = true): void {
+        const work = this.doMarkClosed(window, closed).catch(error => console.error('[co-review] recording a closed window failed', error));
         this.closing.add(work);
         work.finally(() => this.closing.delete(work));
     }
 
-    protected async doMarkClosed(workspaceRoot: string, closed: boolean): Promise<void> {
-        // A window shows one workspace: a repository, or a review directory (whose reviews are its own workspace's).
-        const reviews = (await this.store.listForWindow(workspaceRoot)).filter(r => r.agent?.transport === 'mcp');
+    protected async doMarkClosed({ workspaceRoot, reviewId }: ReviewWindow, closed: boolean): Promise<void> {
+        // A window opened for a review closes that review. One the reviewer opened shows a workspace (a repository, or
+        // a review directory, whose reviews are its own workspace's): its reviews, but those with a window of their own.
+        const reviews = (reviewId ? [await this.store.get(reviewId)].filter((r): r is Review => !!r)
+            : (await this.store.listForWindow(workspaceRoot)).filter(r => !this.windows.hasWindowOf(r.id)))
+            .filter(r => r.agent?.transport === 'mcp');
         for (const review of reviews) {
             if (closed) {
                 await this.store.setClosed(review.id, { at: Date.now() });
@@ -224,7 +227,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + '(its diff as a .patch in a review directory: open_review with dir), someone else\'s pull request (its patch and a PR.md in a '
                 + 'review directory), or a design document (open_review with dir). In each, prepare the review without showing it '
                 + '(open_review with open: false), add your first-pass findings, then show it with open_review({ reviewId }) and tell the '
-                + 'reviewer the URL. Then loop: '
+                + 'reviewer it is open in Co-Review. Then loop: '
                 + 'await_reviewer → investigate the repository → reply, until it returns the reviewer\'s Submit; await_reviewer is the only call to wait on. Use add_findings for issues you find, '
                 + 'ask_reviewer when you need a decision, and repo_map to find where things live before searching. '
                 + 'To review the whole repository: repo_map({ overview: true }) for where to start and how the code clusters, then '
@@ -250,7 +253,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         };
 
         server.registerTool('open_review', {
-            description: 'Open a review and join it as co-reviewer; returns the URL to give the reviewer. Either a repository (`root`, '
+            description: 'Open a review and join it as co-reviewer; shows it to the reviewer in Co-Review, in a window of its own. Either a repository (`root`, '
                 + 'default: the one Co-Review was started for) or a review directory / inline content: `dir` (index.markdown + assets + *.patch), '
                 + '`markdown` and/or `patch` strings. A `dir` can also be a knowledge bundle such as OKF (`<repo>/okf`): every Markdown page '
                 + 'is a review page, `/x.md` links resolve from the bundle root and `path:line` links open the code. '
@@ -358,8 +361,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             // A round no agent has picked up yet (submitted while none was connected) is still delivered.
             session.consumedSubmit = (review.verdict?.count ?? 0) - (review.verdict?.toAgent === 'waiting' ? 1 : 0);
             this.presence.seen(review.id);
-            // The desktop app shows the review in the repository's window (opened, or focused, by launching the app
-            // with it; its frontend switches to the review); a browser cannot attach to the Electron backend.
+            // Every review shows in a window of its own, so several can be open at once: the desktop app opens it (or
+            // focuses it, if open) when launched with the workspace and `--review`; a browser opens a tab with
+            // `?review=`. A browser cannot attach to the Electron backend.
             const desktop = !!process.versions.electron;
             const url = desktop ? undefined : `${baseUrl}/?review=${review.id}#${workspace}`;
             if (open !== false) {
@@ -372,9 +376,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     const [exe, ...args] = JSON.parse(process.env.CO_REVIEW_APP_LAUNCH) as string[];
                     const env = { ...process.env };
                     delete env.ELECTRON_RUN_AS_NODE;
-                    spawn(exe, [...args, workspace], { detached: true, stdio: 'ignore', env }).on('error', () => undefined).unref();
+                    spawn(exe, [...args, workspace, `--review=${review.id}`], { detached: true, stdio: 'ignore', env }).on('error', () => undefined).unref();
                     if (session.transport.sessionId) {
-                        this.windows.shown(FileUri.create(workspace).toString(), session.transport.sessionId);
+                        this.windows.shown({ workspaceRoot: FileUri.create(workspace).toString(), reviewId: review.id }, session.transport.sessionId);
                     }
                 }
             }
@@ -382,8 +386,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 reviewId: review.id, title: review.title, openThreads: review.threads.filter(t => t.status === 'open').length,
                 proposedFindings: review.threads.filter(t => t.status === 'proposed').length, ...extra,
                 ...(open === false ? { note: `Prepared, not shown to the reviewer yet. Add your first-pass findings, then call open_review({ reviewId: "${review.id}" }) to show it.` }
-                    : url ? { url } : { note: 'Shown in the Co-Review desktop app.' }),
-                hint: 'Share the URL with the reviewer, then loop await_reviewer → reply until it returns their Submit.'
+                    : { note: 'Open in Co-Review, in its own window.' }),
+                hint: 'Tell the reviewer it is open in Co-Review, then loop await_reviewer → reply until it returns their Submit.'
             });
         });
 
@@ -672,8 +676,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     }
                     // Approved: this agent is done with the review, and a window it showed can close.
                     if (review.verdict!.decision === 'approve' && session.transport.sessionId) {
-                        this.windows.done(session.transport.sessionId, `You approved the review, and ${agent.name} has it.`,
-                            FileUri.create(this.windowRoot(review)).toString());
+                        this.windows.done(session.transport.sessionId, `You approved the review, and ${agent.name} has it.`, review.id);
                     }
                     return json({ ...this.batch(review), hint: 'The reviewer submitted: act on the decision and the open comments.' });
                 }

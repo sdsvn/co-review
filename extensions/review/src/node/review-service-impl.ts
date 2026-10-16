@@ -68,7 +68,7 @@ export class ReviewServiceImpl implements ReviewService {
         this.toDispose.dispose();
         if (client) {
             this.toDispose.push(this.presence.onDidChange(p => client.onAgentPresence(p)));
-            this.toDispose.push(this.windows.onDidRequestClose(({ workspaceRoot, message }) => client.onCloseWindow(workspaceRoot, message)));
+            this.toDispose.push(this.windows.onDidRequestClose(({ workspaceRoot, message, reviewId }) => client.onCloseWindow(workspaceRoot, message, reviewId)));
             this.toDispose.push(this.store.onDidChange(change => {
                 if (change.kind === 'changed') {
                     client.onReviewChanged(change.review);
@@ -84,12 +84,12 @@ export class ReviewServiceImpl implements ReviewService {
         this.windows.detach(this);
     }
 
-    async showWorkspace(workspaceRoot: string): Promise<void> {
-        this.windows.attach(workspaceRoot, this);
+    async showWorkspace(workspaceRoot: string, reviewId?: string): Promise<void> {
+        this.windows.attach({ workspaceRoot, reviewId }, this);
     }
 
-    async keepWindowOpen(workspaceRoot: string): Promise<void> {
-        this.windows.keptOpen(workspaceRoot);
+    async keepWindowOpen(workspaceRoot: string, reviewId?: string): Promise<void> {
+        this.windows.keptOpen({ workspaceRoot, reviewId });
     }
 
     getCurrentUser(workspaceRoot: string): Promise<Participant> {

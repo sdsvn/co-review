@@ -51,6 +51,8 @@ export class ReviewManager {
     protected _reviews: Review[] = [];
     protected _activeReviewId: string | undefined;
     protected _root: string | undefined;
+    /** The review this window was opened for (`?review=<id>`, when an agent showed it): each such review has its own window. */
+    protected readonly openedFor = new URLSearchParams(window.location.search).get('review') ?? undefined;
     protected _user: Participant = { id: 'human:unknown', kind: 'human', name: 'You' };
     protected _drafts: ReviewDraft[] = [];
     protected saveDraftsTimer: number | undefined;
@@ -85,16 +87,10 @@ export class ReviewManager {
                 return;
             }
             const index = this._reviews.findIndex(r => r.id === review.id);
-            const previous = index >= 0 ? this._reviews[index] : undefined;
             if (index >= 0) {
                 this._reviews[index] = review;
             } else {
                 this._reviews.unshift(review);
-            }
-            // An agent from a harness just joined this review: show it.
-            if (review.agent?.transport === 'mcp' && previous?.agent?.id !== review.agent.id) {
-                this._activeReviewId = review.id;
-                this.storage.setData(ACTIVE_REVIEW_KEY, review.id);
             }
             this.onDidChangeEmitter.fire();
         });
@@ -103,7 +99,8 @@ export class ReviewManager {
             this.onDidChangeEmitter.fire();
         });
         // The agent that showed this window is done with its review (desktop app started by an agent).
-        this.client.onDidRequestCloseWindow(({ workspaceRoot, message }) => workspaceRoot === this._root && this.closeSoon(message));
+        this.client.onDidRequestCloseWindow(({ workspaceRoot, message, reviewId }) =>
+            workspaceRoot === this._root && reviewId === this.openedFor && this.closeSoon(message));
         // A commented file changed (an agent's edit, a save): the backend carries its comments through the change.
         this.fileService.onDidFilesChange(e => {
             const review = this.activeReview;
@@ -113,7 +110,7 @@ export class ReviewManager {
             }
         });
         // Tell the backend again after a reconnect: its agents are told when this window closes.
-        this.connection.onStatusChange(status => status === ConnectionStatus.ONLINE && this._root && this.service.showWorkspace(this._root));
+        this.connection.onStatusChange(status => status === ConnectionStatus.ONLINE && this._root && this.service.showWorkspace(this._root, this.openedFor));
         this.client.onDidDeleteReview(({ reviewId }) => {
             this._reviews = this._reviews.filter(r => r.id !== reviewId);
             this.presence.delete(reviewId);
@@ -136,7 +133,7 @@ export class ReviewManager {
         if (choice === 'close' || choice === 'Close now') {
             window.close();
         } else if (this._root) {
-            this.service.keepWindowOpen(this._root);
+            this.service.keepWindowOpen(this._root, this.openedFor);
         }
     }
 
@@ -144,7 +141,7 @@ export class ReviewManager {
         const roots = await this.workspaceService.roots;
         this._root = roots[0]?.resource.toString();
         if (this._root) {
-            this.service.showWorkspace(this._root);
+            this.service.showWorkspace(this._root, this.openedFor);
         }
         if (!this._root) {
             this._reviews = [];
@@ -161,8 +158,7 @@ export class ReviewManager {
         this._user = user;
         this._reviews = reviews;
         // `?review=<id>` (used when an agent opens a review for the reviewer) wins over the last active one.
-        const requested = new URLSearchParams(window.location.search).get('review');
-        this._activeReviewId = [requested, active].find(id => reviews.some(r => r.id === id)) ?? reviews.find(r => !r.archivedAt)?.id;
+        this._activeReviewId = [this.openedFor, active].find(id => reviews.some(r => r.id === id)) ?? reviews.find(r => !r.archivedAt)?.id;
         await Promise.all(reviews.map(async r => {
             const p = await this.service.getAgentPresence(r.id);
             if (p) {

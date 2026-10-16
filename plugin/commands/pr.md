@@ -25,7 +25,7 @@ $ARGUMENTS
    callers, data, configuration, other services), and where to start reading. Plain language; no line-by-line
    walkthrough.
 5. Show it: `open_review({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
-   changed, the findings). Give me the URL (if there is one) and two sentences: what the pull request does and its
+   changed, the findings). Tell me it is open in Co-Review, with two sentences: what the pull request does and its
    riskiest part.
 6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review (tell
    me what's still open). It's someone else's change: don't edit it. On my Submit, tell me my verdict and what I

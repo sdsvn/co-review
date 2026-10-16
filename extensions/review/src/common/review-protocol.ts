@@ -99,10 +99,13 @@ export interface GitHubEdits {
 }
 
 export interface ReviewService extends RpcServer<ReviewClient> {
-    /** This frontend (window) shows `workspaceRoot`: its agents are told when the reviewer closes it. */
-    showWorkspace(workspaceRoot: string): Promise<void>;
+    /**
+     * This frontend (window) shows `workspaceRoot`, opened for `reviewId` when an agent showed it: its agents are told
+     * when the reviewer closes it.
+     */
+    showWorkspace(workspaceRoot: string, reviewId?: string): Promise<void>;
     /** The reviewer kept open the window Co-Review was closing for an agent (see ReviewClient.onCloseWindow). */
-    keepWindowOpen(workspaceRoot: string): Promise<void>;
+    keepWindowOpen(workspaceRoot: string, reviewId?: string): Promise<void>;
     getCurrentUser(workspaceRoot: string): Promise<Participant>;
     getGitInfo(workspaceRoot: string): Promise<GitInfo>;
     resolveCommit(workspaceRoot: string, ref: string): Promise<string | undefined>;
@@ -175,8 +178,8 @@ export interface ReviewClient {
     onReviewChanged(review: Review): void;
     onReviewDeleted(reviewId: string, workspaceRoot: string): void;
     /**
-     * The agents that showed the desktop window of `workspaceRoot` are done with it (see ReviewWindows): tell the
-     * reviewer why (`message`), then close it unless they keep it open.
+     * The agents that showed the desktop window of `workspaceRoot` opened for `reviewId` are done with it (see
+     * ReviewWindows): tell the reviewer why (`message`), then close it unless they keep it open.
      */
-    onCloseWindow(workspaceRoot: string, message: string): void;
+    onCloseWindow(workspaceRoot: string, message: string, reviewId?: string): void;
 }

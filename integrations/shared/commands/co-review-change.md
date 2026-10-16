@@ -20,7 +20,7 @@ Co-Review tools from the co-review extension.
    callers, data, configuration, other services), and where to start reading. Plain language; no line-by-line
    walkthrough.
 3. Show it: `co_review_start({ reviewId })`. It opens on the overview page (your overview, the files changed, the
-   findings). Give me the URL (if there is one) and, in one sentence, what to look at first.
+   findings). Tell me it is open in Co-Review and, in one sentence, what to look at first.
 4. Loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit or says I closed the review
    (tell me what's still open), then act on my verdict: approve → go ahead (commit, merge, continue), mentioning
    anything still open; request changes → address every comment and apply the accepted suggestions as new commits

@@ -1,5 +1,5 @@
 import { ContainerModule, injectable } from '@theia/core/shared/inversify';
-import { app, BrowserWindow, powerMonitor } from '@theia/core/electron-shared/electron';
+import { app, BrowserWindow, Event as ElectronEvent, powerMonitor } from '@theia/core/electron-shared/electron';
 import { ElectronMainApplication, ElectronMainCommandOptions } from '@theia/core/lib/electron-main/electron-main-application';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -49,6 +49,8 @@ async function answers(url: string): Promise<boolean> {
  * The desktop app's windows:
  * - `--background` (how `co-review mcp` starts it for an agent): no window until a review is shown or the
  *   reviewer opens the app, so starting an agent session does not put a window in front of them;
+ * - a review an agent shows (`--review=<id>`) gets a window of its own, so several reviews, also of one repository,
+ *   are open at once; showing it again focuses that window;
  * - a repository that already has a window is focused rather than opened a second time;
  * - activating the app (Dock, Finder) with no window open opens one.
  */
@@ -65,6 +67,10 @@ export class ReviewElectronMainApplication extends ElectronMainApplication {
 
     protected override async handleMainCommand(options: ElectronMainCommandOptions): Promise<void> {
         if (this.background && !options.secondInstance) {
+            return;
+        }
+        // Started with a review to show (an app that relaunched itself with the launch it could not serve).
+        if (!options.secondInstance && await this.showReviewLaunch(this.processArgv.getProcessArgvWithoutBin(), options.cwd)) {
             return;
         }
         return super.handleMainCommand(options);
@@ -216,16 +222,86 @@ export class ReviewElectronMainApplication extends ElectronMainApplication {
         }
     }
 
+    protected override async onSecondInstance(event: ElectronEvent, argv: string[], cwd: string, originalArgv: string[]): Promise<void> {
+        if (!await this.showReviewLaunch(this.processArgv.getProcessArgvWithoutBin(originalArgv), cwd)) {
+            return super.onSecondInstance(event, argv, cwd, originalArgv);
+        }
+    }
+
+    /** A launch with `--review=<id>` (and its workspace) shows that review's window; false for any other launch. */
+    protected async showReviewLaunch(args: string[], cwd: string): Promise<boolean> {
+        const reviewId = args.find(arg => arg.startsWith('--review='))?.slice('--review='.length);
+        if (!reviewId) {
+            return false;
+        }
+        const file = args.find(arg => !arg.startsWith('-'));
+        let workspacePath = '';
+        try {
+            workspacePath = file ? await fs.promises.realpath(path.resolve(cwd, file)) : '';
+        } catch {
+            log.warn(`no workspace at ${file}: showing review ${reviewId} without one`);
+        }
+        await this.openReviewWindow(workspacePath, reviewId);
+        return true;
+    }
+
+    /** Windows being opened for a review: showing it twice in quick succession opens one window. */
+    protected readonly openingReviews = new Map<string, Promise<BrowserWindow>>();
+
+    /** The window of review `reviewId` (in `workspacePath`): focused if it is open, else opened. */
+    protected async openReviewWindow(workspacePath: string, reviewId: string): Promise<BrowserWindow> {
+        const existing = this.windowOfReview(reviewId);
+        log.info(`${existing ? 'focusing' : 'opening'} the window of review ${reviewId} in ${workspacePath || 'no workspace'}`);
+        if (existing) {
+            return this.focus(existing);
+        }
+        const opening = this.openingReviews.get(reviewId);
+        if (opening) {
+            return this.focus(await opening);
+        }
+        const open = (async () => {
+            const [uri, window] = await Promise.all([this.createWindowUri({ review: encodeURIComponent(reviewId) }),
+                this.reuseOrCreateWindow(this.getLastWindowOptions())]);
+            await window.loadURL(uri.withFragment(encodeURI(workspacePath)).toString(true)).catch(() => undefined);
+            return window;
+        })();
+        this.openingReviews.set(reviewId, open);
+        try {
+            return await open;
+        } finally {
+            this.openingReviews.delete(reviewId);
+        }
+    }
+
+    protected focus(window: BrowserWindow): BrowserWindow {
+        if (window.isMinimized()) {
+            window.restore();
+        }
+        window.show();
+        window.focus();
+        return window;
+    }
+
+    /** The window opened for review `reviewId` (its URL's `?review=`). */
+    protected windowOfReview(reviewId: string): BrowserWindow | undefined {
+        for (const wrapper of this.windows.values()) {
+            const window = wrapper.window;
+            try {
+                if (!window.isDestroyed() && new URL(window.webContents.getURL()).searchParams.get('review') === reviewId) {
+                    return window;
+                }
+            } catch {
+                /* not loaded yet */
+            }
+        }
+        return undefined;
+    }
+
     protected override async openWindowWithWorkspace(workspacePath: string): Promise<BrowserWindow> {
         const existing = workspacePath ? this.windowOf(workspacePath) : undefined;
         log.info(`${existing ? 'focusing' : 'opening'} the window of ${workspacePath || 'no workspace'}`);
         if (existing) {
-            if (existing.isMinimized()) {
-                existing.restore();
-            }
-            existing.show();
-            existing.focus();
-            return existing;
+            return this.focus(existing);
         }
         return super.openWindowWithWorkspace(workspacePath);
     }

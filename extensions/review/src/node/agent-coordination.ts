@@ -71,12 +71,26 @@ export class AgentPresenceTracker {
 export type WindowCloser = 'reviewer' | 'agent';
 
 /**
- * The review windows (frontends) open per workspace, so closing one can be told to the agents in that review, and
- * the windows agents showed, so they close when those agents are done.
+ * What a window shows: a workspace, and the review it was opened for (`?review=<id>`) when an agent showed it. An
+ * agent's review gets a window of its own, so several reviews of one repository are open side by side, and closing
+ * one is told only to its agents.
+ */
+export interface ReviewWindow {
+    workspaceRoot: string;
+    reviewId?: string;
+}
+
+function keyOf(w: ReviewWindow): string {
+    return w.reviewId ? `${w.workspaceRoot}?review=${w.reviewId}` : w.workspaceRoot;
+}
+
+/**
+ * The review windows (frontends) open, so closing one can be told to the agents in its review, and the windows
+ * agents showed, so they close when those agents are done.
  *
- * - A frontend says which workspace it shows (`attach`); when its connection goes and no other frontend shows that
- *   workspace for a few seconds (a reload reconnects well within that), the window is closed. When the app quits,
- *   `shutdown` closes them all at once.
+ * - A frontend says what it shows (`attach`); when its connection goes and no other frontend shows the same for a
+ *   few seconds (a reload reconnects well within that), the window is closed. When the app quits, `shutdown` closes
+ *   them all at once.
  * - In an app an agent started (`--background`, from `co-review mcp`), a window an agent showed with `open_review`
  *   is asked to close when the last agent using it is done (the reviewer approved, or its session ended). The window
  *   says so and closes after a countdown, unless the reviewer keeps it open. With no window left the app quits, as it
@@ -86,92 +100,104 @@ export type WindowCloser = 'reviewer' | 'agent';
 export class ReviewWindows {
 
     protected readonly startedByAgent = !!process.versions.electron && process.argv.includes('--background');
-    /** Workspace URI -> the agent sessions that showed it. */
+    /** Window key -> what it shows. */
+    protected readonly windows = new Map<string, ReviewWindow>();
+    /** Window key -> the agent sessions that showed it. */
     protected readonly shownBy = new Map<string, Set<string>>();
-    /** Workspace URI -> the frontends showing it. */
+    /** Window key -> the frontends showing it. */
     protected readonly frontends = new Map<string, Set<object>>();
-    /** Workspaces whose window Co-Review asked to close (for an agent), with when it asked. */
+    /** Windows Co-Review asked to close (for an agent), with when it asked. */
     protected readonly closingForAgent = new Map<string, number>();
 
-    protected readonly onDidRequestCloseEmitter = new Emitter<{ workspaceRoot: string; message: string }>();
+    protected readonly onDidRequestCloseEmitter = new Emitter<ReviewWindow & { message: string }>();
     /** A window should close: the agents that showed it are done. `message` says why, for the reviewer. */
     readonly onDidRequestClose = this.onDidRequestCloseEmitter.event;
-    protected readonly onDidOpenEmitter = new Emitter<string>();
-    /** A workspace got its first window. */
+    protected readonly onDidOpenEmitter = new Emitter<ReviewWindow>();
+    /** A window got its first frontend. */
     readonly onDidOpen = this.onDidOpenEmitter.event;
-    protected readonly onDidCloseEmitter = new Emitter<{ workspaceRoot: string; by: WindowCloser }>();
-    /** The last window of a workspace closed. */
+    protected readonly onDidCloseEmitter = new Emitter<ReviewWindow & { by: WindowCloser }>();
+    /** The last frontend of a window closed. */
     readonly onDidClose = this.onDidCloseEmitter.event;
 
-    /** Workspaces whose last window went, waiting a few seconds for a reload to come back before counting as closed. */
+    /** Windows whose last frontend went, waiting a few seconds for a reload to come back before counting as closed. */
     protected readonly closing = new Map<string, NodeJS.Timeout>();
 
-    /** A frontend shows `workspaceRoot` (it may have shown another one before). */
-    attach(workspaceRoot: string, frontend: object): void {
+    /** A frontend shows `window` (it may have shown another one before). */
+    attach(window: ReviewWindow, frontend: object): void {
         this.detach(frontend);
-        const set = this.frontends.get(workspaceRoot) ?? new Set();
+        const key = keyOf(window);
+        this.windows.set(key, { workspaceRoot: window.workspaceRoot, reviewId: window.reviewId });
+        const set = this.frontends.get(key) ?? new Set();
         // Back within the grace period (a reload): not closed, and not newly opened either.
-        const reloaded = this.closing.has(workspaceRoot);
-        clearTimeout(this.closing.get(workspaceRoot));
-        this.closing.delete(workspaceRoot);
+        const reloaded = this.closing.has(key);
+        clearTimeout(this.closing.get(key));
+        this.closing.delete(key);
         const first = !set.size && !reloaded;
         set.add(frontend);
-        this.frontends.set(workspaceRoot, set);
+        this.frontends.set(key, set);
         if (first) {
-            this.onDidOpenEmitter.fire(workspaceRoot);
+            this.onDidOpenEmitter.fire(this.windows.get(key)!);
         }
     }
 
-    /** A frontend went away; its workspace's window counts as closed when none comes back shortly. */
+    /** A frontend went away; its window counts as closed when none comes back shortly. */
     detach(frontend: object): void {
-        for (const [root, set] of this.frontends) {
+        for (const [key, set] of this.frontends) {
             if (set.delete(frontend) && !set.size) {
-                clearTimeout(this.closing.get(root));
-                this.closing.set(root, setTimeout(() => this.closed(root), 4000));
+                clearTimeout(this.closing.get(key));
+                this.closing.set(key, setTimeout(() => this.closed(key), 4000));
             }
         }
     }
 
+    /** Whether a window opened for `reviewId` is open (or reloading). */
+    hasWindowOf(reviewId: string): boolean {
+        return [...this.frontends.keys()].some(key => this.windows.get(key)?.reviewId === reviewId);
+    }
+
     /** The reviewer kept open a window Co-Review was closing for an agent: closing it later is theirs. */
-    keptOpen(workspaceRoot: string): void {
-        this.closingForAgent.delete(workspaceRoot);
+    keptOpen(window: ReviewWindow): void {
+        this.closingForAgent.delete(keyOf(window));
     }
 
     /** The app is quitting: every window is closing, also those whose frontend already went (quitting closes them first). */
     shutdown(): void {
-        for (const root of new Set([...this.frontends.keys(), ...this.closing.keys()])) {
-            this.closed(root);
+        for (const key of new Set([...this.frontends.keys(), ...this.closing.keys()])) {
+            this.closed(key);
         }
     }
 
-    protected closed(workspaceRoot: string): void {
-        clearTimeout(this.closing.get(workspaceRoot));
-        this.closing.delete(workspaceRoot);
-        if (!this.frontends.delete(workspaceRoot)) {
+    protected closed(key: string): void {
+        clearTimeout(this.closing.get(key));
+        this.closing.delete(key);
+        if (!this.frontends.delete(key)) {
             return;
         }
-        const asked = this.closingForAgent.get(workspaceRoot);
-        this.closingForAgent.delete(workspaceRoot);
+        const asked = this.closingForAgent.get(key);
+        this.closingForAgent.delete(key);
         // Closed within the countdown Co-Review started: for the agent; otherwise by the reviewer.
         const by: WindowCloser = asked !== undefined && Date.now() - asked < 30_000 ? 'agent' : 'reviewer';
-        this.onDidCloseEmitter.fire({ workspaceRoot, by });
+        this.onDidCloseEmitter.fire({ ...this.windows.get(key)!, by });
     }
 
-    shown(workspaceRoot: string, session: string): void {
+    shown(window: ReviewWindow, session: string): void {
         if (this.startedByAgent) {
-            const sessions = this.shownBy.get(workspaceRoot) ?? new Set();
+            const key = keyOf(window);
+            this.windows.set(key, { workspaceRoot: window.workspaceRoot, reviewId: window.reviewId });
+            const sessions = this.shownBy.get(key) ?? new Set();
             sessions.add(session);
-            this.shownBy.set(workspaceRoot, sessions);
+            this.shownBy.set(key, sessions);
         }
     }
 
-    /** `session` is done with the window of `workspaceRoot` (all its windows when omitted); `message` tells the reviewer why. */
-    done(session: string, message: string, workspaceRoot?: string): void {
-        for (const [root, sessions] of this.shownBy) {
-            if ((workspaceRoot === undefined || root === workspaceRoot) && sessions.delete(session) && !sessions.size) {
-                this.shownBy.delete(root);
-                this.closingForAgent.set(root, Date.now());
-                this.onDidRequestCloseEmitter.fire({ workspaceRoot: root, message });
+    /** `session` is done with the window of `reviewId` (all its windows when omitted); `message` tells the reviewer why. */
+    done(session: string, message: string, reviewId?: string): void {
+        for (const [key, sessions] of this.shownBy) {
+            const window = this.windows.get(key)!;
+            if ((reviewId === undefined || window.reviewId === reviewId) && sessions.delete(session) && !sessions.size) {
+                this.shownBy.delete(key);
+                this.closingForAgent.set(key, Date.now());
+                this.onDidRequestCloseEmitter.fire({ ...window, message });
             }
         }
     }
