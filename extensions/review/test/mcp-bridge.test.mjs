@@ -17,6 +17,8 @@ const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
 const { isInitializeRequest } = require('@modelcontextprotocol/sdk/types.js');
 const bridge = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'bin', 'co-review.mjs');
+/** The bridge's version (a checkout's: its app's package.json), which its handshake cache is stamped with. */
+const version = JSON.parse(readFileSync(resolve(dirname(bridge), '..', 'applications', 'electron', 'package.json'), 'utf8')).version;
 
 /** A Co-Review-like MCP server with one tool, that can be told to forget every session. */
 function fakeCoReview() {
@@ -133,7 +135,8 @@ test('a probe before initialize does not start Co-Review; the handshake comes fr
     const home = mkdtempSync(join(tmpdir(), 'co-review-bridge-'));
     writeFileSync(join(home, 'mcp-handshake.json'), JSON.stringify({
         initialize: { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'co-review', version: '0.1.0' } },
-        tools: { tools: [] }
+        tools: { tools: [] },
+        version
     }));
     // Nothing listens on this port: the bridge would start Co-Review there.
     const server = await fakeCoReview();
@@ -150,4 +153,27 @@ test('a probe before initialize does not start Co-Review; the handshake comes fr
     assert.deepEqual((await a.send('tools/list', {})).result, { tools: [] });
     const log = join(home, 'logs', 'cli.log');
     assert.doesNotMatch(existsSync(log) ? readFileSync(log, 'utf8') : '', /starting Co-Review|lost Co-Review/);
+});
+
+test('after an update the handshake of the old version is not used: the tools come from Co-Review, and are cached', async t => {
+    const home = mkdtempSync(join(tmpdir(), 'co-review-bridge-'));
+    writeFileSync(join(home, 'mcp-handshake.json'), JSON.stringify({
+        initialize: { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'co-review', version: '0.1.0' } },
+        tools: { tools: [] },
+        version: '0.0.1'
+    }));
+    const server = await fakeCoReview();
+    const a = agent(server.port, home);
+    t.after(() => {
+        a.end();
+        server.close();
+        rmSync(home, { recursive: true, force: true });
+    });
+    const init = await a.send('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } });
+    assert.equal(init.result?.serverInfo?.name, 'fake');
+    a.notify('notifications/initialized');
+    assert.deepEqual((await a.send('tools/list', {})).result.tools.map(tool => tool.name), ['echo']);
+    const cached = JSON.parse(readFileSync(join(home, 'mcp-handshake.json'), 'utf8'));
+    assert.equal(cached.version, version);
+    assert.deepEqual(cached.tools.tools.map(tool => tool.name), ['echo']);
 });

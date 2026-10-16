@@ -94,8 +94,12 @@ async function mcp() {
     } catch {
         /* first run */
     }
+    // Another version's handshake (an update since): its tools are not this Co-Review's, so connect and refresh it.
+    if (cached?.version !== version()) {
+        cached = undefined;
+    }
     const remember = (key, value) => {
-        cached = { ...cached, [key]: value };
+        cached = { ...cached, [key]: value, version: version() };
         try {
             mkdirSync(home, { recursive: true });
             writeFileSync(cacheFile, JSON.stringify(cached));
