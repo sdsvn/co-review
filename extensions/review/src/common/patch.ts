@@ -192,3 +192,17 @@ export function changedLines(files: PatchFile[]): Map<string, number[]> {
     }
     return changed;
 }
+
+/** Lock files and generated files: changed with the change, rarely read in a review. */
+const GENERATED = /(^|\/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|go\.sum|poetry\.lock|Gemfile\.lock|composer\.lock)$|\.gen\.[a-z]+$|(^|\/)(dist|generated|__generated__)\//;
+
+/** A file whose only change is a version number (a release bump): `"version": …`, `version = …`, `"@scope/pkg": "1.2.3"`. */
+function versionOnly(file: { rows?: PatchRow[] }): boolean {
+    const changed = (file.rows ?? []).filter(r => r.t === 'add' || r.t === 'del');
+    return changed.length > 0 && changed.every(r => /^\s*("?version"?\s*[:=]|"[@\w./-]+"\s*:\s*"[\^~]?\d+\.\d+\.\d+[^"]*",?\s*$)/.test(r.s));
+}
+
+/** A file of a change a reviewer rarely reads: generated, a lock file, or only a version bump. Listed apart, opened last. */
+export function isRoutineFile(file: { path: string; rows?: PatchRow[] }): boolean {
+    return GENERATED.test(file.path) || versionOnly(file);
+}

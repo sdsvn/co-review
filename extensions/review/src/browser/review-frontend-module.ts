@@ -1,4 +1,5 @@
 import '../../src/browser/style/review.css';
+import '../../src/browser/style/rich.css';
 
 import { FrontendApplicationContribution } from '@theia/core/lib/browser/frontend-application-contribution';
 import { bindViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
@@ -11,7 +12,8 @@ import { ReviewLocations } from './review-locations';
 import { ReviewClientImpl } from './review-client';
 import { ReviewContribution } from './review-contribution';
 import { ReviewEditorDecorator } from './review-editor-decorator';
-import { ReviewManager } from './review-manager';
+import { NOTIFICATIONS_PREFERENCE, ReviewManager } from './review-manager';
+import { PreferenceContribution } from '@theia/core/lib/common/preferences';
 import { ReviewNavigator } from './review-navigator';
 import { BaseFileResolver, CodeNavigation } from './review-code';
 import { ReviewChange, ReviewChangeDecorator, ReviewChangeExplorerContribution, ReviewChangeOpenHandler, ReviewNavigatorFilter } from './review-change';
@@ -106,6 +108,17 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
     })).inSingletonScope();
     bindViewContribution(bind, ReviewContribution);
     bind(FrontendApplicationContribution).toService(ReviewContribution);
+    bind(TabBarToolbarContribution).toService(ReviewContribution);
+    bind(PreferenceContribution).toConstantValue({
+        schema: {
+            properties: {
+                [NOTIFICATIONS_PREFERENCE]: {
+                    type: 'boolean', default: true,
+                    description: 'Notify (an OS notification) when the agent replies or adds findings while the review window is in the background.'
+                }
+            }
+        }
+    });
 
     bind(CoReviewThemeContribution).toSelf().inSingletonScope();
     bind(FrontendApplicationContribution).toService(CoReviewThemeContribution);

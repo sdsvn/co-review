@@ -14,6 +14,8 @@ import { MermaidBlock, render } from './document-render';
 import { splitFrontmatter } from '../../common/design-format';
 import { markText, textAnchor, unmark } from './text-anchor';
 import { openDiagramZoom } from './diagram-zoom';
+import { Briefing } from '../review-briefing';
+import { ReviewCoverage } from '../../common/review-model';
 
 const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
@@ -22,8 +24,8 @@ export interface DocumentReviewWidgetOptions {
     uri: string;
 }
 
-/** Not part of the document text: inline threads and rendered diagrams. */
-const SKIP = '.co-review-slot, .co-review-dgm svg';
+/** Not part of the document text: inline threads, rendered diagrams and the overview's briefing. */
+const SKIP = '.co-review-slot, .co-review-dgm svg, .co-review-briefing, .co-review-file-bar';
 
 type Anchored = { key: string; anchor: DocAnchor; element: (root: Root) => void };
 
@@ -89,9 +91,19 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         return new URI(this.options.uri);
     }
 
-    getResourceUri(): URI {
-        return this.uri;
+    getResourceUri(): URI | undefined {
+        // The overview page is Co-Review's own file, outside the repository: no breadcrumb path to it.
+        return this.overview ? undefined : this.uri;
     }
+
+    protected get overview(): boolean {
+        return isOverviewPage(this.options.uri);
+    }
+
+    /** The overview page's briefing (above its text) and what it shows of the repository's coverage. */
+    protected briefing: { host: HTMLElement; root: Root } | undefined;
+    protected coverage: ReviewCoverage | undefined;
+    protected coverageTimer: number | undefined;
 
     createMoveToUri(resourceUri: URI): URI {
         return resourceUri;
@@ -104,6 +116,9 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         this.title.iconClass = codicon('comment-discussion');
         this.title.closable = true;
         this.addClass('co-review-document');
+        if (this.overview) {
+            this.addClass('overview');
+        }
         this.node.tabIndex = 0;
         this.header.className = 'co-review-doc-header';
         this.content.className = 'co-review-doc-content';
@@ -120,7 +135,12 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
                 this.toDispose.push(this.fileService.watch(this.uri));
             }
         });
-        this.toDispose.push(this.reviews.onDidChange(() => this.schedulePaint()));
+        this.toDispose.push(this.reviews.onDidChange(() => {
+            this.schedulePaint();
+            this.renderBriefing();
+            this.refreshCoverage();
+            this.refreshChangedFiles();
+        }));
         this.toDispose.push(this.reviews.onDidChangeDrafts(() => this.schedulePaint()));
         this.toDispose.push(this.reviews.onDidChangeCollapsed(() => this.schedulePaint()));
         this.content.addEventListener('mouseup', () => setTimeout(() => this.showSelectionActions()));
@@ -152,9 +172,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         spacer.className = 'co-review-spacer';
         const path = document.createElement('span');
         path.className = 'co-review-doc-path';
-        path.textContent = isOverviewPage(this.options.uri)
-            ? `Overview of “${this.reviews.activeReview?.title ?? 'the review'}” — kept up to date; comment on any of it`
-            : this.reviews.relativePath(this.options.uri);
+        path.textContent = this.overview ? '' : this.reviews.relativePath(this.options.uri);
         const waiting = document.createElement('span');
         waiting.className = 'co-review-muted';
         waiting.textContent = this.pendingReload ? 'The document changed; it updates when you finish your comment.' : '';
@@ -240,6 +258,10 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             this.content.prepend(note);
         }
         this.renderMeta();
+        if (this.overview) {
+            this.mountBriefing();
+            this.decorateChangedFiles();
+        }
         this.setLevel(this.level);
         await this.renderOpenSpec();
         if (stale()) {
@@ -254,6 +276,139 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             this.paint();
             // After the threads are placed (they take room too), back to where the reviewer was.
             setTimeout(() => !stale() && this.restorePlace(place), 40);
+        }
+    }
+
+    /** The briefing goes right under the page's title; it is mounted again with every load (the content is replaced). */
+    protected mountBriefing(): void {
+        const old = this.briefing;
+        this.briefing = undefined;
+        setTimeout(() => old?.root.unmount());
+        const host = document.createElement('div');
+        host.className = 'co-review-briefing';
+        const title = this.content.querySelector(':scope > h1');
+        if (title) {
+            title.after(host);
+        } else {
+            this.content.prepend(host);
+        }
+        this.briefing = { host, root: createRoot(host) };
+        this.renderBriefing();
+        this.refreshCoverage();
+    }
+
+    protected renderBriefing(): void {
+        const review = this.reviews.activeReview;
+        if (!this.briefing || !review) {
+            return;
+        }
+        this.briefing.root.render(<Briefing manager={this.reviews} navigator={this.navigator} review={review} coverage={this.coverage} />);
+    }
+
+    /** A repository review's files viewed, for the briefing; read shortly after the review changes. */
+    protected refreshCoverage(): void {
+        const review = this.reviews.activeReview;
+        if (!this.overview || !review || review.bundle) {
+            return;
+        }
+        window.clearTimeout(this.coverageTimer);
+        this.coverageTimer = window.setTimeout(async () => {
+            this.coverage = await this.reviews.getCoverage().catch(() => undefined);
+            this.renderBriefing();
+        }, 400);
+    }
+
+    /**
+     * The change's files on the overview page, as the page lists them (a folder line with its totals, its files as
+     * `path` +added −removed): each file with a bar of its lines, whether it is viewed and its comments, a click
+     * opening its diff; the line of generated and version-only files folds away.
+     */
+    protected decorateChangedFiles(): void {
+        const items = Array.from(this.content.querySelectorAll<HTMLLIElement>('li')).map(li => {
+            const code = li.firstElementChild;
+            const m = code?.tagName === 'CODE' && li.childElementCount === 1 ? /^\s*\+(\d+) −(\d+)\s*$/.exec(li.textContent!.slice(code.textContent!.length)) : null;
+            return m ? { li, path: code!.textContent!, added: Number(m[1]), removed: Number(m[2]) } : undefined;
+        }).filter((x): x is NonNullable<typeof x> => !!x);
+        const most = Math.max(1, ...items.map(i => i.added + i.removed));
+        for (const item of items) {
+            const slash = item.path.lastIndexOf('/');
+            item.li.classList.add('co-review-changed-file');
+            item.li.dataset.path = item.path;
+            item.li.title = `Open the diff of ${item.path}`;
+            item.li.innerHTML = `<span class="co-review-changed-state"></span>`
+                + `<span class="co-review-changed-path"><span class="name">${escape(item.path.slice(slash + 1))}</span></span>`
+                + `<span class="co-review-changed-comments"></span>`
+                + `<span class="co-review-changed-count"><span class="add">+${item.added}</span> <span class="del">−${item.removed}</span></span>`
+                + `<span class="co-review-file-bar"><span class="add" style="width:${Math.round(100 * item.added / most)}%"></span>`
+                + `<span class="del" style="width:${Math.round(100 * item.removed / most)}%"></span></span>`;
+            item.li.addEventListener('click', e => {
+                e.preventDefault();
+                // The check marks the file viewed (or not) right here; the rest of the line opens its diff.
+                if ((e.target as Element).closest('.co-review-changed-state')) {
+                    const root = this.reviews.root;
+                    if (root) {
+                        const uri = new URI(root).resolve(item.path).toString();
+                        this.reviews.setViewed([uri], !this.reviews.isViewed(uri));
+                    }
+                    return;
+                }
+                this.navigator.openChangedFile(item.path);
+            });
+            // The folder line above it.
+            const folder = item.li.parentElement?.closest('li');
+            if (folder && !folder.classList.contains('co-review-changed-folder')) {
+                folder.classList.add('co-review-changed-folder');
+                folder.parentElement?.classList.add('co-review-changed-tree');
+            }
+        }
+        // Generated and version-only files: one folded line.
+        for (const p of Array.from(this.content.querySelectorAll('p'))) {
+            const m = /^Also changed, generated or version only \((\d+)\):/.exec(p.textContent ?? '');
+            if (m) {
+                const details = document.createElement('details');
+                details.className = 'co-review-changed-routine';
+                details.innerHTML = `<summary>${m[1]} generated, lock or version-only file${m[1] === '1' ? '' : 's'}</summary>`;
+                const list = document.createElement('div');
+                list.append(...Array.from(p.querySelectorAll('code')).map(c => {
+                    const span = document.createElement('span');
+                    span.className = 'co-review-changed-routine-file';
+                    span.textContent = c.textContent;
+                    span.title = `Open the diff of ${c.textContent}`;
+                    span.onclick = () => this.navigator.openChangedFile(c.textContent!);
+                    return span;
+                }));
+                details.append(list);
+                p.replaceWith(details);
+            }
+        }
+        this.refreshChangedFiles();
+    }
+
+    /** Each listed file's viewed state and comment count, as they are now (they change without the page changing). */
+    protected refreshChangedFiles(): void {
+        const review = this.reviews.activeReview;
+        const root = this.reviews.root;
+        if (!this.overview || !review || !root) {
+            return;
+        }
+        for (const li of Array.from(this.content.querySelectorAll<HTMLLIElement>('li.co-review-changed-file'))) {
+            const path = li.dataset.path!;
+            const viewed = this.reviews.isViewed(new URI(root).resolve(path).toString());
+            // On the diff (a patch anchor) or on the code (a line of the file in the window's folder).
+            const comments = review.threads.filter(t => t.status !== 'resolved' && (this.reviews.patchFile(t.location)?.path
+                ?? (t.location.uri?.startsWith('file:') ? this.reviews.relativePath(t.location.uri) : undefined)) === path).length;
+            li.classList.toggle('viewed', viewed);
+            const state = li.querySelector('.co-review-changed-state');
+            if (state) {
+                state.className = `co-review-changed-state ${codicon(viewed ? 'pass-filled' : 'circle-large-outline')}`;
+                state.setAttribute('title', viewed ? 'Viewed. Click to unmark' : 'Click to mark as viewed');
+            }
+            const badge = li.querySelector('.co-review-changed-comments');
+            if (badge) {
+                badge.innerHTML = comments ? `<span class="${codicon('comment-discussion')}"></span>${comments}` : '';
+                li.classList.toggle('commented', comments > 0);
+                badge.setAttribute('title', comments ? `${comments} open comment${comments === 1 ? '' : 's'}` : '');
+            }
         }
     }
 
@@ -647,6 +802,9 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
 
     override dispose(): void {
         window.clearTimeout(this.paintTimer);
+        window.clearTimeout(this.coverageTimer);
+        const briefing = this.briefing;
+        setTimeout(() => briefing?.root.unmount());
         this.zoomed?.dispose();
         this.revokeImages();
         const roots = this.roots.splice(0);

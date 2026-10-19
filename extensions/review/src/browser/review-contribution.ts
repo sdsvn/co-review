@@ -29,12 +29,16 @@ import { ReviewManager } from './review-manager';
 import { ReviewWidget } from './review-widget';
 import { ReviewEditorDecorator } from './review-editor-decorator';
 import { ReviewNavigator } from './review-navigator';
+import { TabBarToolbarContribution, TabBarToolbarRegistry } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
+import { CommonCommands } from '@theia/core/lib/browser/common-commands';
+import { Widget } from '@theia/core/lib/browser/widgets/widget';
+import { EditorWidget } from '@theia/editor/lib/browser/editor-widget';
 
 export const REVIEW_CONTEXT_MENU_GROUP = [...EDITOR_CONTEXT_MENU, '0_co_review'];
 export const REVIEW_NAVIGATOR_GROUP = [...NavigatorContextMenu.NAVIGATION, '0_co_review'];
 
 @injectable()
-export class ReviewContribution extends AbstractViewContribution<ReviewWidget> implements FrontendApplicationContribution {
+export class ReviewContribution extends AbstractViewContribution<ReviewWidget> implements FrontendApplicationContribution, TabBarToolbarContribution {
 
     @inject(ReviewManager) protected readonly reviews: ReviewManager;
     @inject(ReviewService) protected readonly service: ReviewService;
@@ -77,11 +81,12 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         };
         this.reviews.onDidChange(update);
         update();
+        // The overview's Submit button (or S in the panel): the panel opens on its submit form.
+        this.reviews.onDidRequestSubmit(() => this.openView({ activate: false, reveal: true }));
         // Whether the file in the editor is viewed; click to toggle.
         const viewed = () => {
-            const uri = this.editorManager.currentEditor?.editor.getResourceUri()?.toString();
-            const review = this.reviews.activeReview;
-            if (!uri || !review || review.bundle || !uri.startsWith('file:')) {
+            const uri = this.reviewableUri(this.editorManager.currentEditor);
+            if (!uri) {
                 this.statusBar.removeElement('co-review-viewed');
                 return;
             }
@@ -149,9 +154,37 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         return !!uri;
     }
 
+    /**
+     * The file an editor shows that the reviewer can mark viewed: a repository review's file, or a change review's
+     * changed file (its diff shows the head side). Undefined for anything else (Co-Review's own pages, base files).
+     */
+    protected reviewableUri(widget: Widget | undefined): string | undefined {
+        const review = this.reviews.activeReview;
+        if (!review || !(widget instanceof EditorWidget) || (review.bundle && !review.bundle.code)) {
+            return undefined;
+        }
+        const uri = widget.editor.document?.uri ?? widget.editor.getResourceUri()?.toString();
+        if (!uri?.startsWith('file:') || !this.reviews.root || !new URI(this.reviews.root).isEqualOrParent(new URI(uri))) {
+            return undefined;
+        }
+        return review.bundle && !this.navigator.changeProgress()?.files.includes(this.reviews.relativePath(uri)) ? undefined : uri;
+    }
+
+    registerToolbarItems(registry: TabBarToolbarRegistry): void {
+        // Text only, as Theia draws a toolbar item's text only when it has no icon (the icons are added in CSS).
+        const onDidChange = this.reviews.onDidChange;
+        registry.registerItem({ id: ReviewCommands.NOT_VIEWED.id, command: ReviewCommands.NOT_VIEWED.id, text: 'Mark viewed',
+            tooltip: 'Mark this file as viewed (⌘⌥V)', priority: 10, onDidChange });
+        registry.registerItem({ id: ReviewCommands.VIEWED.id, command: ReviewCommands.VIEWED.id, text: 'Viewed',
+            tooltip: 'You viewed this file. Click to unmark it.', priority: 10, onDidChange });
+        registry.registerItem({ id: ReviewCommands.NEXT_UNVIEWED.id, command: ReviewCommands.NEXT_UNVIEWED.id, text: 'Next file',
+            tooltip: 'Open the next file you have not viewed (N in the Review panel)', priority: 11, onDidChange });
+    }
+
     /** Toggles "viewed" for a file or folder (all of its files), or the file in the editor. */
     protected async toggleViewed(uri: URI | undefined): Promise<void> {
-        const target = uri ?? this.editorManager.currentEditor?.editor.getResourceUri();
+        const editorUri = this.reviewableUri(this.editorManager.currentEditor);
+        const target = uri ?? (editorUri ? new URI(editorUri) : this.editorManager.currentEditor?.editor.getResourceUri());
         if (!target) {
             return;
         }
@@ -166,8 +199,27 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         await this.reviews.setViewed([target.toString()], !this.reviews.isViewed(target.toString()));
     }
 
+    /** Whether a file is left to view (a change review's files; a repository review's are checked when opened). */
+    protected hasUnviewed(): boolean {
+        const change = this.navigator.changeProgress();
+        return change ? change.viewed < change.files.length : true;
+    }
+
+    /**
+     * A window an agent opened for its review starts in focused review mode: the explorer is closed and the activity
+     * bar hidden (CSS) while it is, so the page and the Review panel have the room. ⌘B, or the Files button in the
+     * panel, brings the explorer back, and the activity bar with it.
+     */
+    protected get focused(): boolean {
+        return !!this.reviews.windowReviewId;
+    }
+
     /** After the layout is restored (opening earlier would be undone by the restore). */
     async onDidInitializeLayout(): Promise<void> {
+        if (this.focused) {
+            document.body.classList.add('co-review-focus');
+            this.shell.collapsePanel('left');
+        }
         await this.openStart();
         await this.welcome();
         // A review opened or switched to later (an agent's open_review, the switcher) starts the same way.
@@ -200,7 +252,9 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             return;
         }
         const review = this.reviews.activeReview;
-        await this.fileNavigator.openView({ activate: false, reveal: true });
+        if (!this.focused) {
+            await this.fileNavigator.openView({ activate: false, reveal: true });
+        }
         // A review that starts with findings (an agent's first pass) opens on them: the panel lists them all.
         if (review?.threads.some(t => t.status !== 'resolved')) {
             await this.openView({ activate: false, reveal: true });
@@ -350,6 +404,36 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             isEnabled: () => !!this.reviews.activeReview && !!this.editorManager.currentEditor,
             execute: () => this.toggleViewed(undefined)
         });
+        const editorOf = (widget?: Widget) => widget instanceof EditorWidget ? widget : undefined;
+        registry.registerCommand(ReviewCommands.NOT_VIEWED, {
+            isVisible: (widget?: Widget) => { const uri = this.reviewableUri(editorOf(widget)); return !!uri && !this.reviews.isViewed(uri); },
+            isEnabled: (widget?: Widget) => !!this.reviewableUri(editorOf(widget)),
+            execute: async (widget?: Widget) => {
+                const uri = this.reviewableUri(editorOf(widget) ?? this.editorManager.currentEditor);
+                if (uri) {
+                    await this.reviews.setViewed([uri], true);
+                }
+            }
+        });
+        registry.registerCommand(ReviewCommands.VIEWED, {
+            isVisible: (widget?: Widget) => { const uri = this.reviewableUri(editorOf(widget)); return !!uri && this.reviews.isViewed(uri); },
+            isEnabled: (widget?: Widget) => !!this.reviewableUri(editorOf(widget)),
+            execute: async (widget?: Widget) => {
+                const uri = this.reviewableUri(editorOf(widget) ?? this.editorManager.currentEditor);
+                if (uri) {
+                    await this.reviews.setViewed([uri], false);
+                }
+            }
+        });
+        registry.registerCommand(ReviewCommands.NEXT_UNVIEWED, {
+            isVisible: (widget?: Widget) => !!this.reviewableUri(editorOf(widget)) && this.hasUnviewed(),
+            isEnabled: () => !!this.reviews.activeReview,
+            execute: async () => {
+                if (!await this.navigator.openNextUnviewed()) {
+                    this.messages.info('You have viewed every file of this review.');
+                }
+            }
+        });
         registry.registerCommand(ReviewCommands.TOGGLE_VIEWED_PATH, UriAwareCommandHandler.MonoSelect(this.selectionService, {
             isEnabled: () => !!this.reviews.activeReview,
             execute: uri => this.toggleViewed(uri)
@@ -407,6 +491,8 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         keybindings.registerKeybinding({ command: ReviewCommands.PREVIOUS_COMMENT.id, keybinding: 'ctrlcmd+alt+up', when: 'editorTextFocus' });
         keybindings.registerKeybinding({ command: ReviewCommands.GO_TO_COMMENT.id, keybinding: 'ctrlcmd+alt+o' });
         keybindings.registerKeybinding({ command: ReviewCommands.TOGGLE_VIEWED.id, keybinding: 'ctrlcmd+alt+v', when: 'editorTextFocus' });
+        // Brings the explorer back in focused review mode (and hides it again), as in VS Code.
+        keybindings.registerKeybinding({ command: CommonCommands.TOGGLE_LEFT_PANEL.id, keybinding: 'ctrlcmd+b' });
     }
 
     protected currentEditor(): MonacoEditor | undefined {

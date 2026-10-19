@@ -6,6 +6,7 @@ import { MessageService } from '@theia/core/lib/common/message-service';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
+import { PreferenceService } from '@theia/core/lib/common/preferences';
 import { AgentConfig, AgentSetting, AgentPresence, CodeLocation, DocAnchor, PatchAnchor, ReviewCoverage, ReviewDecision, Participant, Review, ReviewScope, ReviewThread, Severity, ThreadIntent, ThreadOptions, ThreadStatus, isOverviewPage } from '../common/review-model';
 import { GitHubEdits, GitHubPost, GitHubPreview, GitHubTarget, ReviewService } from '../common/review-protocol';
 import { ReviewClientImpl } from './review-client';
@@ -28,6 +29,10 @@ export interface ReviewDraft {
 }
 
 const DRAFTS_KEY = 'co-review.drafts';
+/** Per review: thread id → when the reviewer last read it (opened or selected it), for unread agent replies. */
+const READ_KEY = 'co-review.read';
+/** The preference that turns OS notifications for agent replies on or off. */
+export const NOTIFICATIONS_PREFERENCE = 'co-review.notifications';
 
 /** Frontend view of the review state of the current workspace. */
 @injectable()
@@ -40,7 +45,18 @@ export class ReviewManager {
     @inject(MessageService) protected readonly messages: MessageService;
     @inject(ConnectionStatusService) protected readonly connection: ConnectionStatusService;
     @inject(FileService) protected readonly fileService: FileService;
+    @inject(PreferenceService) protected readonly preferences: PreferenceService;
     protected refreshTimer: number | undefined;
+    protected readonly onDidRequestSubmitEmitter = new Emitter<void>();
+    /** The reviewer asked to submit (the overview's button, a shortcut): the panel opens its submit form. */
+    readonly onDidRequestSubmit = this.onDidRequestSubmitEmitter.event;
+    /** Thread id → when the reviewer last read it; replies after that are unread. */
+    protected read: Record<string, number> = {};
+    /** Before any read state was stored: what came earlier counts as read (no wall of unread dots on first use). */
+    protected readSince = Date.now();
+    protected saveReadTimer: number | undefined;
+    /** When this window last notified about each review, to send at most one notification a minute per review. */
+    protected readonly notifiedAt = new Map<string, number>();
 
     protected readonly onDidChangeEmitter = new Emitter<void>();
     readonly onDidChange = this.onDidChangeEmitter.event;
@@ -53,6 +69,11 @@ export class ReviewManager {
     protected _root: string | undefined;
     /** The review this window was opened for (`?review=<id>`, when an agent showed it): each such review has its own window. */
     protected readonly openedFor = new URLSearchParams(window.location.search).get('review') ?? undefined;
+
+    /** The review this window was opened for by an agent (its own window), if it was. */
+    get windowReviewId(): string | undefined {
+        return this.openedFor;
+    }
     protected _user: Participant = { id: 'human:unknown', kind: 'human', name: 'You' };
     protected _drafts: ReviewDraft[] = [];
     protected saveDraftsTimer: number | undefined;
@@ -87,11 +108,13 @@ export class ReviewManager {
                 return;
             }
             const index = this._reviews.findIndex(r => r.id === review.id);
+            const previous = index >= 0 ? this._reviews[index] : undefined;
             if (index >= 0) {
                 this._reviews[index] = review;
             } else {
                 this._reviews.unshift(review);
             }
+            this.notify(previous, review);
             this.onDidChangeEmitter.fire();
         });
         this.client.onDidChangeAgentPresence(p => {
@@ -149,12 +172,19 @@ export class ReviewManager {
             this.onDidChangeEmitter.fire();
             return;
         }
-        const [user, reviews, active, drafts] = await Promise.all([
+        const [user, reviews, active, drafts, read] = await Promise.all([
             this.service.getCurrentUser(this._root),
             this.service.listReviews(this._root),
             this.storage.getData<string>(ACTIVE_REVIEW_KEY),
-            this.storage.getData<ReviewDraft[]>(DRAFTS_KEY, [])
+            this.storage.getData<ReviewDraft[]>(DRAFTS_KEY, []),
+            this.storage.getData<{ since: number; read: Record<string, number> }>(READ_KEY)
         ]);
+        if (read) {
+            this.readSince = read.since;
+            this.read = read.read ?? {};
+        } else {
+            this.storage.setData(READ_KEY, { since: this.readSince, read: this.read });
+        }
         this._user = user;
         this._reviews = reviews;
         // `?review=<id>` (used when an agent opens a review for the reviewer) wins over the last active one.
@@ -168,6 +198,72 @@ export class ReviewManager {
         this._drafts = (drafts ?? []).filter(d => reviews.some(r => r.id === d.reviewId));
         this.onDidChangeEmitter.fire();
         this.onDidChangeDraftsEmitter.fire();
+    }
+
+    /**
+     * Tells the reviewer, while this window is in the background, that the agent replied or added findings: an OS
+     * notification (clicking it brings the window and the thread), at most one a minute per review, unless the
+     * `co-review.notifications` preference is off. Only for the review this window shows.
+     */
+    protected notify(previous: Review | undefined, review: Review): void {
+        if (!previous || document.hasFocus() || review.id !== this._activeReviewId || typeof Notification === 'undefined'
+            || this.preferences.get<boolean>(NOTIFICATIONS_PREFERENCE, true) === false) {
+            return;
+        }
+        const done = (t: ReviewThread) => t.messages.filter(m => m.author.kind === 'agent' && m.status !== 'streaming').length;
+        const replied = review.threads.find(t => {
+            const before = previous.threads.find(p => p.id === t.id);
+            return before && done(t) > done(before);
+        });
+        const added = review.threads.filter(t => !previous.threads.some(p => p.id === t.id) && t.messages[0]?.author.kind === 'agent');
+        if (!replied && !added.length) {
+            return;
+        }
+        const now = Date.now();
+        if (now - (this.notifiedAt.get(review.id) ?? 0) < 60_000) {
+            return;
+        }
+        this.notifiedAt.set(review.id, now);
+        const agent = review.agent?.name ?? 'The agent';
+        const thread = replied ?? added[0];
+        const body = replied
+            ? `${agent} replied in #${replied.number}: ${replied.messages[replied.messages.length - 1].body.replace(/\s+/g, ' ').slice(0, 120)}`
+            : `${agent} added ${added.length} finding${added.length === 1 ? '' : 's'}.`;
+        try {
+            const notification = new Notification(review.title, { body, tag: `co-review:${review.id}` });
+            notification.onclick = () => {
+                window.focus();
+                this.revealThread(thread.id);
+            };
+        } catch {
+            /* notifications not permitted */
+        }
+    }
+
+    /** Whether the agent replied in a thread since the reviewer last read it. */
+    isUnread(thread: ReviewThread): boolean {
+        const last = thread.messages[thread.messages.length - 1];
+        if (!last || last.author.kind !== 'agent' || last.status === 'streaming' || thread.messages.length < 2) {
+            return false;
+        }
+        return last.createdAt > (this.read[thread.id] ?? this.readSince);
+    }
+
+    /** The reviewer read the thread (opened, selected or expanded it). */
+    markRead(threadId: string): void {
+        const thread = this.activeReview?.threads.find(t => t.id === threadId);
+        if (!thread || !this.isUnread(thread)) {
+            return;
+        }
+        this.read[threadId] = Date.now();
+        window.clearTimeout(this.saveReadTimer);
+        this.saveReadTimer = window.setTimeout(() => this.storage.setData(READ_KEY, { since: this.readSince, read: this.read }), 500);
+        this.onDidChangeEmitter.fire();
+    }
+
+    /** Opens the submit form in the Review panel. */
+    requestSubmit(): void {
+        this.onDidRequestSubmitEmitter.fire();
     }
 
     get root(): string | undefined { return this._root; }

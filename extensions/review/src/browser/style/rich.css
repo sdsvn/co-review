@@ -1,0 +1,224 @@
+/* ---- One visual system: type scale, spacing and severity colours, used by the panel, the cards and the briefing ---- */
+:root {
+    --co-review-text-title: 22px;
+    --co-review-text-section: 13px;
+    --co-review-text-body: var(--theia-ui-font-size1);
+    --co-review-text-meta: 11px;
+    --co-review-space-1: 4px;
+    --co-review-space-2: 8px;
+    --co-review-space-3: 12px;
+    --co-review-space-4: 16px;
+    --co-review-radius: 8px;
+    /* Fixed colours, not the theme's chart colours (Co-Review's themes give those its own palette). */
+    --co-review-sev-high: #DC2626;
+    --co-review-sev-medium: #D97706;
+    --co-review-sev-low: #6366F1;
+    --co-review-sev-none: var(--theia-panel-border);
+    --co-review-ok: #059669;
+    --co-review-del: #DC2626;
+}
+body.theia-dark, body.theia-hc {
+    --co-review-sev-high: #F87171;
+    --co-review-sev-medium: #FBBF24;
+    --co-review-sev-low: #A5B4FC;
+    --co-review-ok: #34D399;
+    --co-review-del: #F87171;
+}
+
+.co-review-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- Panel header: the review, the agent's state, a few actions ---- */
+.co-review-header { gap: var(--co-review-space-1); }
+.co-review-agent-pill {
+    display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; cursor: pointer;
+    font-size: var(--co-review-text-meta); font-weight: 600; white-space: nowrap;
+    color: var(--theia-descriptionForeground); border: 1px solid var(--theia-panel-border);
+}
+.co-review-agent-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--theia-descriptionForeground); opacity: .6; flex: none; }
+.co-review-agent-pill.listening { color: var(--co-review-ok); border-color: color-mix(in srgb, var(--co-review-ok) 45%, transparent); }
+.co-review-agent-pill.listening .co-review-agent-dot { background: var(--co-review-ok); opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--co-review-ok) 25%, transparent); }
+.co-review-agent-pill.working { color: var(--theia-coReview-agent); border-color: var(--theia-coReview-agent); }
+.co-review-agent-pill.working .co-review-agent-dot { background: var(--theia-coReview-agent); opacity: 1; animation: co-review-pulse 1.2s ease-in-out infinite; }
+.co-review-agent-pill.none { color: var(--theia-textLink-foreground); }
+@keyframes co-review-pulse { 50% { opacity: .3; } }
+
+/* ---- Agent activity ---- */
+.co-review-feed { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: var(--co-review-radius); background: var(--theia-editorWidget-background, var(--theia-sideBar-background)); }
+.co-review-feed-item { display: flex; align-items: center; gap: 6px; color: var(--theia-descriptionForeground); font-size: var(--co-review-text-meta); min-width: 0; }
+.co-review-feed-item .codicon { color: var(--theia-coReview-agent); font-size: 12px; }
+.co-review-feed-item.link { cursor: pointer; }
+.co-review-feed-item.link:hover .co-review-feed-text { color: var(--theia-foreground); text-decoration: underline; }
+.co-review-feed-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-review-feed-time { flex: none; }
+
+/* ---- Tabs ---- */
+.co-review-filters { align-items: center; gap: 4px 12px; }
+.co-review-filter { font-weight: 500; }
+.co-review-filter-count { color: var(--theia-descriptionForeground); font-variant-numeric: tabular-nums; margin-left: 2px; }
+.co-review-filter.triage .co-review-filter-count { color: var(--co-review-sev-medium); font-weight: 700; }
+.co-review-filter.active { font-weight: 600; }
+.co-review-grouping { border-bottom: none !important; }
+.co-review-keys { margin-bottom: 3px; }
+
+/* ---- Finding cards ---- */
+.co-review .co-review-card {
+    gap: var(--co-review-space-1); padding: 8px 10px 8px 12px; border-radius: var(--co-review-radius);
+    border-left: 4px solid var(--co-review-sev-none); background: var(--theia-editor-background);
+    transition: border-color .1s, box-shadow .1s;
+}
+.co-review .co-review-card.sev-high { border-left-color: var(--co-review-sev-high); }
+.co-review .co-review-card.sev-medium { border-left-color: var(--co-review-sev-medium); }
+.co-review .co-review-card.sev-low { border-left-color: var(--co-review-sev-low); }
+.co-review .co-review-card.proposed { border-top-style: dashed; border-right-style: dashed; border-bottom-style: dashed; }
+.co-review .co-review-card.selected { box-shadow: 0 0 0 1px var(--theia-focusBorder); }
+.co-review .co-review-card:hover { box-shadow: 0 1px 6px rgba(0, 0, 0, .08); }
+.co-review-card-top { display: flex; align-items: flex-start; gap: 6px; }
+.co-review-card-top .co-review-toggle { margin-top: 1px; color: var(--theia-descriptionForeground); }
+.co-review-card-title { flex: 1; min-width: 0; font-weight: 600; line-height: 1.35; }
+.co-review-card .co-review-number { font-weight: 500; color: var(--theia-descriptionForeground); font-size: var(--co-review-text-meta); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.co-review-unread-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--theia-coReview-agent); flex: none; margin-top: 5px; }
+.co-review-card-where {
+    display: flex; align-items: baseline; gap: 6px; min-width: 0; margin-left: 22px; cursor: pointer;
+    font-family: var(--theia-code-font-family); font-size: var(--co-review-text-meta);
+}
+.co-review-card-where .name { color: var(--theia-textLink-foreground); white-space: nowrap; }
+.co-review-card-where .dir { color: var(--theia-descriptionForeground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.co-review-card-where:hover .name { text-decoration: underline; }
+.co-review-card .co-review-preview { margin-left: 22px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; }
+.co-review-card-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-left: 22px; min-height: 22px; }
+.co-review-card-meta .co-review-badge.label { background: var(--theia-badge-background); color: var(--theia-badge-foreground); border-color: transparent; }
+.co-review-card-meta .co-review-actions { opacity: .55; }
+.co-review-card:hover .co-review-card-meta .co-review-actions, .co-review-card.selected .co-review-card-meta .co-review-actions { opacity: 1; }
+.co-review-triage { display: flex; gap: 4px; }
+.co-review-triage .theia-button { margin: 0; min-width: 0; padding: 1px 10px; line-height: 18px; font-size: var(--co-review-text-meta); }
+.co-review-triage .co-review-accept { background: color-mix(in srgb, var(--co-review-ok) 18%, transparent); color: var(--co-review-ok); border: 1px solid color-mix(in srgb, var(--co-review-ok) 45%, transparent); font-weight: 600; }
+.co-review-triage .co-review-accept:hover { background: color-mix(in srgb, var(--co-review-ok) 28%, transparent); }
+.co-review-card-body { display: flex; flex-direction: column; gap: 6px; margin-left: 22px; padding-top: 4px; border-top: 1px solid var(--theia-panel-border); }
+.co-review-group-header { font-weight: 600; font-size: var(--co-review-text-meta); color: var(--theia-descriptionForeground); text-transform: none; }
+.co-review-group-label { direction: ltr; color: var(--theia-foreground); }
+.co-review-group-dir { color: var(--theia-descriptionForeground); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.co-review-header .co-review-select { min-width: 90px; }
+
+/* Inline threads (editors, pages) show their severity the same way. */
+.co-review-thread.inline.sev-high { border-left: 3px solid var(--co-review-sev-high); }
+.co-review-thread.inline.sev-medium { border-left: 3px solid var(--co-review-sev-medium); }
+.co-review-thread.inline.sev-low { border-left: 3px solid var(--co-review-sev-low); }
+
+/* ---- Empty states ---- */
+.co-review-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.co-review-empty-icon { font-size: 28px !important; color: var(--theia-coReview-agent); }
+.co-review-empty-state { display: block; padding: 10px 12px; border-radius: var(--co-review-radius); border: 1px dashed var(--theia-panel-border); }
+.co-review-empty-state .codicon { margin-right: 4px; color: var(--theia-coReview-agent); }
+.co-review-empty-state .codicon-pass-filled { color: var(--co-review-ok); }
+
+/* ---- Files tab ---- */
+.co-review-files { display: flex; flex-direction: column; gap: 2px; }
+.co-review-files-head { display: flex; align-items: center; gap: 8px; padding: 2px 0 6px; color: var(--theia-descriptionForeground); }
+.co-review-files-dir { display: flex; align-items: center; gap: 4px; padding: 4px 0 2px; cursor: pointer; font-family: var(--theia-code-font-family); font-size: var(--co-review-text-meta); color: var(--theia-descriptionForeground); }
+.co-review-files-file { display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 22px; border-radius: 4px; cursor: pointer; font-family: var(--theia-code-font-family); }
+.co-review-files-file:hover { background: var(--theia-list-hoverBackground); }
+.co-review-files-file .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-review-files-file.viewed .name { color: var(--theia-descriptionForeground); }
+.co-review-files-file input { margin: 0; cursor: pointer; }
+.co-review-files-count { font-size: var(--co-review-text-meta); white-space: nowrap; }
+.co-review-files-count .add { color: var(--co-review-ok); }
+.co-review-files-count .del { color: var(--co-review-del); }
+.co-review-files .co-review-coverage-areas { max-height: none; margin: 0; }
+.co-review-coverage-leaf { width: 16px; flex: none; }
+
+/* ---- Submit, with what goes and what doesn't ---- */
+.co-review-submit { gap: 8px; padding: 10px; border-radius: var(--co-review-radius); border: 1px solid var(--theia-focusBorder); }
+.co-review-submit-title { font-weight: 600; font-size: var(--co-review-text-section); }
+.co-review-submit-summary { margin: 0; padding-left: 18px; color: var(--theia-descriptionForeground); line-height: 1.6; }
+.co-review-submit-summary b { color: var(--theia-foreground); }
+.co-review-submit-summary li.warn, .co-review-submit-summary li.warn b { color: var(--co-review-sev-medium); }
+
+/* ---- Keyboard sheet ---- */
+.co-review-root { position: relative; }
+.co-review-sheet { position: absolute; inset: 0; z-index: 10; display: flex; align-items: flex-start; justify-content: center; padding-top: 40px; background: color-mix(in srgb, var(--theia-editor-background) 70%, transparent); }
+.co-review-sheet-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; min-width: 220px; border-radius: var(--co-review-radius); background: var(--theia-editorWidget-background); border: 1px solid var(--theia-panel-border); box-shadow: 0 6px 24px rgba(0, 0, 0, .18); }
+.co-review-sheet-title { font-weight: 600; margin-bottom: 4px; }
+.co-review-sheet-row { display: flex; align-items: center; gap: 10px; }
+.co-review-sheet-row kbd, .co-review-briefing kbd {
+    min-width: 46px; text-align: center; font: 11px var(--theia-code-font-family); padding: 1px 5px; border-radius: 4px;
+    border: 1px solid var(--theia-panel-border); border-bottom-width: 2px; background: var(--theia-editor-background);
+}
+.co-review-sheet-card .co-review-muted { margin-top: 6px; font-size: var(--co-review-text-meta); max-width: 260px; }
+
+/* ---- Overview page: the briefing, the reading order and the changed files ---- */
+.co-review-document.overview .co-review-doc-header .co-review-doc-path { display: none; }
+.co-review-briefing { margin: 6px 0 22px; user-select: none; }
+.co-review-briefing-inner { display: flex; flex-direction: column; gap: var(--co-review-space-3); }
+.co-review-briefing-kind { display: flex; align-items: center; gap: 6px; font-size: var(--co-review-text-meta); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--theia-coReview-agent, var(--theia-textLink-foreground)); }
+.co-review-briefing-kind .co-review-agent-pill { text-transform: none; letter-spacing: 0; cursor: default; }
+.co-review-tiles { display: flex; flex-wrap: wrap; gap: var(--co-review-space-2); }
+.co-review-tile {
+    display: flex; flex-direction: column; gap: 2px; min-width: 132px; padding: 10px 14px; border-radius: var(--co-review-radius);
+    border: 1px solid var(--theia-panel-border); background: var(--theia-sideBar-background);
+}
+.co-review-tile b { font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.co-review-tile > span { color: var(--theia-descriptionForeground); font-size: 12px; }
+.co-review-tile.attention b { color: var(--co-review-sev-medium); }
+.co-review-tile-note { font-style: italic; }
+.co-review-severity-bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; margin-top: 6px; background: var(--theia-panel-border); }
+.co-review-severity-bar .sev-high { background: var(--co-review-sev-high); }
+.co-review-severity-bar .sev-medium { background: var(--co-review-sev-medium); }
+.co-review-severity-bar .sev-low { background: var(--co-review-sev-low); }
+.co-review-severity-bar .sev-none { background: var(--theia-descriptionForeground); }
+.co-review-severity-bar.progress > span { background: var(--theia-focusBorder); }
+.co-review-severity-bar.progress > span.rest { background: transparent; }
+.co-review-briefing-actions { display: flex; flex-wrap: wrap; gap: var(--co-review-space-2); }
+.co-review-briefing-actions .theia-button { margin: 0; }
+.co-review-document.overview .co-review-doc-content > h1 { margin-bottom: 4px; }
+.co-review-document.overview .co-review-doc-content ol { counter-reset: co-review-step; list-style: none; padding-left: 0; }
+.co-review-document.overview .co-review-doc-content ol > li { counter-increment: co-review-step; position: relative; padding-left: 34px; margin: 8px 0; }
+.co-review-document.overview .co-review-doc-content ol > li::before {
+    content: counter(co-review-step); position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 6px;
+    display: grid; place-items: center; font-weight: 700; font-size: 12px;
+    background: color-mix(in srgb, var(--theia-focusBorder) 18%, transparent); color: var(--theia-focusBorder);
+}
+/* The changed files: a folder tree in a card, each file with its state, comments, counts and a bar. */
+.co-review-document.overview .co-review-doc-content ul.co-review-changed-tree {
+    list-style: none; padding: 6px 10px; margin: 8px 0 10px; border: 1px solid var(--theia-panel-border);
+    border-radius: var(--co-review-radius); background: var(--theia-sideBar-background);
+}
+.co-review-changed-folder { margin: 0; padding: 4px 0 2px; font-family: var(--theia-code-font-family); font-size: 12px; color: var(--theia-descriptionForeground); }
+.co-review-changed-folder > strong { color: var(--theia-foreground); font-weight: 600; margin-right: 6px; }
+.co-review-changed-folder + .co-review-changed-folder { border-top: 1px solid var(--theia-panel-border); margin-top: 4px; padding-top: 6px; }
+.co-review-changed-folder > ul { list-style: none; padding-left: 0; margin: 2px 0 0; }
+.co-review-changed-file {
+    display: grid; grid-template-columns: 16px minmax(0, 1fr) auto auto 96px; align-items: center; gap: 10px;
+    padding: 2px 6px 2px 14px; margin: 0; border-radius: 4px; cursor: pointer; color: var(--theia-foreground);
+}
+.co-review-changed-file:hover { background: var(--theia-list-hoverBackground); }
+.co-review-changed-file.viewed .name { color: var(--theia-descriptionForeground); }
+.co-review-changed-state { font-size: 14px; color: var(--theia-descriptionForeground); cursor: pointer; border-radius: 50%; }
+.co-review-changed-state:hover { color: var(--co-review-ok); background: color-mix(in srgb, var(--co-review-ok) 14%, transparent); }
+.co-review-changed-file.commented .name { font-weight: 600; }
+.co-review-changed-file.viewed .co-review-changed-state { color: var(--co-review-ok); }
+.co-review-changed-path { font-family: var(--theia-code-font-family); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-review-changed-comments { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 999px; color: var(--theia-badge-foreground); background: var(--theia-badge-background); }
+.co-review-changed-comments:empty { padding: 0; background: none; }
+.co-review-changed-comments .codicon { font-size: 12px; }
+.co-review-changed-count { font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.co-review-changed-count .add { color: var(--co-review-ok); }
+.co-review-changed-count .del { color: var(--co-review-del); }
+.co-review-file-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--theia-panel-border); }
+.co-review-file-bar .add { background: var(--co-review-ok); }
+.co-review-file-bar .del { background: var(--co-review-del); }
+.co-review-changed-routine { margin: 0 0 12px; color: var(--theia-descriptionForeground); }
+.co-review-changed-routine summary { cursor: pointer; font-size: 12px; }
+.co-review-changed-routine > div { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px 0 0 14px; }
+.co-review-changed-routine-file { font-family: var(--theia-code-font-family); font-size: 12px; cursor: pointer; }
+.co-review-changed-routine-file:hover { color: var(--theia-textLink-foreground); text-decoration: underline; }
+
+/* ---- The editor's title bar: viewed, next file ---- */
+#co-review\.notViewed::before, #co-review\.viewed::before, #co-review\.nextUnviewed::before { font: normal normal normal 14px/1 codicon; margin-right: 4px; vertical-align: -2px; }
+#co-review\.notViewed::before { content: '\ebb5'; }
+#co-review\.viewed::before { content: '\ebb3'; color: var(--co-review-ok); }
+#co-review\.nextUnviewed::before { content: '\ea9c'; }
+.p-TabBar-toolbar .item > div[id^='co-review.'] { display: flex; align-items: center; padding: 0 6px; border-radius: 4px; font-size: var(--co-review-text-meta); white-space: nowrap; }
+.p-TabBar-toolbar .item > div#co-review\.viewed { color: var(--co-review-ok); }
+
+/* ---- Focused review mode: an agent's review window keeps the room for the page and the panel ---- */
+body.co-review-focus #theia-left-content-panel.theia-mod-collapsed .theia-app-sidebar-container { display: none; }

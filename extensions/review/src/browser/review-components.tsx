@@ -4,6 +4,7 @@ import * as markdownit from '@theia/core/shared/markdown-it';
 import { codicon } from '@theia/core/lib/browser/widgets/widget';
 import { AgentActivity, PermissionRequest, Proposal, ReviewMessage, ReviewThread, Severity, ThreadIntent } from '../common/review-model';
 import { ReviewDraft, ReviewManager } from './review-manager';
+import { findingRest, findingTitle, hasMore, splitLocation } from './review-insights';
 
 /** Shared review UI, rendered both in the review panel and inline in editors. */
 
@@ -153,10 +154,16 @@ export function MessageView({ message, onOpenReference, onAnswerPermission }: Me
     </div>;
 }
 
-export function ReplyBox(props: { onSubmit(body: string): Promise<unknown> }): React.ReactElement {
+export function ReplyBox(props: { onSubmit(body: string): Promise<unknown>; focusSignal?: number }): React.ReactElement {
     const [body, setBody] = React.useState('');
     const [busy, setBusy] = React.useState(false);
     const [active, setActive] = React.useState(false);
+    // The panel's R shortcut: open the reply box and type.
+    React.useEffect(() => {
+        if (props.focusSignal) {
+            setActive(true);
+        }
+    }, [props.focusSignal]);
     const submit = async () => {
         if (!body.trim() || busy) {
             return;
@@ -323,6 +330,10 @@ export interface ThreadViewProps {
     onOpen?(): void;
     onHide?(): void;
     onOpenReference?: OpenReference;
+    /** Changes when the reviewer pressed R on the selected card: its reply box takes the keyboard. */
+    replySignal?: number;
+    /** The card sits under its file's header (grouped by file): it shows only its line, not the file again. */
+    underFile?: boolean;
 }
 
 /** What a thread's anchor state means (its badge's tooltip). */
@@ -359,8 +370,85 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
     const queued = thread.agentState === 'queued' && !resolved;
     const listening = queued && !!manager.getAgentPresence(review!.id)?.listening;
     const agentName = agent?.name ?? 'The agent';
-    return <div id={props.inline ? undefined : `co-review-thread-${thread.id}`}
-        className={`co-review-thread ${resolved ? 'resolved' : ''} ${props.selected ? 'selected' : ''} ${props.inline ? 'inline' : ''}`}
+    const unread = manager.isUnread(thread);
+    React.useEffect(() => {
+        if (unread && (props.selected || (expanded && props.inline))) {
+            manager.markRead(thread.id);
+        }
+    }, [unread, props.selected, expanded, props.inline]);
+    React.useEffect(() => {
+        if (props.replySignal) {
+            setExpanded(true);
+        }
+    }, [props.replySignal]);
+    const badges = <>
+        {anchorState && anchorState !== 'exact' &&
+            <span className={`co-review-badge ${anchorState === 'moved' ? 'moved' : 'outdated'}`} title={ANCHOR_TITLES[anchorState]}>
+                {anchorState === 'ambiguous' ? `ambiguous: ${thread.location.tracked?.candidates?.length ?? 'several'} places`
+                    : anchorState === 'removed' ? 'code removed' : anchorState}
+            </span>}
+        {queued && <span className='co-review-badge queued'
+            title={listening ? `${agentName} is listening and picks this up now.` : `${agentName} is busy; it gets this the next time it checks in. Nothing is lost.`}>
+            {listening ? `sending to ${agentName}…` : `waiting for ${agentName}`}
+        </span>}
+        {thread.agentState === 'working' && !resolved && <span className='co-review-badge working'
+            title={`${agentName} has your message and is working on an answer.`}>{agentName} is on it…</span>}
+        {thread.agentState === 'waiting_for_human' && <span className='co-review-badge waiting'>needs your decision</span>}
+        {resolved && <span className='co-review-badge resolved'>{proposed ? 'dismissed' : 'resolved'}</span>}
+    </>;
+    const body = <>
+        {!props.inline && thread.location.anchor?.text && thread.location.kind !== 'symbol' &&
+            <pre className='co-review-snippet'>{snippet(thread.location.anchor.text)}</pre>}
+        {thread.proposal && <ProposalView proposal={thread.proposal} onDecide={accept => manager.decideProposal(thread, accept)} />}
+        {thread.messages.map(m => <MessageView key={m.id} message={m} onOpenReference={props.onOpenReference}
+            onAnswerPermission={(requestId, optionId) => manager.answerPermission(requestId, optionId)} />)}
+        {agentBusy && <span className='co-review-link' onClick={e => { e.stopPropagation(); manager.cancelAgent(thread); }}>Stop the agent</span>}
+        {!resolved && <ReplyBox onSubmit={reply => manager.reply(thread, reply)} focusSignal={props.replySignal} />}
+    </>;
+    if (!props.inline) {
+        // A card in the Review panel: its title (the first sentence), where it is, one tag, and what to do with it.
+        const where = props.underFile ? lineOf(props.label) : splitLocation(props.label);
+        const rest = thread.labels?.slice(1) ?? [];
+        return <div id={`co-review-thread-${thread.id}`} role='listitem' aria-selected={!!props.selected}
+            className={`co-review-thread co-review-card sev-${thread.severity ?? 'none'} ${proposed ? 'proposed' : ''} ${resolved ? 'resolved' : ''} ${props.selected ? 'selected' : ''} ${unread ? 'unread' : ''}`}
+            onClick={props.onSelect}>
+            <div className='co-review-card-top'>
+                <span className={`${codicon(expanded ? 'chevron-down' : 'chevron-right')} co-review-toggle`}
+                    onClick={e => { e.stopPropagation(); setExpanded(!expanded); }} />
+                <span className='co-review-card-title'>
+                    {thread.intent === 'question' && <span className={`${codicon('hubot')} co-review-mark`} title='Question for the agent' />}
+                    {findingTitle(thread) || <em>(no message)</em>}
+                </span>
+                {unread && <span className='co-review-unread-dot' title={`${agentName} replied since you last read this`} />}
+                <span className='co-review-number' title={thread.severity ? `${thread.severity} severity` : 'No severity'}>#{thread.number}</span>
+            </div>
+            <div className='co-review-card-where' title='Open location' onClick={e => { if (props.onOpen) { e.stopPropagation(); props.onOpen(); } }}>
+                <span className='name'>{where.name}</span>
+                {where.dir && <span className='dir'>{where.dir}</span>}
+                {thread.location.symbol && <span className='co-review-symbol' title={thread.location.symbol}>{thread.location.symbol}</span>}
+            </div>
+            {!expanded && hasMore(thread) && <div className='co-review-preview'>{findingRest(thread)}
+                {thread.messages.length > 1 && <em> (+{thread.messages.length - 1})</em>}</div>}
+            <div className='co-review-card-meta'>
+                <span className='co-review-sr'>{thread.severity ? `${thread.severity} severity` : ''}</span>
+                {thread.labels?.[0] && <span className='co-review-badge label' title={thread.labels.join(', ')}>{thread.labels[0]}{rest.length ? ` +${rest.length}` : ''}</span>}
+                {badges}
+                <span className='co-review-spacer' />
+                {proposed ? <span className='co-review-triage'>
+                    <button className='theia-button co-review-accept' title='Accept: keep it as an open thread (A)'
+                        onClick={e => { e.stopPropagation(); manager.setStatus(thread, 'open'); }}>Accept</button>
+                    <button className='theia-button secondary' title='Dismiss: drop it (D)'
+                        onClick={e => { e.stopPropagation(); manager.setStatus(thread, 'resolved'); }}>Dismiss</button>
+                </span> : <span className='co-review-actions'>
+                    {canAsk && <IconAction icon='hubot' title={`Ask ${agent!.name}`} onClick={() => manager.askAgent(thread)} />}
+                    <IconAction icon={resolved ? 'issue-reopened' : 'check'} title={resolved ? 'Reopen' : 'Resolve'}
+                        onClick={() => manager.setStatus(thread, resolved ? 'open' : 'resolved')} />
+                </span>}
+            </div>
+            {expanded && <div className='co-review-card-body'>{body}</div>}
+        </div>;
+    }
+    return <div className={`co-review-thread inline sev-${thread.severity ?? 'none'} ${resolved ? 'resolved' : ''} ${props.selected ? 'selected' : ''}`}
         onClick={props.onSelect}>
         <div className='co-review-thread-header'>
             {!props.inline && <span className={`${codicon(expanded ? 'chevron-down' : 'chevron-right')} co-review-toggle`}
@@ -409,6 +497,13 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
             {!resolved && <ReplyBox onSubmit={body => manager.reply(thread, body)} />}
         </>}
     </div>;
+}
+
+/** "path/to/a.ts:12-14 · …" as "line 12-14 · …" (or "the file"), for a card under its file's header. */
+function lineOf(label: string): { name: string; dir: string } {
+    const [where, ...rest] = label.split(' · ');
+    const m = /:(\d+(?:-\d+)?)(\s*\(old\))?$/.exec(where);
+    return { name: [m ? `line ${m[1]}${m[2] ?? ''}` : 'the file', ...rest].join(' · '), dir: '' };
 }
 
 function snippet(text: string): string {

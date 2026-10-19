@@ -16,8 +16,8 @@ Review the change you made with me in Co-Review, following the `co-review` skill
    Then write your overview of it for the review's front page, which I read first, and add it with
    `open_review({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
    ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:
-   callers, data, configuration, other services), and where to start reading. Plain language; no line-by-line
-   walkthrough.
+   callers, data, configuration, other services), and where to start reading, as a short numbered list at the end
+   (`1. **The handler**: what it does`). Plain language; no line-by-line walkthrough.
 3. Show it: `open_review({ reviewId })`. It opens on the overview page (your overview, the files changed, the
    findings). Tell me it is open in Co-Review and, in one sentence, what to look at first.
 4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review

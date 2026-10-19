@@ -40,7 +40,12 @@
           "files.enableTrash": false,
           "[markdown]": {
             "editor.wordWrap": "on"
-          }
+          },
+          "[plaintext]": {
+            "editor.wordWrap": "on"
+          },
+          "diffEditor.wordWrap": "on",
+          "diffEditor.hideUnchangedRegions.enabled": true
         },
         "defaultTheme": {
           "light": "co-review-light",

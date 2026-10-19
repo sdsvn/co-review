@@ -32,5 +32,9 @@ export namespace ReviewCommands {
     export const REVIEW_PATHS: Command = { id: 'co-review.reviewPaths', category, label: 'Start Review of Selection' };
     export const INSTALL_SKILLS: Command = { id: 'co-review.installSkills', category, label: 'Install Agent Skills…' };
     export const INSTALL_CLI: Command = { id: 'co-review.installCli', category, label: 'Install the co-review Command' };
+    export const NEXT_UNVIEWED: Command = { id: 'co-review.nextUnviewed', category, label: 'Open Next Unviewed File' };
+    /** The editor's title bar: the file is viewed (click to unmark) / not viewed yet (click to mark). */
+    export const VIEWED: Command = { id: 'co-review.viewed', category, label: 'Mark File as Not Viewed' };
+    export const NOT_VIEWED: Command = { id: 'co-review.notViewed', category, label: 'Mark File as Viewed' };
     export const SETUP_HARNESS: Command = { id: 'co-review.setupHarness', category, label: 'Add Co-Review to an Agent Harness (MCP)…' };
 }

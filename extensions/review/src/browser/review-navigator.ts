@@ -9,6 +9,7 @@ import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import { OpenerService } from '@theia/core/lib/browser/opener-service';
 import { ReviewChange } from './review-change';
 import { CodeNavigation } from './review-code';
+import { isRoutineFile, PatchFile } from '../common/patch';
 
 /** Id of the document review opener (kept here to avoid an import cycle with the document widget). */
 const DOCUMENT_OPENER_ID = 'co-review:document';
@@ -57,6 +58,48 @@ export class ReviewNavigator {
         } else {
             await this.code.compare(review, path, line, side);
         }
+    }
+
+    /** The change review's files, as its patches list them (none for other reviews). */
+    changeFiles(): readonly PatchFile[] {
+        return this.change.hasCode ? this.change.files : [];
+    }
+
+    /** A change review's files the reviewer can view (not deleted ones), and how many they viewed. */
+    changeProgress(): { files: string[]; viewed: number } | undefined {
+        const root = this.reviews.root;
+        if (!this.change.hasCode || !root) {
+            return undefined;
+        }
+        // The files to read first, then generated, lock and version-only ones.
+        const files = this.change.files.filter(f => f.tag !== 'deleted')
+            .sort((a, b) => Number(isRoutineFile(a)) - Number(isRoutineFile(b))).map(f => f.path);
+        return { files, viewed: files.filter(f => this.reviews.isViewed(new URI(root).resolve(f).toString())).length };
+    }
+
+    /**
+     * Opens the next file not viewed yet: in a change review the next changed file after the one in the editor (as
+     * its diff), in a repository review the next file of the first area not fully viewed. False when every file is.
+     */
+    async openNextUnviewed(): Promise<boolean> {
+        const root = this.reviews.root;
+        const progress = this.changeProgress();
+        if (progress && root) {
+            const current = this.editorManager.currentEditor?.editor.uri;
+            const at = current ? progress.files.indexOf(this.change.relativePath(current) ?? '') : -1;
+            const order = [...progress.files.slice(at + 1), ...progress.files.slice(0, at + 1)];
+            const next = order.find(f => !this.reviews.isViewed(new URI(root).resolve(f).toString()));
+            if (next) {
+                await this.openChangedFile(next);
+            }
+            return !!next;
+        }
+        const coverage = await this.reviews.getCoverage();
+        const next = coverage?.areas.find(a => a.next)?.next;
+        if (next) {
+            await this.openReference(next);
+        }
+        return !!next;
     }
 
     /** `onPage`: a location on the patch page opens the page (a draft written there is only shown there). */

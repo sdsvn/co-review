@@ -3,7 +3,7 @@ import { inject, injectable, postConstruct } from '@theia/core/shared/inversify'
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { DocAnchor, isOverviewPage, Review, ReviewThread } from '../common/review-model';
-import { changedLines, parsePatch, parsePatchMeta, PatchFile, PatchMeta } from '../common/patch';
+import { changedLines, isRoutineFile, parsePatch, parsePatchMeta, PatchFile, PatchMeta, PatchRow } from '../common/patch';
 import { BlastRadius, blastRadius, buildGraph, GraphNode } from './graphify';
 import { BundleService } from './bundle-service';
 import { RepoIndex } from './repo-index';
@@ -64,13 +64,41 @@ export interface OverviewParts {
     /** The pull request, from the review directory's `PR.md`. */
     pr?: PatchMeta;
     /** The reviewed patches: name, and per file the lines added and removed. */
-    patches: { name: string; files: { path: string; added: number; removed: number }[] }[];
+    patches: { name: string; files: { path: string; added: number; removed: number; rows?: PatchRow[] }[] }[];
     /** A repository review: the repository overview (where to start, the areas and how they connect). */
     repository?: string;
     /** A change review with a repository: its blast radius ('no graph': Graphify isn't installed or has no graph). */
     radius?: BlastRadius | 'no graph';
     /** The slow section (`repository` or `radius`) is still being built: the page is written again when it is. */
     building?: boolean;
+}
+
+/**
+ * The change's files for the front page, as a tree: one line per folder with its totals, its files under it as
+ * `path` +added −removed (the page draws them with a bar, their viewed state and comments, and opens their diff), and
+ * generated, lock and version-only files on one line at the end, as they are rarely read.
+ */
+function changedFiles(files: { path: string; added: number; removed: number; rows?: PatchRow[] }[]): string[] {
+    const rest = files.filter(isRoutineFile);
+    const read = files.filter(f => !rest.includes(f));
+    const folders = new Map<string, typeof files>();
+    for (const file of read) {
+        const dir = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '';
+        folders.set(dir, [...folders.get(dir) ?? [], file]);
+    }
+    const lines: string[] = [''];
+    for (const [dir, list] of [...folders].sort(([a], [b]) => a.localeCompare(b))) {
+        const added = list.reduce((n, f) => n + f.added, 0);
+        const removed = list.reduce((n, f) => n + f.removed, 0);
+        lines.push(`- **${dir ? `${dir}/` : '(root)'}** ${list.length} file${list.length === 1 ? '' : 's'} · +${added} −${removed}`);
+        for (const file of list) {
+            lines.push(`  - \`${file.path}\` +${file.added} −${file.removed}`);
+        }
+    }
+    if (rest.length) {
+        lines.push('', `Also changed, generated or version only (${rest.length}): ${rest.map(f => `\`${f.path}\``).join(', ')}.`);
+    }
+    return lines;
 }
 
 /** A definition as a link into the code (the window's folder is the code). */
@@ -88,22 +116,32 @@ function radiusSection(radius: BlastRadius | 'no graph'): string[] {
     if (!radius.changed.length) {
         return [...lines, 'The repository\'s code graph has no definitions in the changed lines.'];
     }
-    lines.push(`**Changed** (${radius.changed.length}): ${radius.changed.map(def).join(', ')}`);
+    const files = new Set(radius.changed.map(n => n.file));
+    lines.push(`The change touches ${radius.changed.length} definition${radius.changed.length === 1 ? '' : 's'} in ${files.size} file${files.size === 1 ? '' : 's'}.`);
     if (!radius.affected.length) {
-        return [...lines, '', 'Nothing else in the repository\'s code graph calls, imports or implements them.'];
+        lines[lines.length - 1] += ' Nothing else in the repository\'s code graph calls, imports or implements them.';
+        return lines;
     }
     const areas = new Map<string, typeof radius.affected>();
     for (const node of radius.affected) {
         areas.set(node.area ?? 'Other', [...areas.get(node.area ?? 'Other') ?? [], node]);
     }
-    lines.push('', `**Affected** (${radius.affected.length}), by area: what uses the changed code (up to two steps away), and what it uses.`, '');
-    for (const [area, list] of areas) {
-        lines.push(`- **${area}**: ${list.map(n => `${def(n)} (${n.direction}${n.hops > 1 ? `, ${n.hops} steps` : ''})`).join(', ')}`);
+    lines.push('', `**What else it affects** (${radius.affected.length} definitions, up to two steps away), by area:`, '');
+    // The areas most affected first, each with a few of its definitions: the names say where to look, not everything.
+    // Past six areas, the rest is one line of names and counts.
+    const sorted = [...areas].sort(([, a], [, b]) => b.length - a.length);
+    for (const [area, list] of sorted.slice(0, 6)) {
+        const shown = [...list].sort((a, b) => a.hops - b.hops).slice(0, 3).map(def).join(', ');
+        lines.push(`- **${area}** (${list.length}): ${shown}${list.length > 3 ? `, and ${list.length - 3} more` : ''}`);
     }
-    const shown = [...radius.changed, ...radius.affected].slice(0, 30);
+    if (sorted.length > 6) {
+        lines.push(`- ${sorted.length - 6} more areas: ${sorted.slice(6).map(([area, list]) => `${area} (${list.length})`).join(', ')}`);
+    }
+    // A chart only while it can be read: past about a dozen nodes the lists above say it better.
+    const shown = [...radius.changed, ...radius.affected];
     const ids = new Map(shown.map((n, i) => [n.id, `n${i}`]));
     const edges = radius.edges.filter(e => ids.has(e.from) && ids.has(e.to)).slice(0, 40);
-    if (edges.length) {
+    if (edges.length && shown.length <= 12) {
         lines.push('', '```mermaid', '%% id: blast-radius', 'flowchart LR');
         for (const node of shown) {
             const changed = radius.changed.includes(node);
@@ -132,15 +170,13 @@ export function overviewPage(review: Review, root: string, parts: OverviewParts)
     for (const thread of [...threads].sort((a, b) => a.number - b.number)) {
         areas.set(areaOf(thread), [...areas.get(areaOf(thread)) ?? [], thread]);
     }
-    const count = (status: string) => threads.filter(t => t.status === status).length;
     const agent = review.agent?.name;
-    const lines = [`# ${review.title}`, ''];
-    const verdict = review.verdict ? ` Round ${review.verdict.count} submitted: ${review.verdict.decision}.` : '';
-    lines.push(threads.length
-        ? `${threads.length} thread${threads.length === 1 ? '' : 's'}${agent ? `, first pass by ${agent}` : ''}: `
-        + `${count('proposed')} proposed, ${count('open')} open, ${count('resolved')} resolved.${verdict} `
-        + 'Accept or dismiss findings in the Review panel, open one with its link, or comment on this page.'
-        : `No findings yet.${verdict}`);
+    // The counts, the agent and what to do first are drawn above the page by the app (the briefing); the page says
+    // only what that can't: a submitted round.
+    const lines = [`# ${review.title}`];
+    if (review.verdict) {
+        lines.push('', `Round ${review.verdict.count} submitted: ${review.verdict.decision}.`);
+    }
 
     if (parts.pr) {
         const pr = parts.pr;
@@ -164,10 +200,7 @@ export function overviewPage(review: Review, root: string, parts: OverviewParts)
         const added = patch.files.reduce((n, f) => n + f.added, 0);
         const removed = patch.files.reduce((n, f) => n + f.removed, 0);
         lines.push('', parts.patches.length > 1 ? `## The change: ${patch.name}` : '## The change', '',
-            `${patch.files.length} file${patch.files.length === 1 ? '' : 's'}, +${added} −${removed}.`, '');
-        for (const file of patch.files) {
-            lines.push(`- \`${file.path}\` +${file.added} −${file.removed}`);
-        }
+            `${patch.files.length} file${patch.files.length === 1 ? '' : 's'}, +${added} −${removed}.`, ...changedFiles(patch.files));
     }
 
     if (parts.radius) {
