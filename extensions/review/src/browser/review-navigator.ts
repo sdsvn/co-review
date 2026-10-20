@@ -50,6 +50,11 @@ export class ReviewNavigator {
         if (!review) {
             return;
         }
+        // No code folder (a review directory of patches only): the file on its patch page.
+        if (!this.code.has(review)) {
+            await this.openOnPatchPage(path, line, side);
+            return;
+        }
         const tag = this.change.file(path)?.tag;
         if (tag === 'deleted') {
             await this.code.openBase(review, path, line ?? 1);
@@ -58,6 +63,23 @@ export class ReviewNavigator {
         } else {
             await this.code.compare(review, path, line, side);
         }
+    }
+
+    /** A file of the change on the patch page that shows it, at a line; false when no patch has it. */
+    async openOnPatchPage(path: string, line?: number, side: 'new' | 'old' = 'new'): Promise<boolean> {
+        const patch = this.change.patchOf(path);
+        const opener = patch && (await this.openers.getOpeners()).find(o => o.id === PATCH_OPENER_ID);
+        if (!patch || !opener) {
+            return false;
+        }
+        const widget = await opener.open(new URI(patch), { mode: 'activate' }) as { revealAt?(path: string, line?: number, side?: 'new' | 'old'): void };
+        widget?.revealAt?.(path, line, side);
+        return true;
+    }
+
+    /** A review directory's files, as its patches list them, with or without a code folder. */
+    changeFilesAll(): readonly PatchFile[] {
+        return this.change.files;
     }
 
     /** The change review's files, as its patches list them (none for other reviews). */

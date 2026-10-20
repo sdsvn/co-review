@@ -80,6 +80,8 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
     protected filterInput: HTMLInputElement | null = null;
     /** A pending scroll (see revealWhenRendered), replaced by the next one. */
     protected revealTimer: number | undefined;
+    /** A scroll asked for before the patch was read: done once it is (see load). */
+    protected revealAfterLoad: (() => void) | undefined;
     protected rangeStart: { path: string; row: PatchRow } | undefined;
     /** The language server's hover for the name under the pointer (new-side lines of a review with code). */
     protected hover: (CodeHover & { x: number; y: number }) | undefined;
@@ -170,6 +172,9 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
         }
         this.reviews.syncFindings();
         this.update();
+        const reveal = this.revealAfterLoad;
+        this.revealAfterLoad = undefined;
+        reveal?.();
     }
 
     protected items(): Item[] {
@@ -544,10 +549,14 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
     /** Scrolls to what `find` returns once the page has rendered it (the patch may still be loading). */
     protected revealWhenRendered(find: () => Element | null, top = false, tries = 40): void {
         window.clearTimeout(this.revealTimer);
+        if (!this.files.length && !this.error) {
+            this.revealAfterLoad = () => this.revealWhenRendered(find, top, tries);
+            return;
+        }
         this.revealTimer = window.setTimeout(() => {
             const target = this.files.length ? find() : null;
             if (target) {
-                target.scrollIntoView({ block: top ? 'start' : 'center', behavior: 'smooth' });
+                target.scrollIntoView({ block: top ? 'start' : 'center' });
             } else if (tries > 0) {
                 this.revealWhenRendered(find, top, tries - 1);
             }

@@ -6,6 +6,7 @@ import URI from '@theia/core/lib/common/uri';
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { OpenerService, open } from '@theia/core/lib/browser/opener-service';
+import { MessageService } from '@theia/core/lib/common/message-service';
 import { DocAnchor, isOutOfScope, isOverviewPage, ReviewThread, ThreadIntent } from '../../common/review-model';
 import { DraftEditor, ThreadView } from '../review-components';
 import { ReviewDraft, ReviewManager } from '../review-manager';
@@ -68,6 +69,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
     @inject(FileService) protected readonly fileService: FileService;
     @inject(ReviewManager) protected readonly reviews: ReviewManager;
     @inject(ReviewNavigator) protected readonly navigator: ReviewNavigator;
+    @inject(MessageService) protected readonly messages: MessageService;
     @inject(OpenerService) protected readonly openers: OpenerService;
 
     protected readonly header = document.createElement('div');
@@ -546,7 +548,15 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             }
         }
         if (!uri) {
-            open(this.openers, this.uri.parent.resolve(rel));
+            // Not on disk (a review of patches without its code): a file or folder of the change opens on its patch page.
+            const folder = rel.replace(/\/+$/, '');
+            const changed = this.reviews.activeReview?.bundle && this.navigator.changeFilesAll()
+                .find(f => f.path === folder || f.path.startsWith(`${folder}/`));
+            if (changed) {
+                await this.navigator.openChangedFile(changed.path, line);
+            } else {
+                this.messages.warn(`${rel || target} is not in this review's folder${this.reviews.activeReview?.bundle?.code ? ' or its code' : ''}.`);
+            }
             return;
         }
         const stat = await this.fileService.resolve(uri);

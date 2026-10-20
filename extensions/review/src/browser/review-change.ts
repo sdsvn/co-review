@@ -33,6 +33,7 @@ export class ReviewChange {
 
     protected loadedFor: string | undefined;
     protected _files: PatchFile[] = [];
+    protected patches = new Map<string, string>();
 
     get files(): readonly PatchFile[] {
         return this._files;
@@ -41,6 +42,11 @@ export class ReviewChange {
     /** Whether the active review is a change with its code folder, so its files are in the explorer. */
     get hasCode(): boolean {
         return this._files.length > 0 && !!this.reviews.activeReview?.bundle?.code;
+    }
+
+    /** The patch page (its URI) that shows a file of the change. */
+    patchOf(path: string): string | undefined {
+        return this.patches.get(path);
     }
 
     file(path: string): PatchFile | undefined {
@@ -80,16 +86,21 @@ export class ReviewChange {
         }
         this.loadedFor = key;
         const files: PatchFile[] = [];
+        const patches = new Map<string, string>();
         if (review?.bundle) {
             const dir = URI.fromFilePath(review.bundle.dir);
             const children = (await this.fileService.resolve(dir).catch(() => undefined))?.children ?? [];
             for (const child of children.filter(c => /\.(patch|diff)$/.test(c.name))) {
                 const text = (await this.fileService.read(child.resource).catch(() => undefined))?.value ?? '';
-                files.push(...parsePatch(text));
+                for (const file of parsePatch(text)) {
+                    files.push(file);
+                    patches.set(file.path, child.resource.toString());
+                }
             }
         }
         if (key === this.loadedFor) {
             this._files = files;
+            this.patches = patches;
             this.onDidChangeEmitter.fire();
         }
     }
