@@ -403,15 +403,18 @@ export class ReviewStore {
         });
     }
 
-    /** Marks repository-relative files as viewed (or not). */
-    setViewed(reviewId: string, paths: string[], viewed: boolean): Promise<Review> {
+    /** Marks repository-relative files as viewed, "don't care" (`'skipped'`), or neither (`false`). */
+    setViewed(reviewId: string, paths: string[], viewed: boolean | 'skipped'): Promise<Review> {
         return this.mutate(reviewId, (review, now) => {
-            const map = review.viewed ??= {};
+            const seen = review.viewed ??= {};
+            const skipped = review.skipped ??= {};
             for (const p of paths) {
-                if (viewed) {
-                    map[p] = now;
-                } else {
-                    delete map[p];
+                delete seen[p];
+                delete skipped[p];
+                if (viewed === 'skipped') {
+                    skipped[p] = now;
+                } else if (viewed) {
+                    seen[p] = now;
                 }
             }
             return review;

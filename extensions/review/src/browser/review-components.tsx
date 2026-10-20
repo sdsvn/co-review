@@ -207,6 +207,24 @@ function IconAction(props: { icon: string; title: string; onClick(): void; class
         onClick={e => { e.stopPropagation(); props.onClick(); }} />;
 }
 
+/** What a set of files is marked: all viewed, all "don't care", or neither (none or a mix). */
+export function marksOf(states: ('viewed' | 'skipped' | undefined)[]): 'viewed' | 'skipped' | undefined {
+    return states.length && states.every(s => s === states[0]) ? states[0] : undefined;
+}
+
+/** A folder's marks: every file viewed, or "don't care" (done without reading); clicking the one it has clears it. */
+export function FolderMarks(props: { state: 'viewed' | 'skipped' | undefined; onMark(state: boolean | 'skipped'): void }): React.ReactElement {
+    const { state } = props;
+    return <span className={`co-review-folder-marks ${state ? 'marked' : ''}`}>
+        <IconAction icon={state === 'viewed' ? 'pass-filled' : 'pass'} className={state === 'viewed' ? 'on' : ''}
+            title={state === 'viewed' ? 'All viewed: click to unmark' : 'Mark every file in this folder viewed'}
+            onClick={() => props.onMark(state !== 'viewed')} />
+        <IconAction icon='circle-slash' className={state === 'skipped' ? 'on' : ''}
+            title={state === 'skipped' ? "Don't care: click to unmark" : "Don't care: mark every file in this folder done without reading it"}
+            onClick={() => props.onMark(state === 'skipped' ? false : 'skipped')} />
+    </span>;
+}
+
 const SEVERITIES: (Severity | undefined)[] = [undefined, 'low', 'medium', 'high'];
 
 function useDraft(manager: ReviewManager, draft: ReviewDraft): void {

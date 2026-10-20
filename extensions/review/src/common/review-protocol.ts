@@ -134,8 +134,8 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     setAgent(reviewId: string, agent: AgentConfig | undefined): Promise<Review>;
     /** What the review's ACP agent lets you choose for its sessions (models, reasoning effort, modes); starts it if needed. */
     getAgentSettings(reviewId: string): Promise<AgentSetting[]>;
-    /** Marks repository-relative files as viewed (or not). */
-    setViewed(reviewId: string, paths: string[], viewed: boolean): Promise<Review>;
+    /** Marks repository-relative files as viewed, "don't care" (`'skipped'`), or neither (`false`). */
+    setViewed(reviewId: string, paths: string[], viewed: boolean | 'skipped'): Promise<Review>;
     /** How much of the repository's source the reviewer has viewed, overall and per area. */
     getCoverage(reviewId: string): Promise<ReviewCoverage | undefined>;
     /** The GitHub pull request the review belongs to, if any. */

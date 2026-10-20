@@ -92,11 +92,11 @@ export class RepoIndex {
      * How much of the repository the reviewer has viewed, over its source files: overall and per area (folders;
      * a folder holding most of the repository is split into its subfolders, so `src/…` gives `src/api`, `src/db`, …).
      */
-    async coverage(root: string, viewed: Record<string, number> = {}): Promise<ReviewCoverage> {
+    async coverage(root: string, viewed: Record<string, number> = {}, skipped: Record<string, number> = {}): Promise<ReviewCoverage> {
         const map = await this.get(root);
         const files = Object.entries(map.files);
-        // A file changed since it was marked counts as not viewed.
-        const seen = (file: string, entry: FileEntry) => (viewed[file] ?? 0) >= entry.mtimeMs;
+        // A file changed since it was marked counts as not viewed; one marked "don't care" stays done.
+        const seen = (file: string, entry: FileEntry) => (viewed[file] ?? 0) >= entry.mtimeMs || file in skipped;
         // Folders as areas: top-level ones, and any holding over 40% of the files split into their subfolders,
         // so a repository that is mostly `src/` or `extensions/` still gets areas of a useful size.
         const folders = (file: string) => file.split('/').slice(0, -1);
@@ -124,25 +124,26 @@ export class RepoIndex {
         const areas = new Map<string, ReviewCoverage['areas'][number]>();
         for (const [file, entry] of files) {
             const key = areaOf(file, split);
-            const area = areas.get(key) ?? { path: key, total: 0, viewed: 0 };
+            const area = areas.get(key) ?? { path: key, total: 0, viewed: 0, skipped: 0 };
             area.total++;
             if (seen(file, entry)) {
                 area.viewed++;
+                area.skipped += file in skipped ? 1 : 0;
             } else {
                 area.next ??= file;
             }
             areas.set(key, area);
         }
         const list = [...areas.values()].sort((a, b) => a.path.localeCompare(b.path));
-        return { total: files.length, viewed: list.reduce((n, a) => n + a.viewed, 0), areas: list };
+        return { total: files.length, viewed: list.reduce((n, a) => n + a.viewed, 0), skipped: list.reduce((n, a) => n + a.skipped, 0), areas: list };
     }
 
     /** The repository overview page (Markdown): where to start, the areas and how they connect. See repo-overview.ts. */
-    async overview(root: string, viewed: Record<string, number> = {}): Promise<string> {
+    async overview(root: string, viewed: Record<string, number> = {}, skipped: Record<string, number> = {}): Promise<string> {
         // The Graphify graph (calls, imports, clusters) is built or refreshed first when the command is installed.
         const [map, graph] = await Promise.all([this.get(root), buildGraph(root).catch(() => 'failed' as const)]);
         const outlines = new Map(Object.entries(map.files).map(([file, entry]) => [file, outline(entry)]));
-        return repositoryOverview({ root, coverage: await this.coverage(root, viewed), outlines, graph });
+        return repositoryOverview({ root, coverage: await this.coverage(root, viewed, skipped), outlines, graph });
     }
 
     /** The map as text for an agent: one line per file, `path: Symbol { member, … }, function, …`. */

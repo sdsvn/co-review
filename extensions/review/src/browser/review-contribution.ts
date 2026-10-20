@@ -90,10 +90,10 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
                 this.statusBar.removeElement('co-review-viewed');
                 return;
             }
-            const done = this.reviews.isViewed(uri);
+            const state = this.reviews.pathState(this.reviews.relativePath(uri));
             this.statusBar.setElement('co-review-viewed', {
-                text: done ? '$(pass-filled) Viewed' : '$(circle-large-outline) Not viewed',
-                tooltip: done ? 'You marked this file as viewed; click to unmark' : 'Mark this file as viewed (⌘⌥V)',
+                text: state === 'skipped' ? "$(circle-slash) Don't care" : state ? '$(pass-filled) Viewed' : '$(circle-large-outline) Not viewed',
+                tooltip: state === 'skipped' ? "You marked this file \"don't care\"; click to unmark" : state ? 'You marked this file as viewed; click to unmark' : 'Mark this file as viewed (⌘⌥V)',
                 alignment: StatusBarAlignment.LEFT,
                 priority: 99,
                 command: ReviewCommands.TOGGLE_VIEWED.id
@@ -190,13 +190,21 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         }
         const stat = await this.fileService.resolve(target).catch(() => undefined);
         if (stat?.isDirectory) {
-            const coverage = await this.reviews.getCoverage();
+            // A folder: all of its files (a change review's changed ones), or unmarked again when all are done.
             const folder = this.reviews.relativePath(target.toString());
-            const area = coverage?.areas.find(a => a.path === folder || folder.startsWith(`${a.path}/`) || a.path.startsWith(`${folder}/`));
-            this.messages.info(area ? `${area.viewed} of ${area.total} files viewed in ${area.path}.` : 'Mark files one by one: open each and press ⌘⌥V.');
+            const prefix = folder === '.' ? '' : `${folder}/`;
+            const change = this.navigator.changeProgress()?.files.filter(f => f.startsWith(prefix));
+            if (change) {
+                await this.reviews.setPathState(change, !change.every(f => this.reviews.pathState(f)));
+                return;
+            }
+            const coverage = await this.reviews.getCoverage();
+            const areas = coverage?.areas.filter(a => (a.path === '.' ? '' : `${a.path}/`).startsWith(prefix) || prefix.startsWith(`${a.path}/`)) ?? [];
+            const done = areas.length > 0 && areas.every(a => a.viewed === a.total);
+            await this.reviews.setPathState([prefix || './'], !done);
             return;
         }
-        await this.reviews.setViewed([target.toString()], !this.reviews.isViewed(target.toString()));
+        await this.reviews.setViewed([target.toString()], !this.reviews.isDone(target.toString()));
     }
 
     /** Whether a file is left to view (a change review's files; a repository review's are checked when opened). */
@@ -223,8 +231,9 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         await this.openStart();
         await this.welcome();
         // A review opened or switched to later (an agent's open_review, the switcher) starts the same way.
-        // So does a review whose first findings just arrived (an agent's first pass, with the window already open).
-        const unresolved = () => this.reviews.activeReview?.threads.filter(t => t.status !== 'resolved').length ?? 0;
+        // So does a review whose first findings just arrived (an agent's first pass, with the window already open); the
+        // reviewer's own comments don't count, or their first one would take them away from the page they comment on.
+        const unresolved = () => this.reviews.activeReview?.threads.filter(t => t.status !== 'resolved' && t.messages[0]?.author.kind !== 'human').length ?? 0;
         let active = this.reviews.activeReview?.id;
         let count = unresolved();
         this.reviews.onDidChange(() => {
@@ -406,7 +415,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         });
         const editorOf = (widget?: Widget) => widget instanceof EditorWidget ? widget : undefined;
         registry.registerCommand(ReviewCommands.NOT_VIEWED, {
-            isVisible: (widget?: Widget) => { const uri = this.reviewableUri(editorOf(widget)); return !!uri && !this.reviews.isViewed(uri); },
+            isVisible: (widget?: Widget) => { const uri = this.reviewableUri(editorOf(widget)); return !!uri && !this.reviews.isDone(uri); },
             isEnabled: (widget?: Widget) => !!this.reviewableUri(editorOf(widget)),
             execute: async (widget?: Widget) => {
                 const uri = this.reviewableUri(editorOf(widget) ?? this.editorManager.currentEditor);
@@ -416,7 +425,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             }
         });
         registry.registerCommand(ReviewCommands.VIEWED, {
-            isVisible: (widget?: Widget) => { const uri = this.reviewableUri(editorOf(widget)); return !!uri && this.reviews.isViewed(uri); },
+            isVisible: (widget?: Widget) => { const uri = this.reviewableUri(editorOf(widget)); return !!uri && this.reviews.isDone(uri); },
             isEnabled: (widget?: Widget) => !!this.reviewableUri(editorOf(widget)),
             execute: async (widget?: Widget) => {
                 const uri = this.reviewableUri(editorOf(widget) ?? this.editorManager.currentEditor);

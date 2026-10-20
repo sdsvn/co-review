@@ -23,7 +23,7 @@ import { ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT } from './prompts.gen';
 import { LANGUAGE_BY_EXTENSION, RepoIndex } from './repo-index';
 import { CodeFolders } from './code-folders';
 import { AnchorTracker } from './anchor-tracker';
-import { changedLines, parsePatch } from '../common/patch';
+import { changedLines, parsePatch, parsePatchMeta } from '../common/patch';
 import { blastRadius } from './graphify';
 import { currentUser } from './participants';
 
@@ -266,7 +266,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 reviewId: z.string().optional().describe('An existing review to join and show (e.g. the one you prepared with open: false); '
                     + 'the other arguments except open and overview are then ignored'),
                 root: rootArg,
-                dir: z.string().optional().describe('Review directory (index.markdown or *.pseudocode.md, *.patch, PR.md, <patch>.comments.json)'),
+                dir: z.string().optional().describe('Review directory (index.markdown or *.pseudocode.md, *.patch, PR.md, <patch>.comments.json). '
+                    + 'With patches, the window opens on the repository they change (`root`), so the reviewer has its code too'),
                 markdown: z.string().optional().describe('Inline Markdown document (```mermaid fences render as diagrams)'),
                 patch: z.string().optional().describe('Inline unified diff / git patch'),
                 diff: z.string().optional().describe('Review a git diff of the repository (`root`), run by Co-Review: "HEAD" for uncommitted changes, '
@@ -334,6 +335,17 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                         const radius = await blastRadius(change.repo, changedLines(files)).catch(() => undefined);
                         workspace = await this.codes.prepare(review, change.repo, diff!, files.map(f => f.path), radius?.files ?? []);
                         review = (await this.store.get(review.id)) ?? review;
+                    } catch (e) {
+                        console.error('[co-review] preparing the code of the review failed', e);
+                    }
+                } else if (opened.patches.length) {
+                    // A patch the agent wrote: the window opens on the repository it is about, so the reviewer has the code too.
+                    try {
+                        const code = await this.codeOfPatches(review, root ? realPath(root) : defaultRoot, opened.dir, opened.patches);
+                        if (code) {
+                            workspace = code;
+                            review = (await this.store.get(review.id)) ?? review;
+                        }
                     } catch (e) {
                         console.error('[co-review] preparing the code of the review failed', e);
                     }
@@ -624,14 +636,15 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 await this.index.get(workspace, true);
             }
             if (overview) {
-                return { content: [{ type: 'text', text: await this.index.overview(workspace, review && !review.bundle ? review.viewed : undefined) }] };
+                return { content: [{ type: 'text', text: await this.index.overview(workspace, review && !review.bundle ? review.viewed : undefined, review && !review.bundle ? review.skipped : undefined) }] };
             }
             return { content: [{ type: 'text', text: await this.index.render(workspace, { path: under, query }) }] };
         });
 
         server.registerTool('get_review', {
             description: 'Non-blocking snapshot: the latest verdict, open comments (the submitted batch), all threads with location and messages, '
-                + 'and `coverage` (repository reviews): source files the reviewer marked as viewed, overall and per area.',
+                + 'and `coverage` (repository reviews): source files the reviewer is done with, overall and per area (`viewed` counts those viewed '
+                + 'or marked "don\'t care"; `skipped` the "don\'t care" ones, not read), or `files` (change reviews): the paths viewed and skipped.',
             inputSchema: { reviewId: reviewArg, root: rootArg }
         }, async ({ reviewId, root }) => {
             const found = await resolveReview(reviewId, root ? realPath(root) : undefined);
@@ -641,8 +654,10 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             await this.tracker.resolve(found.id);
             const review = (await this.store.get(found.id)) ?? found;
             // Which parts of the repository the reviewer has looked at, so the agent can point at what's left.
-            const coverage = review.bundle ? undefined : await this.index.coverage(FileUri.fsPath(review.workspaceRoot), review.viewed).catch(() => undefined);
-            return json({ ...this.batch(review), coverage, threads: review.threads.map(t => this.describe(review, t)) });
+            const coverage = review.bundle ? undefined : await this.index.coverage(FileUri.fsPath(review.workspaceRoot), review.viewed, review.skipped).catch(() => undefined);
+            // A change review's files the reviewer read, and those they marked "don't care" (not read).
+            const files = review.bundle ? { viewed: Object.keys(review.viewed ?? {}), skipped: Object.keys(review.skipped ?? {}) } : undefined;
+            return json({ ...this.batch(review), coverage, files, threads: review.threads.map(t => this.describe(review, t)) });
         });
 
         return server;
@@ -801,6 +816,32 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         // `diff --no-index` exits 1 when the files differ, which they always do here.
         const added = await Promise.all(untracked.map(file => git(['diff', '--no-color', '--no-ext-diff', '--no-index', '--', '/dev/null', file], [0, 1])));
         return tracked + added.filter(Boolean).join('');
+    }
+
+    /**
+     * The code folder of a review of patches an agent wrote (see CodeFolders), when `repo` is the git repository they
+     * are about (a file they change is there): a PR.md's `base...branch` when both are known to git, else what the
+     * repository has checked out. Undefined when there is no such repository.
+     */
+    protected async codeOfPatches(review: Review, repo: string | undefined, dir: string, patches: string[]): Promise<string | undefined> {
+        if (!repo) {
+            return undefined;
+        }
+        const git = (args: string[]) => new Promise<string | undefined>(resolve =>
+            execFile('git', ['-C', repo, ...args], (error, stdout) => resolve(error ? undefined : String(stdout).trim())));
+        const top = await git(['rev-parse', '--show-toplevel']);
+        if (!top) {
+            return undefined;
+        }
+        const files = (await Promise.all(patches.map(async p => parsePatch(await fs.readFile(p, 'utf8'))))).flat();
+        const about = await Promise.all(files.map(f => fs.stat(path.join(top, f.tag === 'new file' ? path.dirname(f.path) : f.path)).then(() => f.tag !== 'new file' || path.dirname(f.path) !== '.', () => false)));
+        if (!about.some(Boolean)) {
+            return undefined;
+        }
+        const meta = await fs.readFile(path.join(dir, 'PR.md'), 'utf8').then(parsePatchMeta, () => undefined);
+        const known = async (ref: string | undefined) => !!ref && /^[\w./-]+$/.test(ref) && !ref.startsWith('-') && !!await git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+        const range = meta?.branch && await known(meta.branch) ? `${await known(meta.base) ? meta.base : 'HEAD'}...${meta.branch}` : 'HEAD';
+        return this.codes.prepare(review, top, range, files.map(f => f.path));
     }
 
     protected root(review: Review): string {

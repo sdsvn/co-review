@@ -69,7 +69,7 @@ export async function repositoryOverview(input: OverviewInput): Promise<string> 
             .sort(([, a], [, b]) => b.nodes.length - a.nodes.length).slice(0, 12);
         const lines = [title, '',
             `Built from the Graphify graph of this repository (\`graphify-out/graph.json\`: ${g.nodes.length} definitions, `
-            + `${communities.size} areas). ${inputs.coverage.viewed} of ${inputs.coverage.total} source files viewed so far. `
+            + `${communities.size} areas). ${inputs.coverage.viewed} of ${inputs.coverage.total} source files viewed so far${inputs.coverage.skipped ? ` (${inputs.coverage.skipped} of them marked "don't care")` : ''}. `
             + 'Graphify\'s own report, [GRAPH_REPORT.md](graphify-out/GRAPH_REPORT.md), adds the import cycles and the surprising '
             + 'connections between distant parts of the code.', '',
             '## Start here', '',
@@ -135,7 +135,7 @@ export async function repositoryOverview(input: OverviewInput): Promise<string> 
             const names = inArea.flatMap(f => (inputs.outlines.get(f) ?? '').split(/,\s*(?![^{]*\})/).map(s => s.split(' {')[0]))
                 .filter(Boolean).slice(0, 6);
             lines.push(`- **${area.path === '.' ? '(root)' : area.path}**: ${area.total} file${area.total === 1 ? '' : 's'}, `
-                + `${area.viewed} viewed${names.length ? `. Defines ${names.join(', ')}` : ''}${area.next ? `. Next: ${link(path.basename(area.next), area.next)}` : ''}.`);
+                + `${area.viewed} viewed${area.skipped ? ` (${area.skipped} "don't care")` : ''}${names.length ? `. Defines ${names.join(', ')}` : ''}${area.next ? `. Next: ${link(path.basename(area.next), area.next)}` : ''}.`);
         }
         return lines;
     }

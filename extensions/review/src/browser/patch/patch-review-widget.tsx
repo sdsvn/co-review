@@ -7,8 +7,8 @@ import * as markdownit from '@theia/core/shared/markdown-it';
 import * as DOMPurify from '@theia/core/shared/dompurify';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { PatchAnchor, ReviewThread } from '../../common/review-model';
-import { parsePatch, parsePatchMeta, PatchFile, PatchMeta, PatchRow } from '../../common/patch';
-import { DraftEditor, ThreadView } from '../review-components';
+import { matchesPath, parsePatch, parsePatchMeta, PatchFile, PatchMeta, PatchRow } from '../../common/patch';
+import { DraftEditor, FolderMarks, marksOf, ThreadView } from '../review-components';
 import { ReviewDraft, ReviewManager } from '../review-manager';
 import { ReviewNavigator } from '../review-navigator';
 import { CodeHover, CodeNavigation } from '../review-code';
@@ -40,6 +40,11 @@ function endsAt(anchor: PatchAnchor, path: string, row: PatchRow): boolean {
     return anchor.type === 'code-line' ? anchor.line === line : anchor.type === 'code-range' && anchor.endLine === line;
 }
 
+/** The folder a file is in (`''` at the root). */
+function dirOf(path: string): string {
+    return path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+}
+
 function covers(anchor: PatchAnchor, path: string, row: PatchRow): boolean {
     if (anchor.path !== path || row.t === 'hunk' || (anchor.side ?? 'new') !== rowSide(row)) {
         return false;
@@ -68,6 +73,13 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
     protected meta: PatchMeta | undefined;
     protected error: string | undefined;
     protected collapsed = new Set<string>();
+    /** Folders of the page the reviewer folded. */
+    protected foldedDirs = new Set<string>();
+    /** The file filter: only the files whose path matches it are shown (see matchesPath). */
+    protected filter = '';
+    protected filterInput: HTMLInputElement | null = null;
+    /** A pending scroll (see revealWhenRendered), replaced by the next one. */
+    protected revealTimer: number | undefined;
     protected rangeStart: { path: string; row: PatchRow } | undefined;
     /** The language server's hover for the name under the pointer (new-side lines of a review with code). */
     protected hover: (CodeHover & { x: number; y: number }) | undefined;
@@ -97,6 +109,15 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
         this.title.closable = true;
         this.addClass('co-review-patch');
         this.node.tabIndex = 0;
+        // `/` finds a file, as on GitHub (not while typing a comment).
+        this.node.addEventListener('keydown', e => {
+            const typing = (e.target as HTMLElement).closest('input, textarea, [contenteditable="true"], .monaco-editor');
+            if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                e.preventDefault();
+                this.filterInput?.focus();
+                this.filterInput?.select();
+            }
+        });
         const dir = this.uri.parent;
         this.toDispose.push(this.fileService.onDidFilesChange(e => {
             if (e.contains(this.uri) || e.contains(dir.resolve('PR.md')) || e.contains(dir.resolve(`${this.slug}.md`))) {
@@ -141,7 +162,9 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
         }
         const items = this.items();
         for (const file of this.files) {
-            if (file.rows.length > LARGE_FILE_ROWS && !items.some(i => i.anchor.path === file.path)) {
+            // Large files, and those already viewed or marked "don't care", start folded (unless they have comments).
+            const done = !!this.reviews.pathState(file.path);
+            if ((file.rows.length > LARGE_FILE_ROWS || done) && !items.some(i => i.anchor.path === file.path)) {
                 this.collapsed.add(file.path);
             }
         }
@@ -270,8 +293,35 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
         return <div key={item.key} className='co-review-inline-content co-review-patch-slot' data-thread-id={thread.id}>
             <ThreadView manager={this.reviews} thread={thread} inline label={PatchAnchor.describe(item.anchor)}
                 onHide={() => this.reviews.setCollapsed(thread.id, true)}
-                onOpenReference={(path, line, end) => this.navigator.openReference(path, line, end)} />
+                onOpenReference={(path, line, end) => this.openReference(path, line, end)} />
         </div>;
+    }
+
+    /**
+     * A `path:line` link in a comment: the line on this page when the patch has that file (and, with code to open, that
+     * line), else the file in the editor.
+     */
+    protected openReference(path: string, line?: number, end?: number): void {
+        const clean = path.replace(/^\.\//, '');
+        const file = this.files.find(f => f.path === clean) ?? this.files.find(f => clean.endsWith(`/${f.path}`) || f.path.endsWith(`/${clean}`));
+        if (file && (!line || !this.withCode || file.rows.some(r => r.t !== 'del' && r.n === line))) {
+            this.revealAt(file.path, line, 'new');
+        } else {
+            this.navigator.openReference(path, line, end);
+        }
+    }
+
+    /** Marks files viewed, "don't care" or neither; marked files fold away, unmarked ones open again. */
+    protected mark(paths: string[], state: boolean | 'skipped'): void {
+        for (const path of paths) {
+            if (state) {
+                this.collapsed.add(path);
+            } else {
+                this.collapsed.delete(path);
+            }
+        }
+        this.update();
+        this.reviews.setPathState(paths, state);
     }
 
     protected render(): React.ReactNode {
@@ -302,11 +352,90 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
                 {meta?.body && <div className='co-review-patch-body' dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(md.render(meta.body)) }} />}
             </div>
             {items.filter(i => i.anchor.type === 'patch').map(i => this.renderItem(i))}
-            {this.files.map(file => this.renderFile(file, items))}
+            {this.renderFilter()}
+            {this.renderFolders(items)}
             {this.hover && <div className='co-review-code-hover' style={{ left: this.hover.x + 8, top: this.hover.y + 14 }}
                 onMouseLeave={() => this.hideHover()}
                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(md.render(this.hover.contents.join('\n\n---\n\n'))) }} />}
         </div>;
+    }
+
+    /** The files whose path matches the filter. */
+    protected shownFiles(): PatchFile[] {
+        return this.filter.trim() ? this.files.filter(f => matchesPath(this.filter, f.path)) : this.files;
+    }
+
+    /** Find a file (`/`): filters the page to the matching files; Enter goes to the first, Escape clears it. */
+    protected renderFilter(): React.ReactNode {
+        if (this.files.length < 2) {
+            return undefined;
+        }
+        const shown = this.shownFiles();
+        const done = this.files.filter(f => this.reviews.pathState(f.path)).length;
+        return <div className='co-review-patch-bar'>
+            <span className={codicon('search')} />
+            <input ref={el => { this.filterInput = el; }} className='theia-input co-review-patch-filter' type='text' value={this.filter}
+                placeholder='Find a file (/)' spellCheck={false} aria-label='Find a file'
+                onChange={e => { this.filter = e.target.value; this.update(); }}
+                onKeyDown={e => {
+                    if (e.key === 'Enter' && shown.length) {
+                        e.preventDefault();
+                        this.revealAt(shown[0].path);
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        this.filter = '';
+                        this.update();
+                        this.node.focus();
+                    }
+                }} />
+            <span className='co-review-muted'>{this.filter.trim() ? `${shown.length} of ${this.files.length} files` : `${done} of ${this.files.length} files done`}</span>
+        </div>;
+    }
+
+    /** The files by folder: each folder folds, and marks all of its files viewed or "don't care" at once. */
+    protected renderFolders(items: Item[]): React.ReactNode {
+        const folders = new Map<string, PatchFile[]>();
+        for (const file of this.shownFiles()) {
+            folders.set(dirOf(file.path), [...folders.get(dirOf(file.path)) ?? [], file]);
+        }
+        if (this.filter.trim() && !folders.size) {
+            return <div className='co-review-hint'>No file matches “{this.filter}”.</div>;
+        }
+        // A single folder needs no heading.
+        if (folders.size === 1 && !this.filter.trim()) {
+            return this.files.map(file => this.renderFile(file, items));
+        }
+        return [...folders].map(([dir, files]) => {
+            const folded = this.foldedDirs.has(dir) && !this.filter.trim();
+            const paths = files.map(f => f.path);
+            const toggle = () => {
+                if (folded) {
+                    this.foldedDirs.delete(dir);
+                } else {
+                    this.foldedDirs.add(dir);
+                }
+                this.update();
+            };
+            const state = marksOf(paths.map(p => this.reviews.pathState(p)));
+            return <div key={`dir:${dir}`} className={`co-review-patch-folder ${state ?? ''}`} data-dir={dir}>
+                <div className='co-review-patch-folder-head' onClick={toggle}>
+                    <span className={codicon(folded ? 'chevron-right' : 'chevron-down')} />
+                    <span className={codicon('folder')} />
+                    <span className='co-review-patch-path'>{dir || '(root)'}</span>
+                    <span className='co-review-muted'>{files.length} file{files.length === 1 ? '' : 's'}</span>
+                    <span className='co-review-spacer' />
+                    <FolderMarks state={state} onMark={next => {
+                        if (next) {
+                            this.foldedDirs.add(dir);
+                        } else {
+                            this.foldedDirs.delete(dir);
+                        }
+                        this.mark(paths, next);
+                    }} />
+                </div>
+                {!folded && files.map(file => this.renderFile(file, items))}
+            </div>;
+        });
     }
 
     protected renderFile(file: PatchFile, items: Item[]): React.ReactNode {
@@ -321,7 +450,8 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
             this.update();
         };
         const withCode = this.withCode;
-        return <div key={file.path} className='co-review-patch-file'>
+        const state = this.reviews.pathState(file.path);
+        return <div key={file.path} className={`co-review-patch-file ${state ?? ''}`} data-path={file.path}>
             <div className='co-review-patch-file-head' onClick={toggle}>
                 <span className={codicon(collapsed ? 'chevron-right' : 'chevron-down')} />
                 <span className='co-review-patch-path'>{file.path}</span>
@@ -335,6 +465,13 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
                     onClick={e => { e.stopPropagation(); this.code.compare(this.reviews.activeReview!, file.path); }} />}
                 <span className={`${codicon('comment')} action-label`} title='Comment on this file'
                     onClick={e => { e.stopPropagation(); this.addDraft({ type: 'code-file', path: file.path }); }} />
+                <span className={`${codicon('circle-slash')} action-label ${state === 'skipped' ? 'on' : ''}`} role='button'
+                    title={state === 'skipped' ? "Don't care: click to unmark" : "Don't care: done without reading it"}
+                    onClick={e => { e.stopPropagation(); this.mark([file.path], state === 'skipped' ? false : 'skipped'); }} />
+                <label className={`co-review-patch-viewed ${state === 'viewed' ? 'on' : ''}`} title={state === 'viewed' ? 'Viewed: click to unmark' : 'Mark as viewed'}
+                    onClick={e => e.stopPropagation()}>
+                    <input type='checkbox' checked={state === 'viewed'} onChange={() => this.mark([file.path], state !== 'viewed')} />Viewed
+                </label>
             </div>
             {!collapsed && <>
                 {fileItems.filter(i => i.anchor.type === 'code-file').map(i => this.renderItem(i))}
@@ -342,7 +479,7 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
                     {file.rows.map((row, index) => {
                         const commented = fileItems.some(i => covers(i.anchor, file.path, row));
                         return <React.Fragment key={index}>
-                            <div className={`co-review-patch-row ${row.t} ${commented ? 'commented' : ''}`}>
+                            <div className={`co-review-patch-row ${row.t} ${commented ? 'commented' : ''}`} data-old={row.o} data-new={row.t === 'del' ? undefined : row.n}>
                                 <span className={`co-review-patch-no ${withCode && row.o ? 'link' : ''}`} title={withCode && row.o ? 'Open the base version here' : undefined}
                                     onClick={() => this.onLineNumber(file.path, row, 'old')}>{row.o ?? ''}</span>
                                 <span className={`co-review-patch-no ${withCode && row.n ? 'link' : ''}`} title={withCode && row.n ? 'Open the file here' : undefined}
@@ -365,19 +502,55 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
         </div>;
     }
 
-    /** Scrolls a thread of this patch into view (expanding its file and the thread itself). */
+    /** Scrolls a thread of this patch into view: the line it is on (expanding its file, folder and the thread itself). */
     reveal(threadId: string): void {
         const thread = this.reviews.activeReview?.threads.find(t => t.id === threadId);
-        const path = thread?.location.patchAnchor?.path;
-        if (path) {
-            this.collapsed.delete(path);
-        }
+        const anchor = thread?.location.patchAnchor;
         this.reviews.setCollapsed(threadId, false);
+        if (!anchor || anchor.type === 'patch' || !anchor.path) {
+            this.update();
+            this.revealWhenRendered(() => this.node.querySelector(`.co-review-patch-slot[data-thread-id="${CSS.escape(threadId)}"]`));
+            return;
+        }
+        const line = anchor.type === 'code-line' ? anchor.line : anchor.type === 'code-range' ? anchor.startLine : undefined;
+        this.revealAt(anchor.path, line, anchor.side ?? 'new', anchor.type === 'code-range' ? anchor.endLine : undefined);
+    }
+
+    /** Scrolls to a file of the patch, or a line of it (and highlights it), expanding what hides it. */
+    revealAt(path: string, line?: number, side: 'new' | 'old' = 'new', endLine?: number): void {
+        this.collapsed.delete(path);
+        this.foldedDirs.delete(dirOf(path));
+        if (this.filter.trim() && !matchesPath(this.filter, path)) {
+            this.filter = '';
+        }
         this.update();
-        setTimeout(() => {
-            const slot = this.node.querySelector(`.co-review-patch-slot[data-thread-id="${CSS.escape(threadId)}"]`)
-                ?? this.node.querySelector('.co-review-patch-row.commented, .co-review-patch-slot');
-            slot?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        }, 100);
+        this.revealWhenRendered(() => {
+            const file = Array.from(this.node.querySelectorAll<HTMLElement>('.co-review-patch-file')).find(f => f.dataset.path === path);
+            if (!file) {
+                return null;
+            }
+            const attr = side === 'old' ? 'data-old' : 'data-new';
+            const rows = line ? Array.from(file.querySelectorAll<HTMLElement>(`.co-review-patch-row[${attr}]`))
+                .filter(r => { const n = Number(r.getAttribute(attr)); return n >= line && n <= (endLine ?? line); }) : [];
+            for (const row of rows) {
+                row.classList.remove('flash');
+                void row.offsetWidth;
+                row.classList.add('flash');
+            }
+            return rows[0] ?? file;
+        }, !line);
+    }
+
+    /** Scrolls to what `find` returns once the page has rendered it (the patch may still be loading). */
+    protected revealWhenRendered(find: () => Element | null, top = false, tries = 40): void {
+        window.clearTimeout(this.revealTimer);
+        this.revealTimer = window.setTimeout(() => {
+            const target = this.files.length ? find() : null;
+            if (target) {
+                target.scrollIntoView({ block: top ? 'start' : 'center', behavior: 'smooth' });
+            } else if (tries > 0) {
+                this.revealWhenRendered(find, top, tries - 1);
+            }
+        }, 50);
     }
 }

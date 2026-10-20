@@ -74,7 +74,7 @@ export class ReviewNavigator {
         // The files to read first, then generated, lock and version-only ones.
         const files = this.change.files.filter(f => f.tag !== 'deleted')
             .sort((a, b) => Number(isRoutineFile(a)) - Number(isRoutineFile(b))).map(f => f.path);
-        return { files, viewed: files.filter(f => this.reviews.isViewed(new URI(root).resolve(f).toString())).length };
+        return { files, viewed: files.filter(f => this.reviews.isDone(new URI(root).resolve(f).toString())).length };
     }
 
     /**
@@ -88,7 +88,7 @@ export class ReviewNavigator {
             const current = this.editorManager.currentEditor?.editor.uri;
             const at = current ? progress.files.indexOf(this.change.relativePath(current) ?? '') : -1;
             const order = [...progress.files.slice(at + 1), ...progress.files.slice(0, at + 1)];
-            const next = order.find(f => !this.reviews.isViewed(new URI(root).resolve(f).toString()));
+            const next = order.find(f => !this.reviews.isDone(new URI(root).resolve(f).toString()));
             if (next) {
                 await this.openChangedFile(next);
             }

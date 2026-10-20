@@ -343,13 +343,9 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
                 + `<span class="del" style="width:${Math.round(100 * item.removed / most)}%"></span></span>`;
             item.li.addEventListener('click', e => {
                 e.preventDefault();
-                // The check marks the file viewed (or not) right here; the rest of the line opens its diff.
+                // The check marks the file viewed (or unmarks it, viewed or "don't care") right here; the rest opens its diff.
                 if ((e.target as Element).closest('.co-review-changed-state')) {
-                    const root = this.reviews.root;
-                    if (root) {
-                        const uri = new URI(root).resolve(item.path).toString();
-                        this.reviews.setViewed([uri], !this.reviews.isViewed(uri));
-                    }
+                    this.reviews.setPathState([item.path], !this.reviews.pathState(item.path));
                     return;
                 }
                 this.navigator.openChangedFile(item.path);
@@ -393,15 +389,16 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         }
         for (const li of Array.from(this.content.querySelectorAll<HTMLLIElement>('li.co-review-changed-file'))) {
             const path = li.dataset.path!;
-            const viewed = this.reviews.isViewed(new URI(root).resolve(path).toString());
+            const state = this.reviews.pathState(path);
+            const viewed = !!state;
             // On the diff (a patch anchor) or on the code (a line of the file in the window's folder).
             const comments = review.threads.filter(t => t.status !== 'resolved' && (this.reviews.patchFile(t.location)?.path
                 ?? (t.location.uri?.startsWith('file:') ? this.reviews.relativePath(t.location.uri) : undefined)) === path).length;
             li.classList.toggle('viewed', viewed);
-            const state = li.querySelector('.co-review-changed-state');
-            if (state) {
-                state.className = `co-review-changed-state ${codicon(viewed ? 'pass-filled' : 'circle-large-outline')}`;
-                state.setAttribute('title', viewed ? 'Viewed. Click to unmark' : 'Click to mark as viewed');
+            const check = li.querySelector('.co-review-changed-state');
+            if (check) {
+                check.className = `co-review-changed-state ${codicon(state === 'skipped' ? 'circle-slash' : viewed ? 'pass-filled' : 'circle-large-outline')}`;
+                check.setAttribute('title', state === 'skipped' ? "Don't care. Click to unmark" : viewed ? 'Viewed. Click to unmark' : 'Click to mark as viewed');
             }
             const badge = li.querySelector('.co-review-changed-comments');
             if (badge) {

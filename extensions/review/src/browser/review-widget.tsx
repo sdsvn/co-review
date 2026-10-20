@@ -11,7 +11,7 @@ import { confirmGitHubPost } from './github-preview';
 import { ReviewManager } from './review-manager';
 import { ReviewCommands } from './review-commands';
 import { ReviewNavigator } from './review-navigator';
-import { DraftEditor, ThreadView } from './review-components';
+import { DraftEditor, FolderMarks, marksOf, ThreadView } from './review-components';
 import { agentActivity, agentStatus, ago, severityRank } from './review-insights';
 
 type Filter = 'open' | 'proposed' | 'resolved' | 'all' | 'out-of-scope' | 'files';
@@ -161,7 +161,7 @@ export class ReviewWidget extends ReactWidget {
                 const uri = this.fileOf(thread.location);
                 if (uri) {
                     handled();
-                    this.reviews.setViewed([uri], !this.reviews.isViewed(uri));
+                    this.reviews.setViewed([uri], !this.reviews.isDone(uri));
                 }
                 return;
             }
@@ -408,16 +408,20 @@ export class ReviewWidget extends ReactWidget {
                 {[...folders].sort(([a], [b]) => a.localeCompare(b)).map(([dir, paths]) => <div key={dir} className='co-review-files-folder'>
                     <div className='co-review-files-dir' onClick={() => { this.toggleFold(dir); }}>
                         <span className={codicon(this.folded.has(dir) ? 'chevron-right' : 'chevron-down')} />
-                        <span className={codicon('folder')} />{dir || '(root)'}
+                        <span className={codicon('folder')} /><span className='co-review-files-dir-name'>{dir || '(root)'}</span>
+                        <FolderMarks state={marksOf(paths.map(p => this.reviews.pathState(p)))} onMark={state => this.reviews.setPathState(paths, state)} />
                     </div>
                     {!this.folded.has(dir) && paths.map(path => {
-                        const uri = new URI(root).resolve(path).toString();
-                        const viewed = this.reviews.isViewed(uri);
+                        const state = this.reviews.pathState(path);
+                        const viewed = !!state;
                         const f = stats.get(path);
-                        return <div key={path} className={`co-review-files-file ${viewed ? 'viewed' : ''}`} title={`Open the diff of ${path}`}
+                        return <div key={path} className={`co-review-files-file ${viewed ? 'viewed' : ''} ${state === 'skipped' ? 'skipped' : ''}`} title={`Open the diff of ${path}`}
                             onClick={() => this.navigator.openChangedFile(path)}>
-                            <input type='checkbox' checked={viewed} title={viewed ? 'Viewed: click to unmark' : 'Mark as viewed'}
-                                onClick={e => e.stopPropagation()} onChange={() => this.reviews.setViewed([uri], !viewed)} />
+                            {state === 'skipped'
+                                ? <span className={`${codicon('circle-slash')} co-review-files-skipped`} title="Don't care: click to unmark" role='button'
+                                    onClick={e => { e.stopPropagation(); this.reviews.setPathState([path], false); }} />
+                                : <input type='checkbox' checked={viewed} title={viewed ? 'Viewed: click to unmark' : 'Mark as viewed'}
+                                    onClick={e => e.stopPropagation()} onChange={() => this.reviews.setPathState([path], !viewed)} />}
                             <span className='name'>{path.slice(path.lastIndexOf('/') + 1)}</span>
                             {comments.get(path) && <span className='co-review-changed-comments' title={`${comments.get(path)} open comment${comments.get(path) === 1 ? '' : 's'}`}>
                                 <span className={codicon('comment-discussion')} />{comments.get(path)}</span>}
@@ -432,18 +436,19 @@ export class ReviewWidget extends ReactWidget {
             return <div className='co-review-files'>{head}</div>;
         }
         // Areas are folders: drawn as a tree, each folder by its own name, with its viewed count and bar.
-        type Node = { name: string; path: string; viewed: number; total: number; next?: string; children: Map<string, Node> };
-        const tree: Node = { name: '', path: '', viewed: 0, total: 0, children: new Map() };
+        type Node = { name: string; path: string; viewed: number; skipped: number; total: number; next?: string; children: Map<string, Node> };
+        const tree: Node = { name: '', path: '', viewed: 0, skipped: 0, total: 0, children: new Map() };
         for (const area of coverage.areas) {
             let node = tree;
             const parts = area.path === '.' ? ['(root)'] : area.path.split('/');
             parts.forEach((part, i) => {
                 const path = parts.slice(0, i + 1).join('/');
                 if (!node.children.has(part)) {
-                    node.children.set(part, { name: part, path, viewed: 0, total: 0, children: new Map() });
+                    node.children.set(part, { name: part, path, viewed: 0, skipped: 0, total: 0, children: new Map() });
                 }
                 node = node.children.get(part)!;
                 node.viewed += area.viewed;
+                node.skipped += area.skipped;
                 node.total += area.total;
                 node.next = node.next ?? area.next;
             });
@@ -471,6 +476,8 @@ export class ReviewWidget extends ReactWidget {
                 <span className='co-review-coverage-path'>{node.name}</span>
                 <span className='co-review-coverage-count'>{node.viewed}/{node.total}</span>
                 {bar(node.viewed, node.total)}
+                <FolderMarks state={node.viewed < node.total ? undefined : node.skipped === node.total ? 'skipped' : node.skipped ? undefined : 'viewed'}
+                    onMark={state => this.reviews.setPathState([node.path === '(root)' ? './' : `${node.path}/`], state)} />
             </div>
             {!this.folded.has(node.path) && [...node.children.values()].map(child => draw(child, depth + 1))}
         </div>;

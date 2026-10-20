@@ -522,15 +522,26 @@ export class ReviewManager {
         return this.service.getAgentPresets();
     }
 
-    /** Whether the reviewer marked the file (a URI) as viewed in the active review. */
-    isViewed(uri: string): boolean {
-        return !!this.activeReview?.viewed?.[this.relativePath(uri)];
+    /** Whether the reviewer is done with the file (a URI): viewed it, or marked it "don't care". */
+    isDone(uri: string): boolean {
+        return this.pathState(this.relativePath(uri)) !== undefined;
     }
 
-    async setViewed(uris: string[], viewed: boolean): Promise<void> {
+    /** A repository-relative file's mark in the active review: viewed, "don't care" (`skipped`), or none. */
+    pathState(path: string): 'viewed' | 'skipped' | undefined {
         const review = this.activeReview;
-        if (review) {
-            await this.service.setViewed(review.id, uris.map(u => this.relativePath(u)), viewed);
+        return review?.viewed?.[path] ? 'viewed' : review?.skipped?.[path] ? 'skipped' : undefined;
+    }
+
+    async setViewed(uris: string[], viewed: boolean | 'skipped'): Promise<void> {
+        await this.setPathState(uris.map(u => this.relativePath(u)), viewed);
+    }
+
+    /** Marks repository-relative files viewed, "don't care" (`'skipped'`), or neither (`false`). */
+    async setPathState(paths: string[], state: boolean | 'skipped'): Promise<void> {
+        const review = this.activeReview;
+        if (review && paths.length) {
+            await this.service.setViewed(review.id, paths, state);
         }
     }
 

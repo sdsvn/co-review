@@ -206,3 +206,16 @@ function versionOnly(file: { rows?: PatchRow[] }): boolean {
 export function isRoutineFile(file: { path: string; rows?: PatchRow[] }): boolean {
     return GENERATED.test(file.path) || versionOnly(file);
 }
+
+/** Whether `query` matches a path: its characters in order (`prw` matches `patch-review-widget`), ignoring case. */
+export function matchesPath(query: string, path: string): boolean {
+    const q = query.toLowerCase().replace(/\s+/g, '');
+    const p = path.toLowerCase();
+    let i = 0;
+    for (const c of p) {
+        if (c === q[i]) {
+            i++;
+        }
+    }
+    return i === q.length;
+}

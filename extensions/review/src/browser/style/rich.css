@@ -222,3 +222,6 @@ body.theia-dark, body.theia-hc {
 
 /* ---- Focused review mode: an agent's review window keeps the room for the page and the panel ---- */
 body.co-review-focus #theia-left-content-panel.theia-mod-collapsed .theia-app-sidebar-container { display: none; }
+.co-review-files-dir-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-review-files-file.skipped .name { text-decoration: line-through; }
+.co-review-files-skipped { cursor: pointer; color: var(--theia-descriptionForeground); }

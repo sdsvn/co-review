@@ -316,6 +316,8 @@ export interface Review {
      * not viewed again (see ReviewCoverage).
      */
     viewed?: Record<string, number>;
+    /** Files the reviewer marked "don't care" (skipped without reading): path → when. A file is in one map at most. */
+    skipped?: Record<string, number>;
     /** Workspace root URI the review belongs to. */
     workspaceRoot: string;
     scope: ReviewScope;
@@ -409,15 +411,18 @@ export namespace ReviewScope {
 }
 
 /** How much of the repository the reviewer has looked at: its source files, overall and per area (folder). */
+/** `viewed` counts the files done: viewed, or marked "don't care" (`skipped` of them). */
 export interface ReviewCoverage {
     total: number;
     viewed: number;
+    skipped: number;
     areas: {
         /** Repository-relative folder, or `.` for files at the root. */
         path: string;
         total: number;
         viewed: number;
-        /** The first file of the area not viewed yet (or changed since). */
+        skipped: number;
+        /** The first file of the area not done yet (or changed since). */
         next?: string;
     }[];
 }

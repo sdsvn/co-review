@@ -338,7 +338,7 @@ export class OverviewPages {
             const root = FileUri.fsPath(review.workspaceRoot);
             if (fresh || !this.repositories.has(review.id)) {
                 this.build(review.id, () => this.repositories.set(review.id, ''), async () => {
-                    this.repositories.set(review.id, await this.index.overview(root, review.viewed));
+                    this.repositories.set(review.id, await this.index.overview(root, review.viewed, review.skipped));
                 });
             }
             parts.repository = this.repositories.get(review.id) || undefined;

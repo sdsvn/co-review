@@ -179,8 +179,16 @@ export class ReviewServiceImpl implements ReviewService {
         return this.agents.getSettings(reviewId);
     }
 
-    setViewed(reviewId: string, paths: string[], viewed: boolean): Promise<Review> {
-        return this.store.setViewed(reviewId, paths, viewed);
+    /** A path ending in `/` is a folder of a repository review: all of its source files (as the repo map lists them). */
+    async setViewed(reviewId: string, paths: string[], viewed: boolean | 'skipped'): Promise<Review> {
+        const folders = paths.filter(p => p.endsWith('/'));
+        const review = folders.length ? await this.store.get(reviewId) : undefined;
+        let files = paths.filter(p => !p.endsWith('/'));
+        if (review && !review.bundle) {
+            const all = Object.keys((await this.index.get(FileUri.fsPath(review.workspaceRoot))).files);
+            files = [...files, ...all.filter(f => folders.some(dir => dir === './' ? !f.includes('/') : f.startsWith(dir)))];
+        }
+        return this.store.setViewed(reviewId, files, viewed);
     }
 
     writeOverview(reviewId: string): Promise<string | undefined> {
@@ -212,7 +220,7 @@ export class ReviewServiceImpl implements ReviewService {
     async getCoverage(reviewId: string): Promise<ReviewCoverage | undefined> {
         const review = await this.store.get(reviewId);
         // Review directories (designs, patches) are not repository reviews.
-        return review && !review.bundle ? this.index.coverage(FileUri.fsPath(review.workspaceRoot), review.viewed) : undefined;
+        return review && !review.bundle ? this.index.coverage(FileUri.fsPath(review.workspaceRoot), review.viewed, review.skipped) : undefined;
     }
 
     async askAgent(reviewId: string, threadId: string): Promise<void> {
