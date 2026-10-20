@@ -245,7 +245,7 @@ export interface AgentPresence {
     lastSeen: number;
 }
 
-/** `proposed`: an automated finding the reviewer has not accepted yet (Accept → open, Dismiss → resolved). */
+/** `proposed`: an automated finding the reviewer has not accepted yet (Keep → open, Dismiss → resolved). */
 export type ThreadStatus = 'open' | 'resolved' | 'proposed';
 
 /** `comment`: feedback to address. `question`: a question for an agent to answer ("Ask Agent"). */

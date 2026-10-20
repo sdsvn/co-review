@@ -18,8 +18,8 @@ type Filter = 'open' | 'proposed' | 'resolved' | 'all' | 'out-of-scope' | 'files
 
 /** The panel's single-key shortcuts, for the sheet `?` shows. */
 const SHORTCUTS: [string, string][] = [
-    ['J / ↓', 'Next card'], ['K / ↑', 'Previous card'], ['Enter', 'Open its code'], ['A', 'Accept the finding'],
-    ['D', 'Dismiss the finding'], ['X', 'Resolve or reopen'], ['R', 'Reply'], ['V', 'Mark its file viewed'],
+    ['J / ↓', 'Next card'], ['K / ↑', 'Previous card'], ['Enter', 'Open its code'], ['A', 'Keep the finding (it becomes open)'],
+    ['D', 'Dismiss the finding'], ['X', 'Resolve or reopen the thread'], ['R', 'Reply'], ['V', 'Mark its file viewed'],
     ['N', 'Next unviewed file'], ['S', 'Submit review…'], ['?', 'This sheet']
 ];
 

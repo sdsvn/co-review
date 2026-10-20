@@ -114,7 +114,7 @@ function PermissionView({ request, onAnswer }: { request: PermissionRequest; onA
     </div>;
 }
 
-/** A suggested edit as before/after lines, with Accept / Reject while pending. */
+/** A suggested edit as before/after lines, with Apply edit / Discard while pending. */
 function ProposalView({ proposal, onDecide }: { proposal: Proposal; onDecide?(accept: boolean): void }): React.ReactElement {
     return <div className={`co-review-proposal ${proposal.status}`}>
         <div className='co-review-proposal-head'>
@@ -122,9 +122,9 @@ function ProposalView({ proposal, onDecide }: { proposal: Proposal; onDecide?(ac
             {proposal.path && <span className='co-review-muted'> · {proposal.path}{proposal.startLine ? `:${proposal.startLine}` : ''}</span>}
             <span className='co-review-spacer' />
             {proposal.status === 'pending' && onDecide ? <>
-                <span className='co-review-link' onClick={e => { e.stopPropagation(); onDecide(false); }}>Reject</span>
-                <button className='theia-button' onClick={e => { e.stopPropagation(); onDecide(true); }}>Accept edit</button>
-            </> : <span className={`co-review-badge ${proposal.status === 'accepted' ? 'resolved' : ''}`}>{proposal.status}</span>}
+                <span className='co-review-link' title='Discard the suggested edit; the file stays as it is' onClick={e => { e.stopPropagation(); onDecide(false); }}>Discard</span>
+                <button className='theia-button' title='Apply the suggested edit to the file' onClick={e => { e.stopPropagation(); onDecide(true); }}>Apply edit</button>
+            </> : <span className={`co-review-badge ${proposal.status === 'accepted' ? 'resolved' : ''}`}>{proposal.status === 'accepted' ? 'edit applied' : 'edit discarded'}</span>}
         </div>
         <pre className='co-review-proposal-before'>{proposal.before.split('\n').map(l => `− ${l}`).join('\n')}</pre>
         <pre className='co-review-proposal-after'>{proposal.after.split('\n').map(l => `+ ${l}`).join('\n')}</pre>
@@ -199,6 +199,22 @@ export function ReplyBox(props: { onSubmit(body: string): Promise<unknown>; focu
             <button className='theia-button' disabled={busy} onClick={submit}>Reply</button>
         </div>}
     </div>;
+}
+
+/** A thread's status change, as a labelled button: Keep / Dismiss a finding, Resolve / Reopen a thread. */
+function StatusActions({ manager, thread }: { manager: ReviewManager; thread: ReviewThread }): React.ReactElement {
+    const set = (status: ReviewThread['status']) => (e: React.MouseEvent) => { e.stopPropagation(); manager.setStatus(thread, status); };
+    if (thread.status === 'proposed') {
+        return <span className='co-review-triage'>
+            <button className='theia-button co-review-accept' title='Keep this finding: it becomes an open thread (A)' onClick={set('open')}>Keep</button>
+            <button className='theia-button secondary' title='Dismiss this finding: not an issue, it moves to Resolved (D)' onClick={set('resolved')}>Dismiss</button>
+        </span>;
+    }
+    return <span className='co-review-triage'>
+        {thread.status === 'resolved'
+            ? <button className='theia-button secondary' title='Reopen this thread: it moves back to Open (X)' onClick={set('open')}>Reopen</button>
+            : <button className='theia-button secondary' title='Resolve this thread: it is dealt with, it moves to Resolved (X)' onClick={set('resolved')}>Resolve</button>}
+    </span>;
 }
 
 /** A small icon action; the label is the tooltip. */
@@ -452,16 +468,10 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
                 {thread.labels?.[0] && <span className='co-review-badge label' title={thread.labels.join(', ')}>{thread.labels[0]}{rest.length ? ` +${rest.length}` : ''}</span>}
                 {badges}
                 <span className='co-review-spacer' />
-                {proposed ? <span className='co-review-triage'>
-                    <button className='theia-button co-review-accept' title='Accept: keep it as an open thread (A)'
-                        onClick={e => { e.stopPropagation(); manager.setStatus(thread, 'open'); }}>Accept</button>
-                    <button className='theia-button secondary' title='Dismiss: drop it (D)'
-                        onClick={e => { e.stopPropagation(); manager.setStatus(thread, 'resolved'); }}>Dismiss</button>
-                </span> : <span className='co-review-actions'>
-                    {canAsk && <IconAction icon='hubot' title={`Ask ${agent!.name}`} onClick={() => manager.askAgent(thread)} />}
-                    <IconAction icon={resolved ? 'issue-reopened' : 'check'} title={resolved ? 'Reopen' : 'Resolve'}
-                        onClick={() => manager.setStatus(thread, resolved ? 'open' : 'resolved')} />
+                {!proposed && canAsk && <span className='co-review-actions'>
+                    <IconAction icon='hubot' title={`Ask ${agent!.name}`} onClick={() => manager.askAgent(thread)} />
                 </span>}
+                <StatusActions manager={manager} thread={thread} />
             </div>
             {expanded && <div className='co-review-card-body'>{body}</div>}
         </div>;
@@ -492,15 +502,11 @@ export function ThreadView(props: ThreadViewProps): React.ReactElement {
                 title={`${agentName} has your message and is working on an answer.`}>{agentName} is on it…</span>}
             {thread.agentState === 'waiting_for_human' && <span className='co-review-badge waiting'>needs your decision</span>}
             {resolved && <span className='co-review-badge resolved'>resolved</span>}
-            {proposed && <span className='co-review-badge proposed' title='Automated finding: accept to keep it, dismiss to drop it'>proposed finding</span>}
+            {proposed && <span className='co-review-badge proposed' title='Found by the agent, not judged yet: Keep it or Dismiss it'>to triage</span>}
             <span className='co-review-spacer' />
-            <span className={`co-review-actions ${proposed ? 'always' : ''}`}>
+            <StatusActions manager={manager} thread={thread} />
+            <span className='co-review-actions'>
                 {canAsk && <IconAction icon='hubot' title={`Ask ${agent!.name}`} onClick={() => manager.askAgent(thread)} />}
-                {proposed ? <>
-                    <IconAction icon='pass' title='Accept finding' onClick={() => manager.setStatus(thread, 'open')} />
-                    <IconAction icon='circle-slash' title='Dismiss finding' onClick={() => manager.setStatus(thread, 'resolved')} />
-                </> : <IconAction icon={resolved ? 'issue-reopened' : 'check'} title={resolved ? 'Reopen' : 'Resolve'}
-                    onClick={() => manager.setStatus(thread, resolved ? 'open' : 'resolved')} />}
                 {props.inline && props.onHide && <IconAction icon='chevron-up' title='Collapse' onClick={props.onHide} />}
             </span>
         </div>

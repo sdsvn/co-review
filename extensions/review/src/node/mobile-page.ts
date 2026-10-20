@@ -145,11 +145,11 @@ export const MOBILE_PAGE = `<!doctype html>
       card.appendChild(el('<pre class="before">' + esc(t.proposal.before) + '</pre>'));
       card.appendChild(el('<pre class="after">' + esc(t.proposal.after) + '</pre>'));
       if (t.proposal.status === 'pending') {
-        var pr = el('<div class="row"><span class="muted">Suggested edit</span><span class="spacer"></span><button>Reject</button><button class="primary">Accept edit</button></div>');
+        var pr = el('<div class="row"><span class="muted">Suggested edit</span><span class="spacer"></span><button>Discard</button><button class="primary">Apply edit</button></div>');
         pr.children[2].onclick = function () { api('/reviews/' + review.id + '/threads/' + t.id + '/proposal', { accept: false }); };
         pr.children[3].onclick = function () { api('/reviews/' + review.id + '/threads/' + t.id + '/proposal', { accept: true }); };
         card.appendChild(pr);
-      } else { card.appendChild(el('<div class="muted">Suggestion ' + t.proposal.status + '</div>')); }
+      } else { card.appendChild(el('<div class="muted">Edit ' + (t.proposal.status === 'accepted' ? 'applied' : 'discarded') + '</div>')); }
     }
     t.messages.forEach(function (m) {
       card.appendChild(el('<div class="msg ' + m.kind + '"><div class="row"><span class="who">' + esc(m.author) + '</span><span class="spacer"></span><span class="muted">'
@@ -161,7 +161,7 @@ export const MOBILE_PAGE = `<!doctype html>
       b.onclick = function () { api('/reviews/' + review.id + '/threads/' + t.id + '/status', { status: status }); };
       actions.appendChild(b);
     }
-    if (t.status === 'proposed') { action('Dismiss', 'resolved'); action('Accept', 'open', true); }
+    if (t.status === 'proposed') { action('Dismiss', 'resolved'); action('Keep', 'open', true); }
     else if (t.status === 'open') {
       var reply = el('<textarea data-thread="' + t.id + '" placeholder="Reply…" rows="2"></textarea>');
       reply.value = state.drafts[t.id] || '';
