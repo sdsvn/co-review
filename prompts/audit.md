@@ -14,6 +14,6 @@
    area, and the repository's areas, as one page I can read and comment on. Tell me it is open in Co-Review, with the
    areas with their finding counts, in one short message.
 5. Then loop `{{await_reviewer}}` → investigate → `{{reply}}` until it returns my Submit or says I closed the review
-   (tell me what's still open). On my Submit: approve → nothing to change unless I say so; request changes → fix
+   (closing it means I'm done: act on nothing, and tell me in one line what's still open). On my Submit: approve → nothing to change unless I say so; request changes → fix
    what I accepted and asked for, as commits, then reply in each thread with what changed and wait again. Don't
    edit files while I review unless I ask in a thread.

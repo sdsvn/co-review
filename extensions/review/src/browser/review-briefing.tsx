@@ -76,7 +76,9 @@ export function Briefing({ manager, navigator, review, coverage }: BriefingProps
             {!progress && files && files.viewed < files.total && <button className='theia-button secondary' onClick={() => navigator.openNextUnviewed()}>
                 Next file to read
             </button>}
-            {(review.bundle || review.agent) && <button className='theia-button secondary' onClick={() => manager.requestSubmit()}>Submit review…</button>}
+            {review.purpose === 'explain'
+                ? <button className='theia-button secondary' title='Close this window: the agent knows you are done' onClick={() => manager.finish()}>Done</button>
+                : (review.bundle || review.agent) && <button className='theia-button secondary' onClick={() => manager.requestSubmit()}>Submit review…</button>}
         </div>
     </div>;
 }

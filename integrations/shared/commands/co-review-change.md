@@ -22,7 +22,7 @@ Co-Review tools from the co-review extension.
 3. Show it: `co_review_start({ reviewId })`. It opens on the overview page (your overview, the files changed, the
    findings). Tell me it is open in Co-Review and, in one sentence, what to look at first.
 4. Loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit or says I closed the review
-   (tell me what's still open), then act on my verdict: approve → go ahead (commit, merge, continue), mentioning
+   (closing it means I'm done: act on nothing, and tell me in one line what's still open), then act on my verdict: approve → go ahead (commit, merge, continue), mentioning
    anything still open; request changes → address every comment and apply the accepted suggestions as new commits
    (don't rewrite the reviewed diff), then reply in each thread with what changed and wait again; comment → answer,
    nothing to change unless I say so. Don't edit files while I review unless I ask in a thread.

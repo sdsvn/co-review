@@ -385,6 +385,13 @@ export class ReviewStore {
         });
     }
 
+    setPurpose(reviewId: string, purpose: Review['purpose']): Promise<Review> {
+        return this.mutate(reviewId, review => {
+            review.purpose = purpose;
+            return review;
+        });
+    }
+
     /** The reviewer closed the review's window (`at`), or it is shown again (undefined). */
     setClosed(reviewId: string, closed: Review['closed']): Promise<Review> {
         return this.mutate(reviewId, review => {

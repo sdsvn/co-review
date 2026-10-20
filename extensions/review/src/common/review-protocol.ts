@@ -106,6 +106,8 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     showWorkspace(workspaceRoot: string, reviewId?: string): Promise<void>;
     /** The reviewer kept open the window Co-Review was closing for an agent (see ReviewClient.onCloseWindow). */
     keepWindowOpen(workspaceRoot: string, reviewId?: string): Promise<void>;
+    /** The reviewer is done with the review (Done on an explanation): its agents are told it is closed, as when its window closes. */
+    finishReview(reviewId: string): Promise<void>;
     getCurrentUser(workspaceRoot: string): Promise<Participant>;
     getGitInfo(workspaceRoot: string): Promise<GitInfo>;
     resolveCommit(workspaceRoot: string, ref: string): Promise<string | undefined>;

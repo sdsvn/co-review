@@ -1,6 +1,6 @@
 ---
 name: co-review
-description: Review with the human in Co-Review and stay as their co-reviewer — the whole repository, your change, someone else's pull request or a design: prepare the review, add first-pass findings, show it, answer their questions in the threads, and act on their verdict. Use when the user says "review this with me", "open a review", "co-review", "let me review your change", "walk me through the change", "I want to review before you continue", "review this PR", "audit the repo", or when a change is ready and the human should look at it before it is committed or merged. Needs Co-Review's MCP tools (open_review, await_reviewer, reply, add_findings, get_review).
+description: Review with the human in Co-Review and stay as their co-reviewer — the whole repository, your change, someone else's pull request or a design: prepare the review, add first-pass findings, show it, answer their questions in the threads, and act on their verdict. Use when the user says "review this with me", "open a review", "co-review", "let me review your change", "walk me through the change", "explain this with co-review", "I want to review before you continue", "review this PR", "audit the repo", or when a change is ready and the human should look at it before it is committed or merged. Needs Co-Review's MCP tools (open_review, await_reviewer, reply, add_findings, get_review).
 ---
 
 # Co-review with the human
@@ -71,7 +71,7 @@ instead of 5,000 files:
    area, and the repository's areas, as one page I can read and comment on. Tell me it is open in Co-Review, with the
    areas with their finding counts, in one short message.
 5. Then loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review
-   (tell me what's still open). On my Submit: approve → nothing to change unless I say so; request changes → fix
+   (closing it means I'm done: act on nothing, and tell me in one line what's still open). On my Submit: approve → nothing to change unless I say so; request changes → fix
    what I accepted and asked for, as commits, then reply in each thread with what changed and wait again. Don't
    edit files while I review unless I ask in a thread.
 <!-- /prompt -->
@@ -105,7 +105,7 @@ on lines, suggests edits and submits one verdict:
 3. Show it: `open_review({ reviewId })`. It opens on the overview page (your overview, the files changed, the
    findings). Tell me it is open in Co-Review and, in one sentence, what to look at first.
 4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review
-   (tell me what's still open), then act on my verdict: approve → go ahead (commit, merge, continue), mentioning
+   (closing it means I'm done: act on nothing, and tell me in one line what's still open), then act on my verdict: approve → go ahead (commit, merge, continue), mentioning
    anything still open; request changes → address every comment and apply the accepted suggestions as new commits
    (don't rewrite the reviewed diff), then reply in each thread with what changed and wait again; comment → answer,
    nothing to change unless I say so. Don't edit files while I review unless I ask in a thread.
@@ -137,8 +137,8 @@ For a pull request you didn't write. You take the first pass; the human decides 
 5. Show it: `open_review({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
    changed, the findings). Tell me it is open in Co-Review, with two sentences: what the pull request does and its
    riskiest part.
-6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review (tell
-   me what's still open). It's someone else's change: don't edit it. On my Submit, tell me my verdict and what I
+6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review (closing
+   it means I'm done: tell me in one line what's still open). It's someone else's change: don't edit it. On my Submit, tell me my verdict and what I
    asked for; the author does the work. I can post the review to the pull request myself (**Also post to GitHub**
    when submitting). If I ask you to post it, call `post_review_to_github` with `comments`: each of my open
    comments rewritten as my own point, in my voice, without our discussion or any mention of it. Co-Review shows me
@@ -149,6 +149,14 @@ For a pull request you didn't write. You take the first pass; the human decides 
 
 Follow the `co-review-design` skill: write the design document, check it with `open: false`, show it, revise it
 from the comments, and implement only after approval.
+
+### Explaining something
+
+When the human asks you to explain something with Co-Review ("walk me through X", "explain Y in Co-Review"), it is
+for understanding, not a verdict. Write the explanation as a page (a design-style document in a review directory, or
+the change's patch with an overview), and open it with `open_review({ ..., explain: true })`. The window then has
+no Submit, only **Done**. Answer the human's questions in the threads until `await_reviewer` says they closed it,
+then stop: change nothing and don't act on the threads unless they asked you to in one.
 
 ### Markdown pages
 
@@ -181,8 +189,8 @@ loop:
     { status: "comment", threads: [...] } → for each thread: investigate the code it points at
                                             (thread.location, thread.code), then reply({ threadId, body })
     { status: "submitted", decision, … }  → go to step 3
-    { status: "closed" }                  → the human closed the review: stop waiting, and tell them in the
-                                            conversation what is still open (open_review({ reviewId }) reopens it)
+    { status: "closed" }                  → the human closed the review: they are done. Stop waiting, act on
+                                            nothing, and tell them in one line what is still open
     { status: "pending" }                 → call again (the human is reading)
 ```
 
@@ -218,7 +226,8 @@ How to answer:
 ## Rules
 
 - The human's comments are instructions for this change only. Don't widen scope.
-- Keep answering until the human submits or says the review is done. Don't end the loop on your own.
+- Keep answering until the human submits, closes the review or says it is done. Don't end the loop on your own.
+- Closing the review is the human's "done": no Submit is coming and nothing is to be acted on.
 - If Co-Review isn't running, `co-review mcp` starts it. Don't start servers yourself.
 - If Co-Review seems stuck (a window that doesn't respond, a call that keeps failing), run `co-review logs`: it says
   whether Co-Review answers and shows its recent log (windows, backend, agent bridges). Show the human the relevant

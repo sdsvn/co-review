@@ -132,9 +132,12 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     protected closedNotice(review: Review): Record<string, unknown> {
         return {
             status: 'closed', reviewId: review.id, by: 'reviewer',
-            hint: 'The reviewer closed the review window (or quit Co-Review); the review and its threads are saved. Stop waiting on '
-                + 'this review. Tell the user in the conversation what is still open, if anything. To continue, open_review({ reviewId }) '
-                + 'shows it again.'
+            hint: (review.purpose === 'explain'
+                ? 'The reviewer closed the explanation: they are done with it. '
+                : 'The reviewer closed the review window (or quit Co-Review): they are done with the review, and no Submit is coming. ')
+                + 'Stop waiting on it and treat it as finished: do not act on the review or change anything because of it. In one '
+                + 'line, tell the user it is closed and what is still open, if anything. The review and its threads are saved; '
+                + 'open_review({ reviewId }) shows it again, only if the user asks.'
         };
     }
 
@@ -228,7 +231,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'review directory), or a design document (open_review with dir). In each, prepare the review without showing it '
                 + '(open_review with open: false), add your first-pass findings, then show it with open_review({ reviewId }) and tell the '
                 + 'reviewer it is open in Co-Review. Then loop: '
-                + 'await_reviewer → investigate the repository → reply, until it returns the reviewer\'s Submit; await_reviewer is the only call to wait on. Use add_findings for issues you find, '
+                + 'await_reviewer → investigate the repository → reply, until it returns the reviewer\'s Submit or says they closed it (then they are '
+                + 'done: act on nothing); await_reviewer is the only call to wait on. To explain something to the reviewer, open it with '
+                + 'explain: true: they never submit, they close it when done. Use add_findings for issues you find, '
                 + 'ask_reviewer when you need a decision, and repo_map to find where things live before searching. '
                 + 'To review the whole repository: repo_map({ overview: true }) for where to start and how the code clusters, then '
                 + 'add_findings with the area as the first label and status "proposed" (a few per area); get_review returns `coverage`, '
@@ -257,6 +262,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'default: the one Co-Review was started for) or a review directory / inline content: `dir` (index.markdown + assets + *.patch), '
                 + '`markdown` and/or `patch` strings. A `dir` can also be a knowledge bundle such as OKF (`<repo>/okf`): every Markdown page '
                 + 'is a review page, `/x.md` links resolve from the bundle root and `path:line` links open the code. '
+                + 'To explain something to the reviewer (a walkthrough, "explain X with Co-Review"), pass `explain: true`: there is no '
+                + 'verdict, so they never have to submit; answer their questions until await_reviewer says they closed it, and act on nothing. '
                 + 'To have the reviewer start from your findings, prepare it first: open_review({ ..., open: false }), add_findings, '
                 + 'then open_review({ reviewId }) shows it. '
                 + 'Then loop await_reviewer → reply until the reviewer submits.\n\n'
@@ -274,6 +281,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     + '"main...HEAD" for a branch, any revision range. It becomes the patch page (named `patchName`, default "change"); '
                     + 'with `dir`, it is written into that directory (e.g. next to a PR.md)'),
                 patchName: z.string().optional().describe('Slug for the inline patch page (default "change")'),
+                explain: z.boolean().optional().describe('The review explains something to the reviewer (a walkthrough), not for a verdict: '
+                    + 'they ask questions and close it when done, with nothing to submit; you act on nothing'),
                 storePath: z.string().optional().describe('Where to write the review state file (default <dir>/review.json)'),
                 title: z.string().optional(),
                 open: z.boolean().optional().describe('Show the review to the reviewer: the browser, or the desktop app\'s window (default true). '
@@ -284,7 +293,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     + 'radius: callers, data, config, other services), and where to start. Written in the prepare step; pass it again '
                     + '(with reviewId) to update it. Not for a design document, which is its own front page')
             }
-        }, async ({ reviewId, root, dir, markdown, patch: inlinePatch, diff, patchName, storePath, title, open, openspec, overview }) => {
+        }, async ({ reviewId, root, dir, markdown, patch: inlinePatch, diff, patchName, storePath, title, open, openspec, overview, explain }) => {
             const agent = this.agentOf(session);
             let patch = inlinePatch;
             // A diff Co-Review ran: the repository and the diff give the review its code folder (see CodeFolders).
@@ -368,6 +377,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             if (overview?.trim()) {
                 review = await this.store.setOverview(review.id, overview.trim());
             }
+            if (explain !== undefined && explain !== (review.purpose === 'explain')) {
+                review = await this.store.setPurpose(review.id, explain ? 'explain' : undefined);
+            }
             currentReviewId = review.id;
             this.startChannel(session, review, agent);
             // A round no agent has picked up yet (submitted while none was connected) is still delivered.
@@ -409,7 +421,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'when they ask you something, reply in a thread you are part of (in a review directory: any comment, including on '
                 + 'proposed findings) or answer an ask_reviewer question; {status:"submitted", decision, summary, comments[], '
                 + 'acceptedSuggestions[]} when they click Submit; {status:"closed", hint} when they closed the review window or quit '
-                + 'Co-Review (stop waiting on it and tell the user); {status:"pending"} on timeout. Answer comments with reply, act on a '
+                + 'Co-Review (they are done: stop waiting, act on nothing, tell the user in one line); {status:"pending"} on timeout. Answer comments with reply, act on a '
                 + 'Submit, and call it again until the review is done.',
             inputSchema: { reviewId: reviewArg, timeoutSec: z.number().int().min(1).max(3600).optional() }
         }, async ({ reviewId, timeoutSec }, extra) =>

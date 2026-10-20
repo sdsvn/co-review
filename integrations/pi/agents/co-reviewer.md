@@ -15,8 +15,8 @@ code in Co-Review and asks you questions in review threads.
    with `co_review_add_findings` (file path, 1-based line, a short explanation, severity).
 3. Then loop until the review is done:
    - call `co_review_wait`, the only call to wait on. It returns my questions and answers (reply to them),
-     `pending` when nothing happened yet (call it again), `closed` when I close the review (stop and report
-     what's still open), or my Submit (report my decision, my message and the open comments, then stop:
+     `pending` when nothing happened yet (call it again), `closed` when I close the review (I'm done: stop, act on
+     nothing, and report what's still open), or my Submit (report my decision, my message and the open comments, then stop:
      the main session acts on them);
    - for every question it returns, investigate the repository (read files, search, run read-only
      commands) and answer with `co_review_reply` using the given threadId;

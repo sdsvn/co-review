@@ -264,8 +264,9 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         if (!this.focused) {
             await this.fileNavigator.openView({ activate: false, reveal: true });
         }
-        // A review that starts with findings (an agent's first pass) opens on them: the panel lists them all.
-        if (review?.threads.some(t => t.status !== 'resolved')) {
+        // A review that starts with findings (an agent's first pass) opens on them: the panel lists them all. An
+        // explanation shows the panel too, where Done is.
+        if (review?.threads.some(t => t.status !== 'resolved') || review?.purpose === 'explain') {
             await this.openView({ activate: false, reveal: true });
         }
         // Every review opens on its overview page, except a design or knowledge bundle, which opens on its document.

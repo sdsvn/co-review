@@ -27,8 +27,8 @@ Use the Co-Review tools from the co-review extension: $ARGUMENTS
 5. Show it: `co_review_start({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
    changed, the findings). Tell me it is open in Co-Review, with two sentences: what the pull request does and its
    riskiest part.
-6. Loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit or says I closed the review (tell
-   me what's still open). It's someone else's change: don't edit it. On my Submit, tell me my verdict and what I
+6. Loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit or says I closed the review (closing
+   it means I'm done: tell me in one line what's still open). It's someone else's change: don't edit it. On my Submit, tell me my verdict and what I
    asked for; the author does the work. I can post the review to the pull request myself (**Also post to GitHub**
    when submitting). If I ask you to post it, call `co_review_post_github` with `comments`: each of my open
    comments rewritten as my own point, in my voice, without our discussion or any mention of it. Co-Review shows me

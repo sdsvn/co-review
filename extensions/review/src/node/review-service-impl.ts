@@ -92,6 +92,10 @@ export class ReviewServiceImpl implements ReviewService {
         this.windows.keptOpen({ workspaceRoot, reviewId });
     }
 
+    async finishReview(reviewId: string): Promise<void> {
+        await this.store.setClosed(reviewId, { at: Date.now() });
+    }
+
     getCurrentUser(workspaceRoot: string): Promise<Participant> {
         return currentUser(workspaceRoot);
     }

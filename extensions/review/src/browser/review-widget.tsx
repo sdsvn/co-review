@@ -146,7 +146,7 @@ export class ReviewWidget extends ReactWidget {
             case '?': handled(); this.sheetOpen = !this.sheetOpen; this.update(); return;
             case 'Escape': if (this.sheetOpen) { handled(); this.sheetOpen = false; this.update(); } return;
             case 'n': handled(); this.navigator.openNextUnviewed(); return;
-            case 's': if (review) { handled(); this.submitOpen = true; this.update(); } return;
+            case 's': if (review && review.purpose !== 'explain') { handled(); this.submitOpen = true; this.update(); } return;
         }
         if (!thread || !review) {
             return;
@@ -285,7 +285,13 @@ export class ReviewWidget extends ReactWidget {
         const drafts = this.reviews.drafts;
         return <>
             {this.renderActivity(review)}
-            {(review.bundle || review.agent) && <SubmitReview review={review} manager={this.reviews} open={this.submitOpen}
+            {review.purpose === 'explain' && <div className='co-review-submit-bar'>
+                <span className='co-review-muted' title='The agent opened this to explain something: there is no verdict to submit'>
+                    An explanation: nothing to submit. Ask anything, then close it.</span>
+                <span className='co-review-spacer' />
+                <button className='theia-button' title='Close this window: the agent knows you are done' onClick={() => this.reviews.finish()}>Done</button>
+            </div>}
+            {(review.bundle || review.agent) && review.purpose !== 'explain' && <SubmitReview review={review} manager={this.reviews} open={this.submitOpen}
                 onOpenChange={o => { this.submitOpen = o; this.update(); }}
                 pending={{
                     open, proposed, drafts: drafts.filter(d => d.body.trim()).length,
@@ -357,7 +363,10 @@ export class ReviewWidget extends ReactWidget {
         const agent = review.agent;
         if (!review.threads.length) {
             return <div className='co-review-hint co-review-empty-state'>
-                {agent
+                {review.purpose === 'explain'
+                    ? <><span className={codicon('comment-discussion')} /> <b>Ask {agent?.name ?? 'the agent'} anything.</b> Hover a line and click + to ask
+                        about it, or select text and choose Ask Agent. Click Done when you have what you need.</>
+                    : agent
                     ? <><span className={agentStatus(review, this.reviews.getAgentPresence(review.id)).state === 'working' ? `${codicon('loading')} codicon-modifier-spin` : codicon('sparkle')} />
                         <b>{agent.name} is on its first pass.</b> Its findings show up here as it adds them. Meanwhile, hover a line in the
                         editor and click + to comment, or select code and choose Ask Agent.</>
@@ -369,8 +378,9 @@ export class ReviewWidget extends ReactWidget {
         if (this.filter === 'open' && !counts.open && !counts.proposed) {
             return <div className='co-review-hint co-review-empty-state'>
                 <span className={codicon('pass-filled')} /> <b>Everything is resolved.</b>
-                {(review.bundle || agent) && <> Submit your review to tell {agent?.name ?? 'the agent'}. <span className='co-review-link'
+                {(review.bundle || agent) && review.purpose !== 'explain' && <> Submit your review to tell {agent?.name ?? 'the agent'}. <span className='co-review-link'
                     onClick={() => { this.submitOpen = true; this.update(); }}>Submit review…</span></>}
+                {review.purpose === 'explain' && <> Close it when you are done: <span className='co-review-link' onClick={() => this.reviews.finish()}>Done</span></>}
             </div>;
         }
         return <div className='co-review-hint'>{this.filter === 'proposed' ? 'Nothing left to triage.' : `No ${this.filter === 'out-of-scope' ? 'out-of-scope' : this.filter} threads.`}</div>;

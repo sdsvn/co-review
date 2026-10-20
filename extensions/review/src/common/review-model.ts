@@ -338,6 +338,11 @@ export interface Review {
      * the review is told once. Cleared when the review is shown again.
      */
     closed?: { at: number };
+    /**
+     * `explain`: the agent opened it to explain something (a walkthrough), not for a verdict. There is nothing to
+     * submit: the reviewer asks questions and closes it when done, and the agent acts on nothing.
+     */
+    purpose?: 'explain';
     /** When the reviewer archived this review; archived reviews are hidden from the active list but not deleted. */
     archivedAt?: number;
     createdAt: number;

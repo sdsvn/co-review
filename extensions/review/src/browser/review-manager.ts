@@ -263,7 +263,24 @@ export class ReviewManager {
 
     /** Opens the submit form in the Review panel. */
     requestSubmit(): void {
-        this.onDidRequestSubmitEmitter.fire();
+        // An explanation has nothing to submit: its window closes when the reviewer is done.
+        if (this.activeReview?.purpose !== 'explain') {
+            this.onDidRequestSubmitEmitter.fire();
+        }
+    }
+
+    /**
+     * The reviewer is done with an explanation: the window closes, and its agent is told (a closed review is done). A
+     * browser tab a script did not open cannot close itself, so the reviewer is told to close it.
+     */
+    async finish(): Promise<void> {
+        const review = this.activeReview;
+        if (review) {
+            await this.service.finishReview(review.id);
+        }
+        window.close();
+        // Still here: a browser tab Co-Review did not open, which only the reviewer can close.
+        setTimeout(() => this.messages.info(`Done: ${review?.agent?.name ?? 'the agent'} knows you are finished. You can close this tab.`), 300);
     }
 
     get root(): string | undefined { return this._root; }
