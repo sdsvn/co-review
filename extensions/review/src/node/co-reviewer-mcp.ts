@@ -19,7 +19,8 @@ import { SyntaxServiceImpl } from './syntax-service-impl';
 import { BundleService } from './bundle-service';
 import { GitHubReviews, previewMarkdown } from './github';
 import { documentFormat, DocumentFormat } from '../common/design-format';
-import { acceptedSuggestions, commentOf, findThread, threadRef } from './review-payloads';
+import { acceptedSuggestions, commentOf, findThread, patchFile, threadRef } from './review-payloads';
+import { locateInPatch, locateInText } from '../common/code-quote';
 import { ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT } from './prompts.gen';
 import { LANGUAGE_BY_EXTENSION, RepoIndex } from './repo-index';
 import { CodeFolders } from './code-folders';
@@ -49,6 +50,16 @@ interface Session {
 }
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
+
+/** The parts of an add_findings finding that `code` places. */
+interface QuotedFinding {
+    code?: string;
+    path?: string;
+    line?: number;
+    endLine?: number;
+    target?: string;
+    anchor?: Record<string, any>;
+}
 
 function json(value: unknown): ToolResult {
     return { content: [{ type: 'text', text: JSON.stringify(value, undefined, 2) }] };
@@ -449,7 +460,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         });
 
         server.registerTool('add_findings', {
-            description: 'Add findings. Two shapes: {path, line?, endLine?, body, severity?, labels?, status?} creates threads on repository code '
+            description: 'Add findings. Give `code` (the line(s) the finding is about, copied exactly) and Co-Review places the finding on them, '
+                + 'instead of trusting line numbers; if a quote matches nothing, or several places without a `line` to choose, no finding of the call is added. '
+                + 'Two shapes: {path, code?, line?, endLine?, body, severity?, labels?, status?} creates threads on repository code '
                 + '(without `line`, on the file or folder; `labels` group them in the panel, e.g. the area of the repository; '
                 + '`status: "proposed"` lets the reviewer Keep or Dismiss each one, as for a first-pass audit); '
                 + 'anchored findings {id, target ("doc" | "doc:<path>" | "patch:<slug>"), anchor, severity, labels, body, verdict?} are PROPOSED '
@@ -468,6 +481,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     anchor: z.record(z.string(), z.any()).optional(),
                     labels: z.array(z.string()).optional(),
                     verdict: z.string().optional(),
+                    code: z.string().optional().describe('The line(s) the finding is about, copied exactly from the file or the patch. '
+                        + 'Co-Review finds them and sets the lines itself (`line` then only picks one when they appear more than once); '
+                        + 'a quote that matches nothing is refused'),
                     status: z.enum(['open', 'proposed']).optional().describe('Code findings: "proposed" to have the reviewer triage them (default "open")'),
                     proposal: z.object({ before: z.string(), after: z.string(), path: z.string().optional(), startLine: z.number().optional() }).passthrough().optional()
                 }).passthrough())
@@ -479,6 +495,17 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             }
             const agent = this.agentOf(session);
             const dir = review.bundle?.dir ?? FileUri.fsPath(review.workspaceRoot);
+            // Quotes are resolved before anything is created, so a finding that misses its code adds none of the batch.
+            const misses: string[] = [];
+            for (const [i, finding] of findings.entries()) {
+                const miss = finding.code !== undefined ? await this.placeQuote(review, dir, finding) : undefined;
+                if (miss) {
+                    misses.push(`findings[${i}] (${finding.anchor?.path ?? finding.path ?? finding.target ?? 'no path'}): ${miss}`);
+                }
+            }
+            if (misses.length) {
+                return fail(`No findings were added. ${misses.join('\n')}`);
+            }
             const ids: string[] = [];
             for (const finding of findings) {
                 if (finding.anchor && finding.target?.startsWith('doc:') && !/\.(md|markdown)$/i.test(finding.target)) {
@@ -988,6 +1015,58 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         }
         const stat = await fs.stat(file).catch(() => undefined);
         return { kind: stat?.isDirectory() ? 'directory' : 'file', uri: FileUri.create(file).toString() };
+    }
+
+    /**
+     * Places a finding on the lines its `code` quotes: sets `line`/`endLine` (repository code) or the anchor's lines (a
+     * patch page). Returns why it can't, without changing the finding.
+     */
+    protected async placeQuote(review: Review, dir: string, finding: QuotedFinding): Promise<string | undefined> {
+        const code = finding.code ?? '';
+        const near = finding.anchor?.line ?? finding.anchor?.startLine ?? finding.line;
+        if (finding.anchor) {
+            if (!finding.target?.startsWith('patch:')) {
+                return '`code` places findings on code; a Markdown page takes anchor {type: "text", exact}.';
+            }
+            if (typeof finding.anchor.path !== 'string') {
+                return 'a quote on a patch page needs anchor.path, the file it is in.';
+            }
+            const patch = await fs.readFile(patchFile(dir, finding.target.slice('patch:'.length)), 'utf8').catch(() => undefined);
+            const file = patch === undefined ? undefined : parsePatch(patch).find(f => f.path === finding.anchor!.path);
+            if (!file) {
+                return patch === undefined ? `there is no patch ${finding.target}.` : `${finding.anchor.path} isn't in ${finding.target}.`;
+            }
+            const side = finding.anchor.side === 'old' ? 'old' : 'new';
+            const result = locateInPatch(file, code, side, near);
+            if ('error' in result) {
+                return result.error;
+            }
+            const { start, end } = result.found;
+            const { line, startLine, endLine, ...rest } = finding.anchor;
+            finding.anchor = start === end
+                ? { ...rest, type: 'code-line', line: start, side, source: code }
+                : { ...rest, type: 'code-range', startLine: start, endLine: end, side, source: code };
+            return undefined;
+        }
+        if (!finding.path) {
+            return 'a quote needs `path`, the file it is in.';
+        }
+        const root = this.codeRoot(review);
+        const file = path.resolve(root, finding.path);
+        if (!file.startsWith(root + path.sep)) {
+            return `${finding.path} is outside the repository (${root}).`;
+        }
+        const text = await fs.readFile(file, 'utf8').catch(() => undefined);
+        if (text === undefined) {
+            return `${finding.path} isn't a file of the repository.`;
+        }
+        const result = locateInText(text, code, near, finding.path);
+        if ('error' in result) {
+            return result.error;
+        }
+        finding.line = result.found.start;
+        finding.endLine = result.found.end;
+        return undefined;
     }
 
     /** Builds a semantic location (range, anchor, Tree-sitter tokens, symbol) from path + lines. */

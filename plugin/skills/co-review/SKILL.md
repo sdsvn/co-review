@@ -65,8 +65,9 @@ instead of 5,000 files:
    when there is none, say so and search instead. Split the repository (or the focus I gave you) into 4–10 areas and read the riskiest code in each
    (entry points, input handling, money, auth, concurrency, persistence).
 3. Add findings with `add_findings`: the area as the first label, `status: "proposed"`, at most three per area,
-   each with what's wrong, why it matters and what to do, with `severity`. A finding goes on the code (`path`,
-   `line`); one about a whole area on its folder (`path` without `line`); one about the repository on `path: "."`.
+   each with what's wrong, why it matters and what to do, with `severity`. A finding goes on the code (`path`
+   and `code`, the line(s) it is about copied exactly from the file: Co-Review finds their lines); one about a whole
+   area on its folder (`path` alone); one about the repository on `path: "."`.
    Say so in the overview when an area looks fine.
    Then write your overview of it for the review's front page, which I read first, and add it with
    `open_review({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
@@ -85,10 +86,8 @@ instead of 5,000 files:
 
 `repo_map({ overview: true })` says where to start and how the code clusters. When the `graphify` command is
 installed, Co-Review builds a [Graphify](https://graphify.net) graph of the code first (Tree-sitter, no LLM, seconds;
-in `graphify-out/`, kept out of `git status`; a repository that keeps one graph per folder, like `services/graphify-out/`,
-keeps those), and while answering, `graphify query "<question>"`, `graphify path "A" "B"` and `graphify explain "X"`
-answer how parts of the code connect without searching. In a git worktree, or with per-folder graphs, pass
-`--graph <path>`: graphs are untracked, so a worktree uses the main checkout's. A finding about a whole area goes on its folder (`path` without `line`), one about the
+in `graphify-out/`, kept out of `git status`), and while answering, `graphify query "<question>"`, `graphify path "A"
+"B"` and `graphify explain "X"` answer how parts of the code connect without searching. A finding about a whole area goes on its folder (`path` without `line`), one about the
 repository on `path: "."`; the overview page and the panel's **By area** view group findings by their first label, so
 make that label the area.
 
@@ -103,9 +102,10 @@ on lines, suggests edits and submits one verdict:
    branch (`<base>` is the branch it will merge into, usually `main`). Co-Review runs the diff itself and makes it a
    pull-request page. Keep the `reviewId` it returns. If it says the diff is empty, tell me and stop.
 2. Add findings only for real risks and non-obvious decisions, at most five, on the changed lines:
-   `add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line,
-   side: "new" }, body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines). They
-   arrive proposed: I accept or dismiss each one.
+   `add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, side: "new" },
+   code, body, severity }] })`, where `code` is the line(s) the finding is about, copied exactly from the diff:
+   Co-Review places the finding on them and refuses a quote that matches nothing (add `line` only to pick one of
+   several matches). They arrive proposed: I accept or dismiss each one.
    Then write your overview of it for the review's front page, which I read first, and add it with
    `open_review({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
    ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:
@@ -137,8 +137,9 @@ For a pull request you didn't write. You take the first pass; the human decides 
    the pull-request page. Keep the `reviewId` it returns.
 4. First pass: read the changed code in context (`git show co-review/pr-<n>:<path>` for whole files) and add at most
    five findings where it matters: `add_findings({ findings: [{ target: "patch:pr-<n>", anchor: { type:
-   "code-line", path, line, side: "new" }, body, severity }] })` (`type: "code-range"` with `startLine` / `endLine`
-   for several lines). They arrive proposed: I accept or dismiss each one.
+   "code-line", path, side: "new" }, code, body, severity }] })`, where `code` is the line(s) the finding is about,
+   copied exactly from the diff: Co-Review places the finding on them and refuses a quote that matches nothing (add
+   `line` only to pick one of several matches). They arrive proposed: I accept or dismiss each one.
    When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
    searching: `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "X"`. A large repository may
    keep one graph per folder (e.g. `services/graphify-out/`; its AGENTS.md says which), and graphs are untracked, so a

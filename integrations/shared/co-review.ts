@@ -349,6 +349,7 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 				path: Type.Optional(Type.String({ description: "File or folder path relative to the repository (\".\" for the repository)" })),
 				target: Type.Optional(Type.String({ description: "\"patch:<slug>\", \"doc\" or \"doc:<path>\" (with anchor)" })),
 				anchor: Type.Optional(Type.Record(Type.String(), Type.Any(), { description: "Where on the page, e.g. { type: \"code-line\", path, line, side: \"new\" } or { type: \"text\", exact }" })),
+				code: Type.Optional(Type.String({ description: "The line(s) the finding is about, copied exactly from the file or the patch: Co-Review places the finding on them (line then only picks one of several matches). A quote that matches nothing is refused." })),
 				line: Type.Optional(Type.Number()),
 				endLine: Type.Optional(Type.Number()),
 				body: Type.String({ description: "Markdown" }),

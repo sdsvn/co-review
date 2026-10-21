@@ -17,8 +17,9 @@ $ARGUMENTS
    the pull-request page. Keep the `reviewId` it returns.
 4. First pass: read the changed code in context (`git show co-review/pr-<n>:<path>` for whole files) and add at most
    five findings where it matters: `add_findings({ findings: [{ target: "patch:pr-<n>", anchor: { type:
-   "code-line", path, line, side: "new" }, body, severity }] })` (`type: "code-range"` with `startLine` / `endLine`
-   for several lines). They arrive proposed: I accept or dismiss each one.
+   "code-line", path, side: "new" }, code, body, severity }] })`, where `code` is the line(s) the finding is about,
+   copied exactly from the diff: Co-Review places the finding on them and refuses a quote that matches nothing (add
+   `line` only to pick one of several matches). They arrive proposed: I accept or dismiss each one.
    When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
    searching: `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "X"`. A large repository may
    keep one graph per folder (e.g. `services/graphify-out/`; its AGENTS.md says which), and graphs are untracked, so a

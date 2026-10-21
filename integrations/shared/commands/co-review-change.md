@@ -11,9 +11,10 @@ Co-Review tools from the co-review extension.
    branch (`<base>` is the branch it will merge into, usually `main`). Co-Review runs the diff itself and makes it a
    pull-request page. Keep the `reviewId` it returns. If it says the diff is empty, tell me and stop.
 2. Add findings only for real risks and non-obvious decisions, at most five, on the changed lines:
-   `co_review_add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line,
-   side: "new" }, body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines). They
-   arrive proposed: I accept or dismiss each one.
+   `co_review_add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, side: "new" },
+   code, body, severity }] })`, where `code` is the line(s) the finding is about, copied exactly from the diff:
+   Co-Review places the finding on them and refuses a quote that matches nothing (add `line` only to pick one of
+   several matches). They arrive proposed: I accept or dismiss each one.
    Then write your overview of it for the review's front page, which I read first, and add it with
    `co_review_start({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
    ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:

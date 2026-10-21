@@ -3,9 +3,10 @@
    branch (`<base>` is the branch it will merge into, usually `main`). Co-Review runs the diff itself and makes it a
    pull-request page. Keep the `reviewId` it returns. If it says the diff is empty, tell me and stop.
 2. Add findings only for real risks and non-obvious decisions, at most five, on the changed lines:
-   `{{add_findings}}({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, line,
-   side: "new" }, body, severity }] })` (`type: "code-range"` with `startLine` / `endLine` for several lines). They
-   arrive proposed: I accept or dismiss each one.
+   `{{add_findings}}({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, side: "new" },
+   code, body, severity }] })`, where `code` is the line(s) the finding is about, copied exactly from the diff:
+   Co-Review places the finding on them and refuses a quote that matches nothing (add `line` only to pick one of
+   several matches). They arrive proposed: I accept or dismiss each one.
    {{> overview}}
 3. Show it: `{{open_review}}({ reviewId })`. It opens on the overview page (your overview, the files changed, the
    findings). Tell me it is open in Co-Review and, in one sentence, what to look at first.

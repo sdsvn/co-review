@@ -19,8 +19,9 @@ Review this entire repository with me in Co-Review, following the `co-review` sk
    when there is none, say so and search instead. Split the repository (or the focus I gave you) into 4–10 areas and read the riskiest code in each
    (entry points, input handling, money, auth, concurrency, persistence).
 3. Add findings with `co_review_add_findings`: the area as the first label, `status: "proposed"`, at most three per area,
-   each with what's wrong, why it matters and what to do, with `severity`. A finding goes on the code (`path`,
-   `line`); one about a whole area on its folder (`path` without `line`); one about the repository on `path: "."`.
+   each with what's wrong, why it matters and what to do, with `severity`. A finding goes on the code (`path`
+   and `code`, the line(s) it is about copied exactly from the file: Co-Review finds their lines); one about a whole
+   area on its folder (`path` alone); one about the repository on `path: "."`.
    Say so in the overview when an area looks fine.
    Then write your overview of it for the review's front page, which I read first, and add it with
    `co_review_start({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a

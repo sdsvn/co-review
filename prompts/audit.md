@@ -6,8 +6,9 @@
    good leads. {{> graphify}} Split the repository (or the focus I gave you) into 4–10 areas and read the riskiest code in each
    (entry points, input handling, money, auth, concurrency, persistence).
 3. Add findings with `{{add_findings}}`: the area as the first label, `status: "proposed"`, at most three per area,
-   each with what's wrong, why it matters and what to do, with `severity`. A finding goes on the code (`path`,
-   `line`); one about a whole area on its folder (`path` without `line`); one about the repository on `path: "."`.
+   each with what's wrong, why it matters and what to do, with `severity`. A finding goes on the code (`path`
+   and `code`, the line(s) it is about copied exactly from the file: Co-Review finds their lines); one about a whole
+   area on its folder (`path` alone); one about the repository on `path: "."`.
    Say so in the overview when an area looks fine.
    {{> overview}}
 4. Show it: `{{open_review}}({ reviewId })`. It opens on the overview page: your overview, every finding grouped by
