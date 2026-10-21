@@ -8,7 +8,7 @@ import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { OpenerService, open } from '@theia/core/lib/browser/opener-service';
 import { MessageService } from '@theia/core/lib/common/message-service';
 import { DocAnchor, isOutOfScope, isOverviewPage, ReviewThread, ThreadIntent } from '../../common/review-model';
-import { DraftEditor, ThreadView } from '../review-components';
+import { ASK_TITLE, COMMENT_TITLE, DraftEditor, ThreadView } from '../review-components';
 import { ReviewDraft, ReviewManager } from '../review-manager';
 import { ReviewNavigator } from '../review-navigator';
 import { MermaidBlock, render } from './document-render';
@@ -668,7 +668,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         this.content.querySelectorAll('.co-review-altitude button').forEach(b => b.classList.toggle('active', Number(b.getAttribute('data-level')) === level));
     }
 
-    /** Text selection → floating Comment / Ask Agent actions (multi-line selections default to asking; no agent, no asking). */
+    /** Text selection → floating Ask Agent / Comment actions (asking first; no agent, no asking). */
     protected showSelectionActions(): void {
         const selection = window.getSelection();
         if (!selection || selection.isCollapsed || !selection.rangeCount) {
@@ -689,9 +689,10 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         const rect = range.getBoundingClientRect();
         const box = this.node.getBoundingClientRect();
         this.popup.innerHTML = '';
-        const action = (label: string, icon: string, intent: ThreadIntent, primary: boolean, edit = false) => {
+        const action = (label: string, icon: string, intent: ThreadIntent, primary: boolean, edit = false, title = label) => {
             const el = document.createElement('button');
             el.className = `co-review-selection-action ${primary ? 'primary' : ''}`;
+            el.title = title;
             el.innerHTML = `<span class="${codicon(icon)}"></span><span>${label}</span>`;
             el.addEventListener('mousedown', e => {
                 e.preventDefault();
@@ -700,10 +701,9 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             });
             return el;
         };
-        const multiLine = exact.includes('\n');
         const ask = this.reviews.hasAgent;
-        this.popup.append(...ask ? [action('Ask Agent', 'hubot', 'question', multiLine)] : [],
-            action('Comment', 'comment', 'comment', !ask || !multiLine), action('Propose Edit', 'edit', 'comment', false, true));
+        this.popup.append(...ask ? [action('Ask Agent', 'hubot', 'question', true, false, ASK_TITLE)] : [],
+            action('Comment', 'comment', 'comment', !ask, false, COMMENT_TITLE), action('Propose Edit', 'edit', 'comment', false, true));
         this.popup.style.display = 'flex';
         this.popup.style.top = `${rect.top - box.top + this.node.scrollTop - 34}px`;
         this.popup.style.left = `${Math.max(8, rect.left - box.left + rect.width / 2 - 80)}px`;

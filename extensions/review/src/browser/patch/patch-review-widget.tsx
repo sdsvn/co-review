@@ -263,8 +263,9 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
     }
 
     protected addDraft(anchor: PatchAnchor): void {
-        const multiLine = anchor.type === 'code-range';
-        this.reviews.addDraft({ kind: 'patch', uri: this.options.uri, patchAnchor: anchor, anchor: { text: anchor.source ?? '' } }, multiLine ? 'question' : 'comment');
+        // A line or lines of the change ask the agent (with one); the patch and its files take a comment.
+        const lines = anchor.type === 'code-line' || anchor.type === 'code-range';
+        this.reviews.addDraft({ kind: 'patch', uri: this.options.uri, patchAnchor: anchor, anchor: { text: anchor.source ?? '' } }, lines ? 'question' : 'comment');
     }
 
     protected onRowClick(e: React.MouseEvent, path: string, row: PatchRow): void {

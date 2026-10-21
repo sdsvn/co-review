@@ -624,7 +624,7 @@ function SubmitReview({ review, manager, open, onOpenChange, pending }: {
                     return;
                 }
             }
-            await manager.submitReview(decision, summary.trim());
+            await manager.submitReview(decision, summary.trim(), !!(post && github));
             setSummary('');
             onOpenChange(false);
             setNote(undefined);

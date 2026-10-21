@@ -11,6 +11,7 @@
    five findings where it matters: `{{add_findings}}({ findings: [{ target: "patch:pr-<n>", anchor: { type:
    "code-line", path, line, side: "new" }, body, severity }] })` (`type: "code-range"` with `startLine` / `endLine`
    for several lines). They arrive proposed: I accept or dismiss each one.
+   {{> graphify}}
    {{> overview}}
 5. Show it: `{{open_review}}({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
    changed, the findings). Tell me it is open in Co-Review, with two sentences: what the pull request does and its
@@ -18,6 +19,8 @@
 6. Loop `{{await_reviewer}}` → investigate → `{{reply}}` until it returns my Submit or says I closed the review (closing
    it means I'm done: tell me in one line what's still open). It's someone else's change: don't edit it. On my Submit, tell me my verdict and what I
    asked for; the author does the work. I can post the review to the pull request myself (**Also post to GitHub**
-   when submitting). If I ask you to post it, call `{{post_review_to_github}}` with `comments`: each of my open
-   comments rewritten as my own point, in my voice, without our discussion or any mention of it. Co-Review shows me
+   when submitting): the Submit's `github.status` says whether I did (`posted`, or `posting` while Co-Review posts it).
+   Then it is on GitHub: never say it isn't, and don't offer to post it. If I ask you to post it, call `{{post_review_to_github}}` with `comments`: each of my open
+   comments rewritten as my own point, in my voice, without our discussion or any mention of it (a finding I kept and
+   replied to is one point made of both: the finding with what I added). Co-Review shows me
    what goes out and posts only when I confirm.

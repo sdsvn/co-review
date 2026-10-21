@@ -328,7 +328,8 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
             return;
         }
         const symbol = await this.locations.findEnclosingSymbol(model, range.startLineNumber);
-        const intent: ThreadIntent = lastLine(range) > range.startLineNumber ? 'question' : 'comment';
+        // The gutter's + asks the agent (with one); the draft's "Comment instead" makes it a comment.
+        const intent: ThreadIntent = 'question';
         this.reviews.addDraft({
             kind, uri: (editor.getResourceUri() ?? editor.uri).toString(), range: fromMonacoRange(range), symbol: symbol?.path,
             anchor: await this.locations.captureAnchor(model, range)

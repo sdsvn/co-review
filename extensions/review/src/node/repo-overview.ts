@@ -1,7 +1,6 @@
-import { promises as fs } from 'fs';
 import * as path from 'path';
 import { ReviewCoverage } from '../common/review-model';
-import { GraphState } from './graphify';
+import { GraphSource, GraphState, loadGraph } from './graphify';
 
 /** A Graphify `graph.json` (networkx node-link): what the overview reads from it. */
 export interface GraphifyGraph {
@@ -31,16 +30,15 @@ export interface OverviewInput {
 
 /**
  * The repository overview: where to start, the areas of the code and how they connect — the page a reviewer opens
- * before reviewing a whole repository. Built from a Graphify graph (`graphify-out/graph.json`) when there is one,
+ * before reviewing a whole repository. Built from its Graphify graphs (`graphify-out/graph.json`, or scoped ones) when it has any,
  * which knows calls, imports and clusters; otherwise from the Tree-sitter repo map (files, folders, definitions).
  */
 export async function repositoryOverview(input: OverviewInput): Promise<string> {
-    const graphFile = path.join(input.root, 'graphify-out', 'graph.json');
-    const graph = await fs.readFile(graphFile, 'utf8').then(text => JSON.parse(text) as GraphifyGraph, () => undefined);
+    const loaded = await loadGraph(input.root);
     const title = `# Repository overview: ${path.basename(input.root)}`;
-    return (graph?.nodes?.length ? fromGraph(input, graph) : fromMap(input)).join('\n');
+    return (loaded ? fromGraph(input, loaded.graph, loaded.sources) : fromMap(input)).join('\n');
 
-    function fromGraph(inputs: OverviewInput, g: GraphifyGraph): string[] {
+    function fromGraph(inputs: OverviewInput, g: GraphifyGraph, sources: GraphSource[]): string[] {
         const nodes = new Map(g.nodes.map(n => [n.id, n]));
         const degree = new Map<string, number>();
         const between = new Map<string, number>();
@@ -67,11 +65,21 @@ export async function repositoryOverview(input: OverviewInput): Promise<string> 
         }
         const areas = [...communities.entries()].filter(([, c]) => c.nodes.length >= 3)
             .sort(([, a], [, b]) => b.nodes.length - a.nodes.length).slice(0, 12);
+        // A graph outside the repository (the main checkout's, for a worktree) is named by its absolute path.
+        const shownPath = (file: string) => path.relative(inputs.root, file).startsWith('..') ? file : path.relative(inputs.root, file).split(path.sep).join('/');
+        const files = sources.map(s => `\`${shownPath(s.file)}\`${s.scope ? ` (${s.scope})` : ''}`).join(', ');
+        const reports = sources.map(s => {
+            const report = shownPath(path.join(path.dirname(s.file), 'GRAPH_REPORT.md'));
+            return path.isAbsolute(report) ? `\`${report}\`` : `[${s.scope ? `${s.scope}/` : ''}GRAPH_REPORT.md](${encodeURI(report)})`;
+        }).join(', ');
         const lines = [title, '',
-            `Built from the Graphify graph of this repository (\`graphify-out/graph.json\`: ${g.nodes.length} definitions, `
+            `Built from the Graphify graph${sources.length === 1 ? '' : 's'} of this repository (${files}: ${g.nodes.length} definitions, `
             + `${communities.size} areas). ${inputs.coverage.viewed} of ${inputs.coverage.total} source files viewed so far${inputs.coverage.skipped ? ` (${inputs.coverage.skipped} of them marked "don't care")` : ''}. `
-            + 'Graphify\'s own report, [GRAPH_REPORT.md](graphify-out/GRAPH_REPORT.md), adds the import cycles and the surprising '
-            + 'connections between distant parts of the code.', '',
+            + `Graphify's own report${sources.length === 1 ? '' : 's'}, ${reports}, add${sources.length === 1 ? 's' : ''} the import cycles and the surprising `
+            + 'connections between distant parts of the code. Agents ask '
+            + (sources.length === 1 && !sources[0].scope && !path.isAbsolute(shownPath(sources[0].file))
+                ? 'it with `graphify query "<question>"` from the repository root.'
+                : `${sources.length === 1 ? 'it' : 'the one for the code in question'} with \`graphify query "<question>" --graph <path above>\`.`), '',
             '## Start here', '',
             'The most connected code: what the rest of the repository calls, imports or implements.', ''];
         if (!degree.size) {

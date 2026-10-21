@@ -207,8 +207,14 @@ export class ReviewServiceImpl implements ReviewService {
         return this.github.preview(reviewId, decision, summary);
     }
 
-    postToGitHub(reviewId: string, decision?: ReviewDecision, summary?: string, edits?: GitHubEdits): Promise<GitHubPost> {
-        return this.github.publish(reviewId, decision, summary, undefined, edits);
+    async postToGitHub(reviewId: string, decision?: ReviewDecision, summary?: string, edits?: GitHubEdits): Promise<GitHubPost> {
+        try {
+            return await this.github.publish(reviewId, decision, summary, undefined, edits);
+        } catch (e) {
+            // The agent was told the reviewer is posting this round: tell it the post failed.
+            await this.store.setVerdictGitHub(reviewId, 'failed').catch(() => undefined);
+            throw e;
+        }
     }
 
 
@@ -244,8 +250,8 @@ export class ReviewServiceImpl implements ReviewService {
         return this.presence.get(reviewId);
     }
 
-    submitReview(reviewId: string, decision: ReviewDecision, summary: string, actor: Participant): Promise<Review> {
-        return this.store.submit(reviewId, decision, summary, actor);
+    submitReview(reviewId: string, decision: ReviewDecision, summary: string, actor: Participant, postingToGitHub?: boolean): Promise<Review> {
+        return this.store.submit(reviewId, decision, summary, actor, postingToGitHub);
     }
 
     syncFindings(reviewId: string): Promise<number> {

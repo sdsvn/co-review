@@ -7,6 +7,7 @@ import type { StreamableHTTPServerTransport as TransportType } from '@modelconte
 import { execFile, spawn } from 'child_process';
 import * as http from 'http';
 import { randomUUID } from 'crypto';
+import * as fsSync from 'fs';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
@@ -576,8 +577,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 summary: z.string().optional().describe('The review\'s message on GitHub (default: the reviewer\'s summary from Submit review)'),
                 comments: z.array(z.object({ threadId: z.string(), body: z.string() })).optional().describe('Each open comment as the '
                     + 'reviewer\'s own point, in their voice (threadId: its id or short id). Only what they want changed, as one comment '
-                    + 'of theirs: not the discussion, not your replies, no mention of talking it over with you. A thread left out is '
-                    + 'posted as the reviewer\'s own messages.')
+                    + 'of theirs: not the discussion, not your replies, no mention of talking it over with you. A finding they kept and '
+                    + 'replied to is one point made of both: the finding with what they added. A thread left out is posted as its finding '
+                    + '(if it is one) followed by the reviewer\'s own messages.')
             }
         }, async ({ reviewId, summary, comments }) => {
             const review = await resolveReview(reviewId);
@@ -636,7 +638,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 query: z.string().optional().describe('Only files whose path or symbol names contain this (case-insensitive)'),
                 refresh: z.boolean().optional().describe('Re-check every file now instead of reusing a map from the last few seconds'),
                 overview: z.boolean().optional().describe('Instead of the file list: the repository overview (where to start, the areas of '
-                    + 'the code and how they connect; from graphify-out/graph.json when the repository has a Graphify graph)')
+                    + 'the code and how they connect; from the repository\'s Graphify graphs when it has any, naming them: graphify-out/, '
+                    + 'per-folder ones like services/graphify-out/, or in a git worktree the main checkout\'s)')
             }
         }, async ({ root, path: under, query, refresh, overview }) => {
             const review = await resolveReview(undefined, root ? realPath(root) : undefined);
@@ -903,8 +906,29 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             comments: open.map(t => commentOf(t, this.root(review), {}, this.codeRoot(review))),
             acceptedSuggestions: acceptedSuggestions(review),
             openCount: open.length,
-            proposedCount: review.threads.filter(t => t.status === 'proposed').length
+            proposedCount: review.threads.filter(t => t.status === 'proposed').length,
+            ...this.githubState(review)
         };
+    }
+
+    /**
+     * Whether this round is on its GitHub pull request, for a pull request's review: the reviewer posts it themselves with
+     * **Also post to GitHub** (Co-Review posts it right after the Submit), so the agent must not say it isn't or offer to.
+     */
+    protected githubState(review: Review): Record<string, unknown> {
+        const round = review.verdict?.count ?? 0;
+        const posted = review.bundle?.github;
+        if (posted && posted.round === round && round) {
+            return { github: { status: 'posted', url: posted.url }, githubNote: `The reviewer posted this round to GitHub (${posted.url}): don't post it or offer to.` };
+        }
+        if (review.verdict?.github === 'posting') {
+            return { github: { status: 'posting' }, githubNote: 'The reviewer is posting this round to GitHub (Co-Review posts it after the Submit): don\'t post it or offer to.' };
+        }
+        if (review.verdict?.github === 'failed') {
+            return { github: { status: 'failed' }, githubNote: 'The reviewer chose to post this round to GitHub, but posting failed: tell them, and offer post_review_to_github.' };
+        }
+        const pr = review.bundle?.dir && fsSync.existsSync(path.join(review.bundle.dir, 'PR.md'));
+        return pr && round ? { github: { status: 'not-posted', ...posted ? { lastPostedRound: posted.round, url: posted.url } : {} } } : {};
     }
 
     /** The await_reviewer comment batch, plus the threads to answer with full context. */

@@ -56,8 +56,8 @@ sequenceDiagram
 |---|---|
 | Keep or drop a proposed finding | ✓ **Accept finding** / ⊘ **Dismiss finding** on the thread (the panel's **Proposed** tab lists them) |
 | Ask about a finding | Reply in its thread; the agent answers there |
-| Comment on code | **+** in the gutter (drag for several lines), or select and press `Cmd+Alt+M` |
-| Ask the agent about code | Select it and press `Cmd+Alt+A` (**Ask Agent**) |
+| Ask the agent about code | **+** in the gutter (drag for several lines), or select it and press `Cmd+Alt+A` (**Ask Agent**): asking is the default with an agent |
+| Comment on code (feedback for your verdict) | Select it and press `Cmd+Alt+M` (**Comment**), or **Comment instead** in a question's draft |
 | Suggest an edit | In a comment on a patch line or document text, **Suggest a change** |
 | Move between threads | `Cmd+Alt+↓` / `Cmd+Alt+↑`, or click a thread in the panel |
 | Finish | **Submit review…** in the panel: **Approve**, **Request changes** or **Comment**, with a message |
@@ -181,7 +181,7 @@ the pull request as one GitHub review, through the GitHub CLI (so `gh auth login
 |---|---|
 | Your decision (Approve / Request changes / Comment) | The review's decision (on your own pull request GitHub only allows a comment; Co-Review posts it as one and says so) |
 | Your message | The review's summary |
-| Open threads on diff lines (your comments, findings you accepted) | Line comments: your point only, not the discussion (the agent can reword each in your voice when it posts) |
+| Open threads on diff lines (your comments, findings you accepted) | Line comments: your point only, not the discussion; a finding you kept and replied to is the finding followed by your reply (the agent can reword each in your voice when it posts, and you can edit each in the preview) |
 | Suggested edits you accepted | GitHub suggestions the author can commit with one click |
 | Comments on the pull request or its description | Listed in the summary |
 | Agents' replies, questions you asked an agent (**Ask Agent**), proposed findings you didn't accept, resolved threads, the agent's own questions | Not posted |

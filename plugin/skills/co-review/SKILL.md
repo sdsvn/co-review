@@ -55,8 +55,14 @@ instead of 5,000 files:
    `reviewId` it returns. Don't tell me about it yet.
 2. Call `repo_map({ overview: true })` and `repo_map`. With [Graphify](https://graphify.net) installed, the
    overview is built from its code graph (Co-Review builds it: calls, imports, clusters, the most connected code), and
-   `graphify-out/GRAPH_REPORT.md` lists import cycles and surprising connections between distant parts of the code:
-   good leads. Split the repository (or the focus I gave you) into 4–10 areas and read the riskiest code in each
+   the graph's `GRAPH_REPORT.md` lists import cycles and surprising connections between distant parts of the code:
+   good leads. When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
+   searching: `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "X"`. A large repository may
+   keep one graph per folder (e.g. `services/graphify-out/`; its AGENTS.md says which), and graphs are untracked, so a
+   git worktree has none: pass `--graph <path>` to the right `graph.json`, the main checkout's in a worktree (the
+   first line of `git worktree list`). If the folder it names has no `graph.json` (only dated snapshots), use the
+   whole repository's, `graphify-out/graph.json`. `repo_map({ overview: true })` names the graphs it found. Only
+   when there is none, say so and search instead. Split the repository (or the focus I gave you) into 4–10 areas and read the riskiest code in each
    (entry points, input handling, money, auth, concurrency, persistence).
 3. Add findings with `add_findings`: the area as the first label, `status: "proposed"`, at most three per area,
    each with what's wrong, why it matters and what to do, with `severity`. A finding goes on the code (`path`,
@@ -65,8 +71,9 @@ instead of 5,000 files:
    Then write your overview of it for the review's front page, which I read first, and add it with
    `open_review({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
    ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:
-   callers, data, configuration, other services), and where to start reading, as a short numbered list at the end
-   (`1. **The handler**: what it does`). Plain language; no line-by-line walkthrough.
+   callers, data, configuration, other services), and where to start reading, as a short numbered list at the end,
+   each linked to the code so I can click it (`1. [**The handler**](path/to/file.go:42): what it does`). Plain
+   language; no line-by-line walkthrough.
 4. Show it: `open_review({ reviewId })`. It opens on the overview page: your overview, every finding grouped by
    area, and the repository's areas, as one page I can read and comment on. Tell me it is open in Co-Review, with the
    areas with their finding counts, in one short message.
@@ -78,8 +85,10 @@ instead of 5,000 files:
 
 `repo_map({ overview: true })` says where to start and how the code clusters. When the `graphify` command is
 installed, Co-Review builds a [Graphify](https://graphify.net) graph of the code first (Tree-sitter, no LLM, seconds;
-in `graphify-out/`, kept out of `git status`), and while answering, `graphify query "<question>"`, `graphify path "A"
-"B"` and `graphify explain "X"` answer how parts of the code connect without searching. A finding about a whole area goes on its folder (`path` without `line`), one about the
+in `graphify-out/`, kept out of `git status`; a repository that keeps one graph per folder, like `services/graphify-out/`,
+keeps those), and while answering, `graphify query "<question>"`, `graphify path "A" "B"` and `graphify explain "X"`
+answer how parts of the code connect without searching. In a git worktree, or with per-folder graphs, pass
+`--graph <path>`: graphs are untracked, so a worktree uses the main checkout's. A finding about a whole area goes on its folder (`path` without `line`), one about the
 repository on `path: "."`; the overview page and the panel's **By area** view group findings by their first label, so
 make that label the area.
 
@@ -100,8 +109,9 @@ on lines, suggests edits and submits one verdict:
    Then write your overview of it for the review's front page, which I read first, and add it with
    `open_review({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
    ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:
-   callers, data, configuration, other services), and where to start reading, as a short numbered list at the end
-   (`1. **The handler**: what it does`). Plain language; no line-by-line walkthrough.
+   callers, data, configuration, other services), and where to start reading, as a short numbered list at the end,
+   each linked to the code so I can click it (`1. [**The handler**](path/to/file.go:42): what it does`). Plain
+   language; no line-by-line walkthrough.
 3. Show it: `open_review({ reviewId })`. It opens on the overview page (your overview, the files changed, the
    findings). Tell me it is open in Co-Review and, in one sentence, what to look at first.
 4. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review
@@ -129,19 +139,29 @@ For a pull request you didn't write. You take the first pass; the human decides 
    five findings where it matters: `add_findings({ findings: [{ target: "patch:pr-<n>", anchor: { type:
    "code-line", path, line, side: "new" }, body, severity }] })` (`type: "code-range"` with `startLine` / `endLine`
    for several lines). They arrive proposed: I accept or dismiss each one.
+   When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
+   searching: `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "X"`. A large repository may
+   keep one graph per folder (e.g. `services/graphify-out/`; its AGENTS.md says which), and graphs are untracked, so a
+   git worktree has none: pass `--graph <path>` to the right `graph.json`, the main checkout's in a worktree (the
+   first line of `git worktree list`). If the folder it names has no `graph.json` (only dated snapshots), use the
+   whole repository's, `graphify-out/graph.json`. `repo_map({ overview: true })` names the graphs it found. Only
+   when there is none, say so and search instead.
    Then write your overview of it for the review's front page, which I read first, and add it with
    `open_review({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
    ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:
-   callers, data, configuration, other services), and where to start reading, as a short numbered list at the end
-   (`1. **The handler**: what it does`). Plain language; no line-by-line walkthrough.
+   callers, data, configuration, other services), and where to start reading, as a short numbered list at the end,
+   each linked to the code so I can click it (`1. [**The handler**](path/to/file.go:42): what it does`). Plain
+   language; no line-by-line walkthrough.
 5. Show it: `open_review({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
    changed, the findings). Tell me it is open in Co-Review, with two sentences: what the pull request does and its
    riskiest part.
 6. Loop `await_reviewer` → investigate → `reply` until it returns my Submit or says I closed the review (closing
    it means I'm done: tell me in one line what's still open). It's someone else's change: don't edit it. On my Submit, tell me my verdict and what I
    asked for; the author does the work. I can post the review to the pull request myself (**Also post to GitHub**
-   when submitting). If I ask you to post it, call `post_review_to_github` with `comments`: each of my open
-   comments rewritten as my own point, in my voice, without our discussion or any mention of it. Co-Review shows me
+   when submitting): the Submit's `github.status` says whether I did (`posted`, or `posting` while Co-Review posts it).
+   Then it is on GitHub: never say it isn't, and don't offer to post it. If I ask you to post it, call `post_review_to_github` with `comments`: each of my open
+   comments rewritten as my own point, in my voice, without our discussion or any mention of it (a finding I kept and
+   replied to is one point made of both: the finding with what I added). Co-Review shows me
    what goes out and posts only when I confirm.
 <!-- /prompt -->
 

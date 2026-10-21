@@ -367,13 +367,24 @@ export class ReviewStore {
     }
 
     /** The reviewer submits the review (a round): decision + message to the agent. */
-    submit(reviewId: string, decision: ReviewDecision, summary: string, actor: Participant): Promise<Review> {
+    submit(reviewId: string, decision: ReviewDecision, summary: string, actor: Participant, postingToGitHub?: boolean): Promise<Review> {
         return this.mutate(reviewId, (review, now) => {
             review.verdict = {
                 decision, summary, submittedAt: now, count: (review.verdict?.count ?? 0) + 1,
-                ...review.agent?.transport === 'mcp' ? { toAgent: 'waiting' as const } : {}
+                ...review.agent?.transport === 'mcp' ? { toAgent: 'waiting' as const } : {},
+                ...postingToGitHub ? { github: 'posting' as const } : {}
             };
             this.record(review, { kind: 'review-submitted', actor, at: now });
+            return review;
+        });
+    }
+
+    /** The latest round's GitHub post failed (see ReviewVerdict.github). */
+    setVerdictGitHub(reviewId: string, github: 'failed'): Promise<Review> {
+        return this.mutate(reviewId, review => {
+            if (review.verdict?.github) {
+                review.verdict.github = github;
+            }
             return review;
         });
     }

@@ -388,6 +388,11 @@ export interface ReviewVerdict {
     count: number;
     /** For a review with an MCP agent: `waiting` until an agent picks the round up, then `delivered`. */
     toAgent?: 'waiting' | 'delivered';
+    /**
+     * The reviewer chose **Also post to GitHub** with this round: `posting` until it is posted (then the bundle's `github`
+     * has this round) or `failed`. The agent is told, so it never offers to post a round the reviewer is posting.
+     */
+    github?: 'posting' | 'failed';
 }
 
 /**

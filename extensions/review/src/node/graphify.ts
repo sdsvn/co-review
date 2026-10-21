@@ -1,12 +1,16 @@
 import { execFile } from 'child_process';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import type { GraphifyGraph } from './repo-overview';
 
 /**
  * Graphify (https://graphify.net) builds a knowledge graph of a repository: definitions, calls, imports, clusters of
  * code that work together (communities) and the most connected code. For code it uses Tree-sitter only (no LLM, no
  * API key), and `graphify update <repo>` takes seconds, so Co-Review builds the graph itself for whole-repository
  * reviews when the `graphify` command is installed. It writes `<repo>/graphify-out/`.
+ *
+ * A large repository may keep scoped graphs instead, one per folder (`services/graphify-out/`, `pkg/graphify-out/`, as
+ * its AGENTS.md says), and a graph is untracked, so a git worktree has none: {@link findGraphs} looks for both.
  */
 
 export type GraphState = 'built' | 'missing' | 'failed';
@@ -34,13 +38,118 @@ export function graphifyInstalled(): Promise<boolean> {
     return installed;
 }
 
-/** Builds or refreshes `<root>/graphify-out/graph.json`; `missing` without the `graphify` command. */
+/** A Graphify graph of (part of) a repository. */
+export interface GraphSource {
+    /** The repository-relative folder it covers, '' for the whole repository; its `source_file`s are relative to it. */
+    scope: string;
+    /** Its `graph.json`. */
+    file: string;
+}
+
+const NOT_SCOPES = new Set(['node_modules', 'vendor', 'dist', 'build', 'target', 'graphify-out']);
+
+async function exists(file: string): Promise<boolean> {
+    return fs.access(file).then(() => true, () => false);
+}
+
+/**
+ * The repository's graphs in one checkout: its scoped graphs up to two folders down when it keeps them (the repository
+ * chose those, e.g. one per service), else its own.
+ */
+async function graphsIn(base: string): Promise<GraphSource[]> {
+    const found: GraphSource[] = [];
+    const scan = async (scope: string, depth: number): Promise<void> => {
+        const entries = await fs.readdir(path.join(base, scope), { withFileTypes: true }).catch(() => []);
+        for (const entry of entries) {
+            if (!entry.isDirectory() || entry.name.startsWith('.') || NOT_SCOPES.has(entry.name)) {
+                continue;
+            }
+            const sub = scope ? `${scope}/${entry.name}` : entry.name;
+            const file = path.join(base, sub, 'graphify-out', 'graph.json');
+            if (await exists(file)) {
+                found.push({ scope: sub, file });
+            } else if (depth < 2) {
+                await scan(sub, depth + 1);
+            }
+        }
+    };
+    await scan('', 1);
+    if (found.length) {
+        return found.sort((a, b) => a.scope.localeCompare(b.scope));
+    }
+    const own = path.join(base, 'graphify-out', 'graph.json');
+    return await exists(own) ? [{ scope: '', file: own }] : [];
+}
+
+/** The main checkout of the repository `root` is a linked git worktree of; undefined when it is the main one. */
+async function mainCheckout(root: string): Promise<string | undefined> {
+    const common = await run('git', ['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir']);
+    const dir = common.ok ? common.stdout.trim() : '';
+    if (path.basename(dir) !== '.git') {
+        return undefined;
+    }
+    const main = path.dirname(dir);
+    const [a, b] = await Promise.all([fs.realpath(main).catch(() => main), fs.realpath(root).catch(() => root)]);
+    return a === b ? undefined : main;
+}
+
+/**
+ * The repository's Graphify graphs: its scoped graphs (`<folder>/graphify-out/`), or else `<root>/graphify-out/graph.json`,
+ * or else, in a linked git worktree (graphs are untracked, so it has none), those of the main checkout.
+ */
+export async function findGraphs(root: string): Promise<GraphSource[]> {
+    const own = await graphsIn(root);
+    if (own.length) {
+        return own;
+    }
+    const main = await mainCheckout(root);
+    return main ? graphsIn(main) : [];
+}
+
+/**
+ * The repository's graphs as one graph with repository-relative `source_file`s (see {@link findGraphs}); scoped graphs
+ * keep their nodes and communities apart. Undefined without a graph.
+ */
+export async function loadGraph(root: string): Promise<{ graph: GraphifyGraph; sources: GraphSource[] } | undefined> {
+    const sources = await findGraphs(root);
+    const graph: GraphifyGraph = { nodes: [], links: [] };
+    let communities = 0;
+    for (const source of sources) {
+        const g = await fs.readFile(source.file, 'utf8').then(text => JSON.parse(text) as GraphifyGraph, () => undefined);
+        if (!g?.nodes?.length) {
+            continue;
+        }
+        const id = (n: string) => source.scope ? `${source.scope}:${n}` : n;
+        const offset = communities;
+        for (const node of g.nodes) {
+            graph.nodes.push({
+                ...node, id: id(node.id),
+                source_file: node.source_file && source.scope ? path.posix.join(source.scope, node.source_file) : node.source_file,
+                community: node.community === undefined ? undefined : node.community + offset
+            });
+            communities = Math.max(communities, (node.community ?? -1) + offset + 1);
+        }
+        for (const edge of g.links ?? g.edges ?? []) {
+            graph.links!.push({ ...edge, source: id(edge.source), target: id(edge.target) });
+        }
+    }
+    return graph.nodes.length ? { graph, sources } : undefined;
+}
+
+/**
+ * Builds or refreshes `<root>/graphify-out/graph.json`; `missing` without the `graphify` command. A repository with
+ * scoped graphs (in `root`, or in the main checkout of the worktree `root` is) keeps them: no whole-repository graph.
+ */
 export function buildGraph(root: string): Promise<GraphState> {
     const pending = running.get(root);
     if (pending) {
         return pending;
     }
     const build = (async (): Promise<GraphState> => {
+        const found = await findGraphs(root);
+        if (found.length && found.every(g => g.scope)) {
+            return 'built';
+        }
         if (!await graphifyInstalled()) {
             return 'missing';
         }
@@ -109,15 +218,14 @@ const MAX_CHANGED = 40;
 const MAX_AFFECTED = 60;
 
 /**
- * A change's blast radius from the repository's Graphify graph (`<root>/graphify-out/graph.json`), if it has one: the
+ * A change's blast radius from the repository's Graphify graphs (see {@link findGraphs}), if it has any: the
  * definitions whose code the change touches (the nearest one starting at or above each changed line), then what
  * depends on them (callers, importers, implementers: two hops) and what they call (one hop). Undefined without a graph.
  */
 export async function blastRadius(root: string, changedLines: Map<string, number[]>): Promise<BlastRadius | undefined> {
     const { DEPENDENCIES } = await import('./repo-overview');
-    const graph = await fs.readFile(path.join(root, 'graphify-out', 'graph.json'), 'utf8')
-        .then(text => JSON.parse(text) as import('./repo-overview').GraphifyGraph, () => undefined);
-    if (!graph?.nodes?.length) {
+    const graph = (await loadGraph(root))?.graph;
+    if (!graph) {
         return undefined;
     }
     const nodes = new Map(graph.nodes.filter(n => n.source_file).map(n => [n.id, {

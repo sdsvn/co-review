@@ -21,6 +21,24 @@ export interface RenderedDocument {
 
 const md = markdownit({ html: false, linkify: true, breaks: false });
 
+/** A repository path in backticks (`src/a.ts`, `src/a.ts:42`, `src/a.ts:42-50`): a folder, then a file with an extension. */
+const CODE_PATH = /^(?:[\w@.+-]+\/)+[\w@+-][\w@.+-]*\.[A-Za-z0-9]+(?::\d+(?:-\d+)?)?$/;
+
+// An agent writes `services/billing/refund.go` as often as a link: it opens the code too (see openLink in the widget).
+const codeInline = md.renderer.rules.code_inline!;
+md.renderer.rules.code_inline = (tokens, idx, options, env, self) => {
+    const html = codeInline(tokens, idx, options, env, self);
+    const text = tokens[idx].content.trim();
+    let inLink = false;
+    for (let i = idx - 1; i >= 0 && !inLink; i--) {
+        if (tokens[i].type === 'link_close') {
+            break;
+        }
+        inLink = tokens[i].type === 'link_open';
+    }
+    return !inLink && CODE_PATH.test(text) ? `<a href="${esc(encodeURI(text))}" class="co-review-code-path">${html}</a>` : html;
+};
+
 function esc(text: string): string {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

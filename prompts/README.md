@@ -34,4 +34,5 @@ Conventions:
 | `review-change.md` | reviewing the agent's change (its diff): the commands and the `co-review` skill |
 | `review-pr.md` | reviewing someone else's pull request: the commands and the `co-review` skill |
 | `pi-tools.md` | the Pi / Oh My Pi tool names, in the skills |
+| `graphify.md` | asking the repository's Graphify graphs (scoped per folder, the main checkout's in a worktree), included by `audit.md`, `review-pr.md`, `co-reviewer.md` |
 | `overview.md` | writing the review's overview (its front page), included by `audit.md`, `review-change.md`, `review-pr.md` |

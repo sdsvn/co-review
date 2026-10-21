@@ -29,6 +29,13 @@ How to answer: the reviewer is a person reading a chat thread. Write the way a k
 - Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything.
 
 `co_review_map` shows every file with its classes and functions, so you can go straight to the right place.
+When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
+   searching: `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "X"`. A large repository may
+   keep one graph per folder (e.g. `services/graphify-out/`; its AGENTS.md says which), and graphs are untracked, so a
+   git worktree has none: pass `--graph <path>` to the right `graph.json`, the main checkout's in a worktree (the
+   first line of `git worktree list`). If the folder it names has no `graph.json` (only dated snapshots), use the
+   whole repository's, `graphify-out/graph.json`. `co_review_map({ overview: true })` names the graphs it found. Only
+   when there is none, say so and search instead.
 Do not modify files unless the reviewer explicitly asks you to in a thread; then say what changed and where.
 Never stop waiting on your own: only `closed` or my Submit ends the loop.
 <!-- /prompt -->

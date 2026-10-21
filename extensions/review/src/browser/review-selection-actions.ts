@@ -8,6 +8,7 @@ import { EditorWidget } from '@theia/editor/lib/browser/editor-widget';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import * as monaco from '@theia/monaco-editor-core';
 import { ReviewCommands } from './review-commands';
+import { ASK_TITLE, COMMENT_TITLE } from './review-components';
 import { ReviewManager } from './review-manager';
 
 /**
@@ -102,10 +103,10 @@ export class ReviewSelectionActions implements FrontendApplicationContribution {
     protected createNode(): HTMLElement {
         const node = document.createElement('div');
         node.className = 'co-review-selection-actions';
-        const button = (label: string, icon: string, commandId: string, primary: boolean) => {
+        const button = (label: string, icon: string, commandId: string, primary: boolean, title: string) => {
             const el = document.createElement('button');
             el.className = `co-review-selection-action ${primary ? 'primary' : ''}`;
-            el.title = label;
+            el.title = title;
             el.innerHTML = `<span class="${codicon(icon)}"></span><span>${label}</span>`;
             // Keep the editor selection: act on mousedown and prevent the focus change.
             el.addEventListener('mousedown', e => {
@@ -117,8 +118,8 @@ export class ReviewSelectionActions implements FrontendApplicationContribution {
             return el;
         };
         node.append(
-            button('Ask Agent', 'hubot', ReviewCommands.ASK_SELECTION.id, true),
-            button('Comment', 'comment', ReviewCommands.COMMENT_SELECTION.id, false)
+            button('Ask Agent', 'hubot', ReviewCommands.ASK_SELECTION.id, true, ASK_TITLE),
+            button('Comment', 'comment', ReviewCommands.COMMENT_SELECTION.id, false, COMMENT_TITLE)
         );
         return node;
     }

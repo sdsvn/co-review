@@ -159,7 +159,8 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     answerPermission(requestId: string, optionId: string): Promise<void>;
     getAgentPresence(reviewId: string): Promise<AgentPresence | undefined>;
     /** Submit the review round (decision + message to the agent). */
-    submitReview(reviewId: string, decision: ReviewDecision, summary: string, actor: Participant): Promise<Review>;
+    /** `postingToGitHub`: the reviewer chose **Also post to GitHub**, and `postToGitHub` follows. */
+    submitReview(reviewId: string, decision: ReviewDecision, summary: string, actor: Participant, postingToGitHub?: boolean): Promise<Review>;
     /** Accept or reject a suggested edit. Accepted document edits are written into the document. */
     decideProposal(reviewId: string, threadId: string, accept: boolean): Promise<void>;
     /** Ingests pre-seeded findings (`<patch>.comments.json[l]` sidecars) of a review directory. */

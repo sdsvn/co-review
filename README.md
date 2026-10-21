@@ -154,7 +154,7 @@ current file, a branch against its base, or a commit. Or right-click files or fo
 | A file or folder | Right-click it in the explorer → **Add Review Comment** |
 | The repository | **⋯** in the Review panel → **Comment on the repository** |
 
-Once an agent is connected, **Ask Agent** appears next to commenting. Reply, resolve and collapse threads inline; the
+Once an agent is connected, asking it is the default (**Ask Agent**); **Comment** is the deliberate choice for feedback that goes with your verdict. Reply, resolve and collapse threads inline; the
 panel lists them by file (**Open / Proposed / Resolved / All**), and **⋯** has the rest.
 
 - **Whole repository:** the panel's **Coverage** shows what you've viewed, overall and per area. **Overview** says

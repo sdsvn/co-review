@@ -9,8 +9,14 @@ Review this entire repository with me in Co-Review, following the `co-review` sk
    `reviewId` it returns. Don't tell me about it yet.
 2. Call `repo_map({ overview: true })` and `repo_map`. With [Graphify](https://graphify.net) installed, the
    overview is built from its code graph (Co-Review builds it: calls, imports, clusters, the most connected code), and
-   `graphify-out/GRAPH_REPORT.md` lists import cycles and surprising connections between distant parts of the code:
-   good leads. Split the repository (or the focus I gave you) into 4–10 areas and read the riskiest code in each
+   the graph's `GRAPH_REPORT.md` lists import cycles and surprising connections between distant parts of the code:
+   good leads. When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
+   searching: `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "X"`. A large repository may
+   keep one graph per folder (e.g. `services/graphify-out/`; its AGENTS.md says which), and graphs are untracked, so a
+   git worktree has none: pass `--graph <path>` to the right `graph.json`, the main checkout's in a worktree (the
+   first line of `git worktree list`). If the folder it names has no `graph.json` (only dated snapshots), use the
+   whole repository's, `graphify-out/graph.json`. `repo_map({ overview: true })` names the graphs it found. Only
+   when there is none, say so and search instead. Split the repository (or the focus I gave you) into 4–10 areas and read the riskiest code in each
    (entry points, input handling, money, auth, concurrency, persistence).
 3. Add findings with `add_findings`: the area as the first label, `status: "proposed"`, at most three per area,
    each with what's wrong, why it matters and what to do, with `severity`. A finding goes on the code (`path`,
@@ -19,8 +25,9 @@ Review this entire repository with me in Co-Review, following the `co-review` sk
    Then write your overview of it for the review's front page, which I read first, and add it with
    `open_review({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
    ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:
-   callers, data, configuration, other services), and where to start reading, as a short numbered list at the end
-   (`1. **The handler**: what it does`). Plain language; no line-by-line walkthrough.
+   callers, data, configuration, other services), and where to start reading, as a short numbered list at the end,
+   each linked to the code so I can click it (`1. [**The handler**](path/to/file.go:42): what it does`). Plain
+   language; no line-by-line walkthrough.
 4. Show it: `open_review({ reviewId })`. It opens on the overview page: your overview, every finding grouped by
    area, and the repository's areas, as one page I can read and comment on. Tell me it is open in Co-Review, with the
    areas with their finding counts, in one short message.

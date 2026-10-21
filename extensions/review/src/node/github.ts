@@ -25,13 +25,16 @@ const DECISION_LABEL: Record<ReviewDecision, string> = { approve: 'Approve', 're
 
 /**
  * A thread as the reviewer's comment on GitHub: their point, not the conversation. The agent's rewording in their voice
- * when it gave one (post_review_to_github's `comments`), else the reviewer's own messages; a finding they accepted
- * without writing anything is the finding's text. Replies from agents (and who said what) stay in Co-Review.
+ * when it gave one (post_review_to_github's `comments`), else the reviewer's own messages; a finding they kept is the
+ * finding's text followed by what they added to it. Other replies from agents (and who said what) stay in Co-Review.
  */
 function threadBody(thread: ReviewThread, reworded?: string): string {
     const humans = thread.messages.filter(m => m.author.kind === 'human' && m.body.trim());
     const first = thread.messages.find(m => m.author.kind !== 'system' && m.body.trim());
-    const text = reworded?.trim() || (humans.length ? humans.map(m => m.body.trim()).join('\n\n') : first?.body.trim() ?? '');
+    // An agent's finding the reviewer kept is the point itself; their replies add to it, they don't replace it.
+    const finding = thread.origin === 'finding' && first && first.author.kind !== 'human' ? [first] : [];
+    const kept = [...finding, ...humans];
+    const text = reworded?.trim() || (kept.length ? kept.map(m => m.body.trim()).join('\n\n') : first?.body.trim() ?? '');
     const suggestion = thread.proposal && thread.proposal.status !== 'rejected' && thread.location.patchAnchor?.side !== 'old'
         ? `\n\n\`\`\`suggestion\n${thread.proposal.after.replace(/\n$/, '')}\n\`\`\`` : '';
     return (text || '(no message)') + suggestion;

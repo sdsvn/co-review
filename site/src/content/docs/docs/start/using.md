@@ -31,7 +31,7 @@ Each target has its own gesture:
 | The repository | **...** in the Review panel then **Comment on the repository** |
 
 Until an agent joins the review, everything is a plain comment.
-Once one is connected, **Ask Agent** appears, and a multi-line selection defaults to asking.
+Once one is connected, asking is the default: the gutter's **+**, a line of a diff and a selection all start a question the agent answers in the thread. A comment is the deliberate choice (**Comment**, **Comment instead** or `Cmd+Alt+M`): feedback to act on, kept for your verdict and posted with your review.
 To connect one yourself, use **...** then **Connect agent**, and pick its model and reasoning effort from the list it offers.
 
 Threads sit inline under the code.

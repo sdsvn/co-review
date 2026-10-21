@@ -6,6 +6,10 @@ import { AgentActivity, PermissionRequest, Proposal, ReviewMessage, ReviewThread
 import { ReviewDraft, ReviewManager } from './review-manager';
 import { findingRest, findingTitle, hasMore, splitLocation } from './review-insights';
 
+/** What asking and commenting do, for their buttons: asking is the default, a comment is chosen on purpose. */
+export const ASK_TITLE = 'Ask the agent: it answers in the thread now. Not part of your review.';
+export const COMMENT_TITLE = 'Comment: feedback to act on, kept for your verdict and posted with your review.';
+
 /** Shared review UI, rendered both in the review panel and inline in editors. */
 
 export function formatTime(ms: number): string {
@@ -315,7 +319,7 @@ export function DraftEditor(props: DraftEditorProps): React.ReactElement {
         </div>
         <div className='co-review-composer'>
             <textarea ref={textarea} className='theia-input' rows={4} value={draft.body} autoFocus={props.acceptFocus && !draft.body}
-                placeholder={suggesting ? 'Why this change? (optional)' : asking ? 'Ask the agent about this code… (⌘/Ctrl+Enter)' : 'Leave a comment… (⌘/Ctrl+Enter)'}
+                placeholder={suggesting ? 'Why this change? (optional)' : asking ? 'Ask the agent about this code… (⌘/Ctrl+Enter)' : 'Feedback to act on, posted with your review… (⌘/Ctrl+Enter)'}
                 onChange={e => manager.updateDraft(draft.id, { body: e.currentTarget.value })}
                 onKeyDown={e => {
                     stopKeys(e);
@@ -341,10 +345,12 @@ export function DraftEditor(props: DraftEditorProps): React.ReactElement {
             <div className='co-review-composer-actions'>
                 {original !== undefined && <span className='co-review-link' onClick={toggleSuggestion}>{suggesting ? 'Remove suggestion' : 'Suggest a change'}</span>}
                 <span className='co-review-spacer' />
-                {!suggesting && manager.hasAgent && <span className={`co-review-link ${!canSubmit || busy ? 'disabled' : ''}`} onClick={() => submit(secondary)}>
-                    {asking ? 'Post as comment' : 'Ask agent instead'}
+                {!suggesting && manager.hasAgent && <span className={`co-review-link ${!canSubmit || busy ? 'disabled' : ''}`}
+                    title={asking ? COMMENT_TITLE : ASK_TITLE} onClick={() => submit(secondary)}>
+                    {asking ? 'Comment instead' : 'Ask agent instead'}
                 </span>}
-                <button className='theia-button' disabled={!canSubmit || busy} onClick={() => submit(suggesting ? 'comment' : primary)}>
+                <button className='theia-button' disabled={!canSubmit || busy} title={suggesting ? undefined : asking ? ASK_TITLE : COMMENT_TITLE}
+                    onClick={() => submit(suggesting ? 'comment' : primary)}>
                     {suggesting ? 'Suggest edit' : asking ? 'Ask Agent' : 'Comment'}
                 </button>
             </div>

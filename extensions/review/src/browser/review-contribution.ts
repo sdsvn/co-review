@@ -385,7 +385,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         });
         registry.registerCommand(ReviewCommands.COMMENT_SELECTION, {
             isEnabled: () => !!this.currentEditor(),
-            execute: () => this.commentOnEditor(false)
+            execute: () => this.commentOnEditor(false, 'comment')
         });
         registry.registerCommand(ReviewCommands.ASK_SELECTION, {
             isEnabled: () => !!this.currentEditor() && this.reviews.hasAgent,
@@ -394,7 +394,7 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
         });
         registry.registerCommand(ReviewCommands.COMMENT_SYMBOL, {
             isEnabled: () => !!this.currentEditor(),
-            execute: () => this.commentOnEditor(true)
+            execute: () => this.commentOnEditor(true, 'comment')
         });
         registry.registerCommand(ReviewCommands.COLLAPSE_ALL, { isEnabled: () => !!this.reviews.activeReview, execute: () => this.decorator.collapseAll() });
         registry.registerCommand(ReviewCommands.EXPAND_ALL, { isEnabled: () => !!this.reviews.activeReview, execute: () => this.decorator.expandAll() });
@@ -568,7 +568,8 @@ export class ReviewContribution extends AbstractViewContribution<ReviewWidget> i
             range = new monaco.Range(selection.startLineNumber, selection.startColumn, endLine, endColumn);
             kind = 'range';
         }
-        const defaultIntent = intent ?? (range.endLineNumber > range.startLineNumber ? 'question' : 'comment');
+        // Asking is the default with an agent; a comment is chosen on purpose (Cmd+Alt+M, the Comment buttons).
+        const defaultIntent = intent ?? 'question';
         await this.startDraft({ kind, uri, range: fromMonacoRange(range), symbol: symbol?.path, anchor: await this.locations.captureAnchor(model, range) }, defaultIntent);
     }
 

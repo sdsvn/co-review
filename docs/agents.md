@@ -34,7 +34,7 @@ The map is:
 - Stored next to the reviews in `~/.co-review`.
 - Refreshed for files that changed since the last build.
 
-An ACP agent gets the part of the map nearest the question in its first prompt. MCP agents call `repo_map` (Pi: `co_review_map`). **Graphify.** When the `graphify` command ([Graphify](https://graphify.net), `uv tool install graphifyy` or `pipx install graphifyy`) is installed, opening the repository overview (**Review: Open Repository Overview**, or `repo_map({ overview: true })` for agents) first builds or refreshes the repository's Graphify graph with `graphify update`. For code that is Tree-sitter only (no LLM, no API key) and takes seconds. The overview is then built from the graph: the most connected code, its clusters, and a diagram of how they connect, with Graphify's `GRAPH_REPORT.md` (import cycles, surprising connections) linked from it. The graph lives in `graphify-out/` in the repository; if Co-Review created that folder, it adds it to the clone's `.git/info/exclude`, so it never shows up as a change. Agents can also ask the graph directly: `graphify query`, `graphify path`, `graphify explain`.
+An ACP agent gets the part of the map nearest the question in its first prompt. MCP agents call `repo_map` (Pi: `co_review_map`). **Graphify.** When the `graphify` command ([Graphify](https://graphify.net), `uv tool install graphifyy` or `pipx install graphifyy`) is installed, opening the repository overview (**Review: Open Repository Overview**, or `repo_map({ overview: true })` for agents) first builds or refreshes the repository's Graphify graph with `graphify update`. For code that is Tree-sitter only (no LLM, no API key) and takes seconds. The overview is then built from the graph: the most connected code, its clusters, and a diagram of how they connect, with Graphify's `GRAPH_REPORT.md` (import cycles, surprising connections) linked from it. The graph lives in `graphify-out/` in the repository; if Co-Review created that folder, it adds it to the clone's `.git/info/exclude`, so it never shows up as a change. A repository that keeps one graph per folder instead (`services/graphify-out/`, `pkg/graphify-out/`) keeps them: Co-Review reads those and builds no whole-repository graph. Graphs are untracked, so a git worktree (Co-Review's own for a pull request, or an agent's) has none; Co-Review then uses the main checkout's. Agents can also ask the graph directly: `graphify query`, `graphify path`, `graphify explain`, with `--graph <path>` for a per-folder graph or the main checkout's (the overview names them).
 
 ## ACP: connect an agent from Co-Review
 
@@ -44,7 +44,7 @@ ACP (Agent Client Protocol) lets the reviewer summon an agent on demand from the
    Pi, Codex — whichever are installed) or enter any ACP command.
    Then pick the **model** and **reasoning effort**, from the list the agent itself offers (Escape keeps its default).
    The choice shows next to the agent in the panel; click it to change it.
-2. Select code → **Ask Agent** (or click **+** in the gutter and drag over several lines — asking is the default for multi-line comments).
+2. Select code → **Ask Agent** (or click **+** in the gutter, or a line of a diff: with an agent connected, asking is the default; **Comment instead** or `Cmd+Alt+M` makes it a review comment, feedback that goes with your verdict).
 3. The answer streams into the thread. Reply in the thread to follow up (same ACP session).
    Permission requests appear as buttons; **Stop** cancels the turn.
 

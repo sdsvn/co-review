@@ -498,10 +498,10 @@ export class ReviewManager {
         }
     }
 
-    async submitReview(decision: ReviewDecision, summary: string): Promise<void> {
+    async submitReview(decision: ReviewDecision, summary: string, postingToGitHub?: boolean): Promise<void> {
         const review = this.activeReview;
         if (review) {
-            await this.service.submitReview(review.id, decision, summary, this._user);
+            await this.service.submitReview(review.id, decision, summary, this._user, postingToGitHub);
         }
     }
 
