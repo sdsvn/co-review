@@ -67,7 +67,8 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
             } else {
                 this.shownResolved.delete(thread.id);
             }
-            this.reviews.setCollapsed(thread.id, false); // fires a change
+            // Always fires a change; setCollapsed doesn't when the thread is already opened, and it would stay shown.
+            this.reviews.setCollapsedMany([thread.id], false);
         }
     }
 
@@ -130,6 +131,8 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
         const toDispose = new DisposableCollection();
         let timer: number | undefined;
         let generation = 0;
+        /** The thread just opened from its gutter icon, to be scrolled into view once it is shown. */
+        let revealing: string | undefined;
 
         const refresh = async () => {
             const model = control.getModel();
@@ -168,6 +171,10 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
                     zones.set(key, zone);
                     zone.place(lastLine(resolved.range));
                     zone.render(this.renderThread(thread, resolved.state));
+                    if (revealing === thread.id) {
+                        revealing = undefined;
+                        zone.reveal(resolved.range.startLineNumber);
+                    }
                 }
             }
             for (const { draft, resolved } of resolvedDrafts) {
@@ -212,7 +219,10 @@ export class ReviewEditorDecorator implements FrontendApplicationContribution {
             if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.element?.className.includes('co-review-glyph')) {
                 const thread = this.threadAtLine(editor, e.target.position?.lineNumber ?? -1);
                 if (thread) {
-                    this.setShownInline(thread, !this.isShownInline(thread));
+                    const show = !this.isShownInline(thread);
+                    // The conversation opens under the last line of its code, which can be off screen.
+                    revealing = show ? thread.id : undefined;
+                    this.setShownInline(thread, show);
                     this.reviews.revealThread(thread.id);
                 }
             }

@@ -20,6 +20,8 @@ export class InlineZone implements Disposable {
     protected zone: monaco.editor.IViewZone | undefined;
     protected zoneId: string | undefined;
     protected height = 0;
+    /** The first line of the code the zone is about, while the zone is to be scrolled into view (see reveal). */
+    protected revealFrom: number | undefined;
     afterLine = -1;
 
     constructor(protected readonly editor: monaco.editor.ICodeEditor) {
@@ -82,6 +84,32 @@ export class InlineZone implements Disposable {
         });
     }
 
+    /**
+     * Scrolls the editor down to the zone once its content is laid out, but not past `fromLine`, the code it is
+     * about: the zone sits under the last line of that code, which for a long range can be below the fold.
+     */
+    reveal(fromLine: number): void {
+        this.revealFrom = fromLine;
+        if (this.height) {
+            this.scrollIntoView();
+        }
+    }
+
+    protected scrollIntoView(): void {
+        const model = this.editor.getModel();
+        if (this.revealFrom === undefined || !model) {
+            return;
+        }
+        // The top of the next line is the bottom of the zones after this one.
+        const bottom = this.afterLine < model.getLineCount() ? this.editor.getTopForLineNumber(this.afterLine + 1) : this.editor.getScrollHeight();
+        const viewport = this.editor.getLayoutInfo().height;
+        if (bottom > this.editor.getScrollTop() + viewport) {
+            const top = Math.min(bottom - viewport, this.editor.getTopForLineNumber(this.revealFrom));
+            this.editor.setScrollTop(top, monaco.editor.ScrollType.Smooth);
+        }
+        this.revealFrom = undefined;
+    }
+
     protected setHeight(contentHeight: number): void {
         const height = Math.ceil(contentHeight) + 8;
         if (height === this.height || !contentHeight) {
@@ -93,6 +121,7 @@ export class InlineZone implements Disposable {
             const id = this.zoneId;
             this.editor.changeViewZones(accessor => accessor.layoutZone(id));
         }
+        this.scrollIntoView();
     }
 
     protected layoutWidth(info = this.editor.getLayoutInfo()): void {
