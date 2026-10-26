@@ -92,7 +92,7 @@ function keyOf(w: ReviewWindow): string {
  *   few seconds (a reload reconnects well within that), the window is closed. When the app quits, `shutdown` closes
  *   them all at once.
  * - In an app an agent started (`--background`, from `co-review mcp`), a window an agent showed with `open_review`
- *   is asked to close when the last agent using it is done (the reviewer approved, or its session ended). The window
+ *   is asked to close when the last agent using it is done (the reviewer submitted, or its session ended). The window
  *   says so and closes after a countdown, unless the reviewer keeps it open. With no window left the app quits, as it
  *   would for the reviewer. A window the reviewer opened, or any window of an app they started, stays.
  */

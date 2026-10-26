@@ -215,7 +215,7 @@ sends it back to revise.
 ## Tips
 
 - **Desktop app or browser.** Both work the same. In the desktop app, the window appears when the agent shows the
-  review, and closes once you approve it or the agent's session ends (when an agent started the app). In the
+  review, and closes once you submit it (after posting to GitHub, if you chose to) or the agent's session ends (when an agent started the app). In the
   browser, the agent gives you a link.
 - **Keep working while you review.** In Claude Code, *"keep answering my review while you fix the tests"* hands the
   review to the background `co-reviewer` subagent.

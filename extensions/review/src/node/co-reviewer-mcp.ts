@@ -731,11 +731,15 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     if (review.verdict!.toAgent === 'waiting') {
                         await this.store.verdictDelivered(review.id);
                     }
-                    // Approved: this agent is done with the review, and a window it showed can close.
-                    if (review.verdict!.decision === 'approve' && session.transport.sessionId) {
-                        this.windows.done(session.transport.sessionId, `You approved the review, and ${agent.name} has it.`, review.id);
+                    const settled = await this.settleGitHubPost(review, signal);
+                    // Submitted: this agent has the review, and a window it showed can close (after the GitHub post).
+                    if (session.transport.sessionId) {
+                        const verb = settled.verdict!.decision === 'approve' ? 'approved' : 'submitted';
+                        const posted = this.githubState(settled).github as { status?: string } | undefined;
+                        this.windows.done(session.transport.sessionId,
+                            `You ${verb} the review${posted?.status === 'posted' ? ' and posted it to GitHub' : ''}, and ${agent.name} has it.`, review.id);
                     }
-                    return json({ ...this.batch(review), hint: 'The reviewer submitted: act on the decision and the open comments.' });
+                    return json({ ...this.batch(settled), hint: 'The reviewer submitted: act on the decision and the open comments.' });
                 }
                 if (waiting.length) {
                     // All marked delivered before any write: each write wakes the channel, which must not push them too.
@@ -1102,6 +1106,20 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             }
         }
         return undefined;
+    }
+
+    /**
+     * The reviewer's GitHub post of a round runs right after its Submit: waits (a minute at most) for how it went, so
+     * the agent is told it was posted (or failed) rather than that it is being posted.
+     */
+    protected async settleGitHubPost(review: Review, signal: AbortSignal): Promise<Review> {
+        const deadline = Date.now() + 60_000;
+        const posting = (r: Review) => r.verdict?.github === 'posting' && r.bundle?.github?.round !== r.verdict.count;
+        while (posting(review) && Date.now() < deadline && !signal.aborted) {
+            await this.nextChange(review.id, deadline - Date.now(), signal);
+            review = await this.store.get(review.id) ?? review;
+        }
+        return review;
     }
 
     protected nextChange(reviewId: string, timeoutMs: number, signal: AbortSignal): Promise<void> {
