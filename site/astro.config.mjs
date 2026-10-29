@@ -14,6 +14,11 @@ export default defineConfig({
 			logo: { src: './src/assets/logo.svg' },
 			favicon: '/favicon.svg',
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/sdsvn/co-review' }],
+			// The explainer video's poster as every docs page's social card, like the landing page's.
+			head: [
+				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://i.ytimg.com/vi/gmZ8NCNpLl8/maxresdefault.jpg' } },
+				{ tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } }
+			],
 			// Light only, with the landing page's header links (see src/components).
 			components: {
 				ThemeProvider: './src/components/ThemeProvider.astro',

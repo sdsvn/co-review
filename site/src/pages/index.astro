@@ -11,6 +11,8 @@ const github = 'https://github.com/sdsvn/co-review';
 // The explainer video on YouTube: the page shows its poster and loads the player only when it is played.
 const video = { id: 'gmZ8NCNpLl8', title: 'Code review in a real IDE — with an AI agent, or without' };
 const videoUrl = `https://youtu.be/${video.id}`;
+// The video's poster doubles as the page's social card (og:image).
+const posterUrl = `https://i.ytimg.com/vi/${video.id}/maxresdefault.jpg`;
 const installLine = `curl -fsSL https://sdsvn.github.io${base}/install.sh | bash`;
 
 const words = ['your coding agent', 'Claude Code', 'Pi', 'Oh My Pi', 'Codex', 'Cursor', 'Copilot', 'Gemini CLI', 'OpenCode'];
@@ -82,6 +84,13 @@ const plugin = [
 		<link rel="canonical" href={new URL(`${base}/`, Astro.site)} />
 		<meta property="og:title" content="Co-Review: know your codebase again" />
 		<meta property="og:description" content="Review your entire repository with the agent that built it. Ask why, in threads under the code." />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={new URL(`${base}/`, Astro.site)} />
+		<meta property="og:image" content={posterUrl} />
+		<meta property="og:image:width" content="1280" />
+		<meta property="og:image:height" content="720" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:image" content={posterUrl} />
 	</head>
 	<body>
 		<div class="page">
@@ -114,7 +123,7 @@ const plugin = [
 
 				<div class="video" id="video" data-video-id={video.id} data-video-title={video.title}>
 					<button type="button" class="video-poster" aria-label={`Play the video: ${video.title}`}>
-						<img src={`https://i.ytimg.com/vi/${video.id}/maxresdefault.jpg`} alt="" width="1280" height="720" fetchpriority="high" decoding="async" />
+						<img src={posterUrl} alt="" width="1280" height="720" fetchpriority="high" decoding="async" />
 						<span class="play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg></span>
 					</button>
 				</div>

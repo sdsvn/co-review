@@ -5,7 +5,7 @@
   "keywords": [
     "theia-extension"
   ],
-  "license": "EPL-2.0",
+  "license": "MIT",
   "files": [
     "lib",
     "src"

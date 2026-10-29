@@ -90,6 +90,14 @@ co-review ~/src/my-service     # open a repository
 
 To build from source instead, see [Contributing](#contributing).
 
+The builds are not code-signed yet. `install.sh` takes care of that on macOS. If you download a release file by hand,
+macOS may say the app "is damaged": run `xattr -dr com.apple.quarantine /Applications/Co-Review.app` once. On
+Windows, SmartScreen asks first: choose **More info → Run anyway**. Intel Macs have no prebuilt app; build
+from source.
+
+Co-Review collects no telemetry and needs no account. Reviews are stored on your machine in `~/.co-review`; your code
+goes to the agent you choose, and to GitHub only when you post a review there.
+
 ## Connect your agent
 
 Every integration launches Co-Review through the `co-review` command, so install it first. Inside Co-Review,
@@ -228,3 +236,8 @@ llms.txt                 integration contract for agents
 ```
 
 See [Architecture](docs/architecture.md) and [Running and packaging](docs/running-and-packaging.md) for details.
+
+## License
+
+[MIT](LICENSE). Co-Review is built on [Eclipse Theia](https://theia-ide.org) and other open-source components under
+their own licenses; see [third-party notices](THIRD-PARTY-NOTICES.md).

@@ -1,6 +1,7 @@
 {
   "name": "co-review-omp",
   "version": "0.8.0",
+  "license": "MIT",
   "private": true,
   "description": "Co-Review for Oh My Pi: open a review, stay as co-reviewer, plus the co-review / co-review-design skills and slash commands",
   "keywords": [

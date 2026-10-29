@@ -3,6 +3,7 @@
   "name": "@co-review/electron-app",
   "productName": "Co-Review",
   "version": "0.8.0",
+  "license": "MIT",
   "description": "Agent-native repository review application",
   "main": "scripts/electron-main.js",
   "dependencies": {
