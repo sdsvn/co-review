@@ -1,10 +1,10 @@
 {
   "private": true,
   "name": "@co-review/browser-app",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "license": "MIT",
   "dependencies": {
-    "@co-review/review": "0.8.0",
+    "@co-review/review": "0.8.1",
     "@theia/core": "1.75.0",
     "@theia/editor": "1.75.0",
     "@theia/file-search": "1.75.0",
