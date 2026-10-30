@@ -63,6 +63,27 @@ const DEFINITIONS: Record<string, Record<string, SyntaxSymbolKind>> = {
 };
 DEFINITIONS.tsx = DEFINITIONS.typescript;
 
+/** Import node types per grammar (see getReach); grammars not listed report no imports. */
+const IMPORT_NODES: Record<string, string[]> = {
+    typescript: ['import_statement', 'export_statement'], tsx: ['import_statement', 'export_statement'],
+    javascript: ['import_statement', 'export_statement'], go: ['import_spec'],
+    python: ['import_statement', 'import_from_statement'], rust: ['use_declaration'], java: ['import_declaration']
+};
+const CALL_NODES: Record<string, string[]> = {
+    typescript: ['call_expression'], tsx: ['call_expression'], javascript: ['call_expression'], go: ['call_expression'],
+    python: ['call'], rust: ['call_expression'], java: ['method_invocation']
+};
+/** Calls that register an entry point by name: `registerTool('x')`, `addCommand('x')`, `HandleFunc('/x')`. */
+const REGISTRATION = /^(register\w*|add(Command|Route|Tool|Handler|Job)\w*|handle(Func)?|route|command|tool|subscribe|schedule)$/i;
+/** HTTP routes count only on something named like a router, so `map.get('x')` isn't one. */
+const HTTP_VERB = /^(get|post|put|patch|delete|options|head|all)$/i;
+const ROUTER = /^(app|router|r|e|g|api|server|srv|mux|fastify|routes?|v\d+)$/i;
+/** Calls that leave the process: HTTP clients and spawned programs. */
+const OUTBOUND = /^(fetch|execFile|execFileSync|exec|execSync|spawn|spawnSync|fork|urlopen|NewRequest|Command|CommandContext)$/;
+const OUTBOUND_RECEIVER = /^(axios|requests|httpx|got|superagent|reqwest|subprocess)$/;
+/** `exec` and friends count only bare or on a process module, so `pattern.exec(text)` isn't one. */
+const SPAWNER = /^(child_process|cp|childProcess|exec|os|globalThis|window)$/;
+
 /** Anchors longer than this are not worth a token-level anchor (symbols cover them). */
 const MAX_ANCHOR_TOKENS = 600;
 
@@ -168,6 +189,71 @@ export class SyntaxServiceImpl implements SyntaxService {
             return result;
         };
         return collect(parsed.tree.rootNode);
+    }
+
+    /**
+     * What a file reaches outside itself, for the repository facts (repo-facts.ts): the modules it imports, as written
+     * (`./store`, `github.com/x/y`, `..models`), and the calls that register an entry point or go outside the process
+     * (`registerTool('open_review')`, `execFile('git')`), each with its first string argument and 0-based line.
+     */
+    async getReach(languageId: string, text: string): Promise<{ imports: string[]; calls: [kind: 'reg' | 'out', callee: string, arg: string, line: number][] }> {
+        const parsed = await this.parse(languageId, text);
+        if (!parsed) {
+            return { imports: [], calls: [] };
+        }
+        const unquote = (s: string) => s.replace(/^[`'"]|[`'"]$/g, '');
+        const imports = new Set<string>();
+        const calls: [kind: 'reg' | 'out', callee: string, arg: string, line: number][] = [];
+        const root = parsed.tree.rootNode;
+        const grammar = parsed.grammar;
+        for (const node of root.descendantsOfType(IMPORT_NODES[grammar] ?? [])) {
+            if (!node) {
+                continue;
+            }
+            if (grammar === 'go') {
+                const spec = node.childForFieldName('path');
+                spec && imports.add(unquote(spec.text));
+            } else if (grammar === 'python') {
+                const from = node.childForFieldName('module_name');
+                if (from) {
+                    imports.add(from.text);
+                } else {
+                    node.namedChildren.forEach(c => c && imports.add((c.childForFieldName('name') ?? c).text));
+                }
+            } else if (grammar === 'rust') {
+                const argument = node.childForFieldName('argument');
+                argument && imports.add(argument.text.replace(/::\{[\s\S]*$/, '').replace(/::\*$/, ''));
+            } else if (grammar === 'java') {
+                imports.add(node.text.replace(/^import\s+(static\s+)?/, '').replace(/[;\s]|\.\*$/g, ''));
+            } else {
+                const source = node.childForFieldName('source');
+                source && imports.add(unquote(source.text));
+            }
+        }
+        for (const call of root.descendantsOfType(CALL_NODES[grammar] ?? [])) {
+            const fn = call && (call.childForFieldName('function') ?? call.childForFieldName('name'));
+            if (!call || !fn) {
+                continue;
+            }
+            const object = call.childForFieldName('object')?.text;
+            const callee = object ? `${object}.${fn.text}` : fn.text;
+            const first = call.childForFieldName('arguments')?.namedChildren[0];
+            const arg = first && /string/.test(first.type) ? unquote(first.text) : '';
+            if ((callee === 'require' || fn.type === 'import') && arg && ['javascript', 'typescript', 'tsx'].includes(grammar)) {
+                imports.add(arg);
+                continue;
+            }
+            const parts = callee.split(/\.|::/);
+            const name = parts[parts.length - 1];
+            const receiver = parts.length > 1 ? parts[parts.length - 2] : '';
+            if (arg && (REGISTRATION.test(name) || (HTTP_VERB.test(name) && ROUTER.test(receiver)))) {
+                calls.push(['reg', callee, arg, call.startPosition.row]);
+            } else if ((OUTBOUND.test(name) && (!receiver || SPAWNER.test(receiver))) || OUTBOUND_RECEIVER.test(receiver)
+                || (/^https?$/.test(receiver) && /^(request|get)$/.test(name))) {
+                calls.push(['out', callee, arg, call.startPosition.row]);
+            }
+        }
+        return { imports: [...imports], calls };
     }
 
     /** Filters definition node types that are only sometimes definitions. */

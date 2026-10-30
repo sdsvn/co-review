@@ -341,6 +341,19 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 	});
 
 	pi.registerTool({
+		name: "co_review_facts",
+		label: "Co-Review: repository facts",
+		description: "What can be worked out about the repository without a model, pinned to its commit: entry points, folder roles, load-bearing files, naming rules, repeated shapes and history. Without a section: what each section holds. Use it before writing a guide to the repository.",
+		parameters: Type.Object({
+			section: Type.Optional(Type.Union(["entry", "folders", "load", "names", "shapes", "history"].map(s => Type.Literal(s)), { description: "The section to return; omit for the summary" })),
+			focus: Type.Optional(Type.String({ description: "Only this repository-relative folder" }))
+		}),
+		async execute(_id: string, params: Record<string, unknown>) {
+			return text(JSON.stringify(await connection.call("repo_facts", params)));
+		}
+	});
+
+	pi.registerTool({
 		name: "co_review_add_findings",
 		label: "Co-Review: add findings",
 		description: "Add review findings as threads. On repository code: path (lines are 1-based; without a line, on the file or folder). On a patch page or a Markdown page of a review directory: target (\"patch:<slug>\", \"doc\", \"doc:<path>\") and anchor (e.g. { type: \"code-line\", path, line, side: \"new\" } on a patch); those arrive proposed. labels group them in the panel (e.g. the area); status \"proposed\" lets the reviewer accept or dismiss each.",

@@ -4,7 +4,9 @@
 
 This is the method behind `/co-review:understand`, written so it can be reimplemented in any language (a Rust port
 is planned) without reading the prompt. The prompt (`prompts/understand.md`) is today's implementation: one agent
-follows these steps. Why the method looks like this: [the proposal](understanding-a-repository.md) and
+follows these steps, starting from the ⚙ facts Co-Review computes itself (`repo_facts`, in
+`extensions/review/src/node/repo-facts.ts`: the evidence, the folder roles and map depth, load-bearing code, naming,
+repeated shapes and history below). Why the method looks like this: [the proposal](understanding-a-repository.md) and
 [ADR 0001](../adr/0001-understanding-first-repository-review.md).
 
 **The target.** A person understands a repository when, without help, they can do nine things (U1–U9): say its

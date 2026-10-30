@@ -24,6 +24,21 @@ Every agent follows the same instruction: the reviewer is a person reading a thr
 
 Agents read only what the answer needs.
 
+### Repository facts
+
+Before an agent writes a guide to the repository (`/co-review:understand`), it asks Co-Review for the repository's **facts**: what can be worked out without a model, pinned to the commit, so the guide starts from the same evidence whichever agent writes it. `repo_facts` (Pi: `co_review_facts`) returns them a section at a time:
+
+| Section | What it holds | How it is found |
+|---|---|---|
+| `entry` | Entry points, outbound calls, environment variables, external modules | Manifests (package.json `bin`/`scripts`, Makefile targets, Cargo and pyproject binaries), `main` functions, registration calls repeated in the code (`registerTool('x')`, `app.get('/x')`), spawned programs and HTTP clients; tests excluded |
+| `folders` | The map: each folder's role (core, infra, glue, tooling, tests, generated, vendored), why, key files, what it depends on and what uses it; what to ignore | Names and "do not edit" headers first; otherwise its position in the import graph. Those roles are marked `low` confidence for the agent to confirm. The map goes deeper while a folder mixes roles or holds over 40% of the files, at most four levels |
+| `load` | The most depended-on files | Importers, then a PageRank over the import graph |
+| `names` | Casing rules, per-folder prefixes and suffixes, verbs, type suffixes, vocabulary, look-alike names | Identifiers split into words and counted; a form covering 70% of its kind, with at least five instances, is a rule |
+| `shapes` | Sibling-file sets that recur across folders, registration calls repeated three times or more | The map's files and calls |
+| `history` | Churn, hotspots (churn × size), files that change together, authors per folder, recipes | The last 2,000 commits, ignoring those that touch more than 50 files; a recipe is what commits that created a file of the same kind in the same folder also changed. Under 50 commits, `thin` is true |
+
+Facts are computed from the repository map (below) and git in well under a second for a repository of this size, and cached per commit next to the map. The method they implement is described in [the understanding pseudocode](proposals/understanding-a-repository.pseudocode.md).
+
 ### Repository map
 
 To make answers fast, Co-Review keeps a **repository map** — a listing of every source file with the classes, functions and methods it defines, built from Tree-sitter.

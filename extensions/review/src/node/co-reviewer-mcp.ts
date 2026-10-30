@@ -23,6 +23,7 @@ import { acceptedSuggestions, commentOf, findThread, patchFile, threadRef } from
 import { locateInPatch, locateInText } from '../common/code-quote';
 import { ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT } from './prompts.gen';
 import { LANGUAGE_BY_EXTENSION, RepoIndex } from './repo-index';
+import { FACTS_SECTIONS, RepoFacts, renderFacts } from './repo-facts';
 import { CodeFolders } from './code-folders';
 import { AnchorTracker } from './anchor-tracker';
 import { changedLines, parsePatch, parsePatchMeta } from '../common/patch';
@@ -87,6 +88,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     @inject(BundleService) protected readonly bundles: BundleService;
     @inject(GitHubReviews) protected readonly github: GitHubReviews;
     @inject(RepoIndex) protected readonly index: RepoIndex;
+    @inject(RepoFacts) protected readonly facts: RepoFacts;
     @inject(CodeFolders) protected readonly codes: CodeFolders;
     @inject(AnchorTracker) protected readonly tracker: AnchorTracker;
 
@@ -249,8 +251,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'ask_reviewer when you need a decision, and repo_map to find where things live before searching. '
                 + 'To review the whole repository: repo_map({ overview: true }) for where to start and how the code clusters, then '
                 + 'add_findings with the area as the first label and status "proposed" (a few per area); get_review returns `coverage`, '
-                + 'the files the reviewer has viewed per area. To help them understand the whole repository (/co-review:understand), make '
-                + 'the overview a guide in four chapters: the lay of the land, how it works, patterns and naming, where it hurts. A knowledge bundle (e.g. OKF) opens with open_review({ dir }); '
+                + 'the files the reviewer has viewed per area. To help them understand the whole repository (/co-review:understand), start from '
+                + 'repo_facts and make the overview a guide in four chapters: the lay of the land, how it works, patterns and naming, where it hurts. A knowledge bundle (e.g. OKF) opens with open_review({ dir }); '
                 + 'its pages come back as target "doc:<path>". '
                 + 'To have a design reviewed before you implement, follow the design-document rules in open_review\'s description. '
                 + 'In Claude Code with channels on, the reviewer\'s questions and submissions also arrive as <channel source="co-review"> '
@@ -682,6 +684,30 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 return { content: [{ type: 'text', text: await this.index.overview(workspace, review && !review.bundle ? review.viewed : undefined, review && !review.bundle ? review.skipped : undefined) }] };
             }
             return { content: [{ type: 'text', text: await this.index.render(workspace, { path: under, query }) }] };
+        });
+
+        server.registerTool('repo_facts', {
+            description: 'What can be worked out about the repository without a model, pinned to its commit: the evidence a guide to the '
+                + 'repository (/co-review:understand) is written from. Without `section`: the commit and what each section holds. Sections: '
+                + '`entry` (entry points from manifests, main functions and registration calls; outbound calls; environment variables; '
+                + 'external modules), `folders` (the map: each folder\'s role, why, key files, what it depends on and what uses it; what to '
+                + 'ignore), `load` (the most depended-on files), `names` (casing rules, per-folder naming rules, verbs, type suffixes, '
+                + 'vocabulary, look-alike names), `shapes` (sibling-file sets and registration calls repeated across folders), `history` '
+                + '(churn, hotspots, files that change together, authors per folder, candidate recipes from past "add X" commits; `thin` '
+                + 'when there are too few commits to infer from). Roles marked `low` confidence come from imports alone: confirm them.',
+            inputSchema: {
+                root: rootArg,
+                section: z.enum(FACTS_SECTIONS as [string, ...string[]]).optional().describe('The section to return; omit for the summary'),
+                focus: z.string().optional().describe('Only this repository-relative folder')
+            }
+        }, async ({ root, section, focus }) => {
+            const review = await resolveReview(undefined, root ? realPath(root) : undefined);
+            const workspace = root ? realPath(root) : review && (!review.bundle || review.bundle.code) ? this.codeRoot(review) : defaultRoot;
+            if (!workspace) {
+                return fail('No repository: pass `root` (absolute path).');
+            }
+            const facts = await this.facts.get(workspace, focus);
+            return { content: [{ type: 'text', text: renderFacts(facts, section as Parameters<typeof renderFacts>[1]) }] };
         });
 
         server.registerTool('get_review', {

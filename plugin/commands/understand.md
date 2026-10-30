@@ -13,26 +13,29 @@ able to predict is.
 
 1. Prepare the review without showing it: `open_review({ title: "Understanding the repository", open: false })`.
    Keep the `reviewId` it returns. Don't tell me about it yet.
-2. Read before you write: the README and docs, AGENTS.md / CLAUDE.md, the manifests and build files (package.json,
-   go.mod, Makefile, …), the CI config, the entry points and the core types. Then `repo_map({ overview: true })`
-   and `repo_map`. When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
+2. Read before you write: the README and docs, AGENTS.md / CLAUDE.md, the CI config, the entry points and the core
+   types. Then get the facts Co-Review works out without a model: `repo_facts` for the summary, then each section
+   (`entry`, `folders`, `load`, `names`, `shapes`, `history`; with a focus, pass it as `focus`). They are your
+   evidence: the commit to pin the guide to, the entry points, every folder's role and why, the load-bearing files,
+   the naming rules, the repeated shapes, the hotspots, what changes together, and the recipes from commits that
+   created a file. Use `repo_map` to find definitions. When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
    searching: `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "X"`. A large repository may
    keep one graph per folder (e.g. `services/graphify-out/`; its AGENTS.md says which), and graphs are untracked, so a
    git worktree has none: pass `--graph <path>` to the right `graph.json`, the main checkout's in a worktree (the
    first line of `git worktree list`). If the folder it names has no `graph.json` (only dated snapshots), use the
    whole repository's, `graphify-out/graph.json`. `repo_map({ overview: true })` names the graphs it found. Only
-   when there is none, say so and search instead. Mine the history with plain git: `git log --numstat` for churn, files that
-   change together, authors, and past commits that added "a new X" (they are the recipes). Note the commit you are
-   at (`git rev-parse --short HEAD`).
-3. List the entry points and external contracts: CLI commands, HTTP routes, RPC or MCP tools, jobs, events, file
-   formats, outbound integrations. Every one gets a flow in chapter 2 or is named there as not traced. Don't pick
-   flows by taste.
+   when there is none, say so and search instead.
+3. Everything the facts list goes in the guide; don't pick by taste. Each entry point gets a flow in chapter 2 or is
+   named there as not traced (registrations of one kind, like the routes of one API, may share a flow). Each mapped
+   folder gets a row in the map. Each naming rule, repeated shape and recipe is explained in chapter 3, or dismissed
+   with a reason. A role marked `low` is a guess from imports: confirm or correct it from the code, and say which.
+   When `history.thin` is true, say so instead of inferring from history.
 4. Write the guide as the review's overview, four chapters (`##` headings), in this order:
-   - **1. Lay of the land.** First line: "Written for `<short sha>` on <date>." Then what it does, for whom, and what
-     it doesn't do; a ```mermaid context diagram (the system and what it talks to); how to build, run, test and
-     deploy it (the actual commands). Then the map: a table of every folder down to where its purpose is uniform,
-     with its one-line job, its role (core, infra, glue, tooling, tests, generated, vendored) and its key files;
-     generated and vendored folders in one "you can ignore" line.
+   - **1. Lay of the land.** First line: "Written for `<short sha>` on <date>.", the facts' commit. Then what it does,
+     for whom, and what it doesn't do; a ```mermaid context diagram (the system and what it talks to, from the
+     outbound calls and environment in the facts); how to build, run, test and deploy it (the actual commands). Then
+     the map: a row per folder in the facts' map, with its one-line job, its role (core, infra, glue, tooling, tests,
+     generated, vendored) and its key files; the facts' ignore list in one "you can ignore" line.
    - **2. How it works.** A glossary (term · what it means here · the code that embodies it), with a "cast of
      characters" table for names that are easy to confuse (`UserStore` vs `UserService` vs `UserManager`). The core
      entities: a ```mermaid stateDiagram of each one's lifecycle, and a short real sample of what it looks like on
@@ -66,6 +69,8 @@ able to predict is.
    - Tag what you didn't verify: _(inferred from …)_ when you reasoned it from the code or history, _(unknown)_ when
      there's no evidence. Never invent a reason. Ask me the unknown "why"s in the guide: "Why X? I found no record."
    - Every heading says what I learn by reading it. Plain language; no line-by-line walkthrough.
+   - Keep Mermaid plain so it renders: short node ids, labels in double quotes, no parentheses or slashes outside
+     quotes, one diagram per fence.
 
    End each chapter with one check, a prediction I can answer before I look further, such as "**Check:** where would
    you add a new MCP tool, and what else would you touch? Select this question and comment your answer." Don't

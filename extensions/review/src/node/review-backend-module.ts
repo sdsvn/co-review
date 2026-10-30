@@ -14,6 +14,7 @@ import { ReviewStore } from './review-store';
 import { AcpAgentService } from './acp-agent-service';
 import { AgentSetup } from './agent-setup';
 import { RepoIndex } from './repo-index';
+import { RepoFacts } from './repo-facts';
 import { OverviewPages } from './overview-page';
 import { CodeFolders } from './code-folders';
 import { AnchorTracker } from './anchor-tracker';
@@ -31,6 +32,7 @@ export default new ContainerModule(bind => {
     bind(BundleService).toSelf().inSingletonScope();
     bind(AgentSetup).toSelf().inSingletonScope();
     bind(RepoIndex).toSelf().inSingletonScope();
+    bind(RepoFacts).toSelf().inSingletonScope();
     bind(AgentPresenceTracker).toSelf().inSingletonScope();
     bind(ReviewWindows).toSelf().inSingletonScope();
     bind(OverviewPages).toSelf().inSingletonScope();

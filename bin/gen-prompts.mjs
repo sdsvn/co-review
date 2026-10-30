@@ -15,12 +15,12 @@ const check = process.argv.includes('--check');
 const TOOLS = {
     mcp: {
         open_review: 'open_review', await_reviewer: 'await_reviewer', reply: 'reply', add_findings: 'add_findings',
-        ask_reviewer: 'ask_reviewer', repo_map: 'repo_map', post_review_to_github: 'post_review_to_github'
+        ask_reviewer: 'ask_reviewer', repo_map: 'repo_map', repo_facts: 'repo_facts', post_review_to_github: 'post_review_to_github'
     },
     pi: {
         open_review: 'co_review_start', await_reviewer: 'co_review_wait', reply: 'co_review_reply',
         add_findings: 'co_review_add_findings', ask_reviewer: 'co_review_ask',
-        repo_map: 'co_review_map', post_review_to_github: 'co_review_post_github'
+        repo_map: 'co_review_map', repo_facts: 'co_review_facts', post_review_to_github: 'co_review_post_github'
     }
 };
 
