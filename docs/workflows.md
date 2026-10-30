@@ -1,11 +1,12 @@
 # Review workflows
 
-Co-Review does four review jobs. Pick the one that matches what you want to read, start it with one command, and the
+Co-Review does five review jobs. Pick the one that matches what you want to read, start it with one command, and the
 agent does the setup and a first pass before you see anything.
 
 | You want to review | Claude Code | Pi / Oh My Pi | What opens |
 |---|---|---|---|
-| [The whole repository](#the-whole-repository) | `/co-review:audit [focus]` | `/co-review-audit [focus]` | The repository, on its overview page |
+| [The whole repository, to understand it](#understanding-the-repository) | `/co-review:understand [focus]` | `/co-review-understand [focus]` | A guide to the repository, on its overview page |
+| [The whole repository, for risks](#the-whole-repository) | `/co-review:audit [focus]` | `/co-review-audit [focus]` | The repository, on its overview page |
 | [Your change](#your-change) | `/co-review:review [base]` | `/co-review-change [base]` | The diff, as a pull-request page |
 | [Someone else's pull request](#someone-elses-pull-request) | `/co-review:pr <number>` | `/co-review-pr <number>` | The pull request, with its description |
 | [A design, before the code](#a-design-before-the-code) | `/co-review:design <task>` | `/co-review-design <task>` | The design document, rendered |
@@ -71,6 +72,44 @@ After you submit, the agent:
 | **Comment** | Answers your comments; changes nothing unless you asked |
 
 The agent doesn't edit files while you review unless you ask for it in a thread.
+
+## Understanding the repository
+
+For learning a codebase: one you're new to, or one an agent built until it no longer felt like yours. The audit below
+tells you what's wrong; this tells you what's there. The goal is that afterwards you can, without the agent, say where
+things live, use the repository's vocabulary, trace its main flows, recognise its patterns and naming, follow its
+house rules, and place a change and predict what it affects. Why it works this way:
+[the proposal](proposals/understanding-a-repository.md) and [ADR 0001](adr/0001-understanding-first-repository-review.md).
+
+**Start:** `/co-review:understand` (optionally a focus: `/co-review:understand internal/billing`).
+
+**The agent:**
+
+1. Prepares a review of the repository without showing it.
+2. Reads the docs, build files, CI, entry points and core types, the repository map (and the Graphify graph when
+   installed), and the git history.
+3. Lists the entry points and external contracts (commands, routes, tools, jobs, file formats), so every one gets a
+   flow.
+4. Writes the overview page as a guide in four chapters:
+   - **Lay of the land:** what it does and doesn't, a context diagram, how to build, run, test and deploy it, and
+     the map: every folder's job and role, and what you can ignore.
+   - **How it works:** a glossary and a "cast of characters" for names that are easy to confuse; each core
+     entity's lifecycle and what it looks like on disk; one flow per entry point, as a sequence diagram with
+     numbered stops in the code and what happens when it fails.
+   - **Patterns, naming, and why:** the shapes the code repeats, in its own terms (not textbook labels); how things
+     are named and what the names signal; where to look for common tasks; the house rules, how each is enforced
+     and what breaks without it; recipes for "add a new X"; the design decisions.
+   - **Where it hurts:** the load-bearing code, hotspots, what changes together, what's untested, the trust
+     boundaries, and the agent's proposed findings, at most three per area.
+5. Shows it and tells you the chapters.
+
+Every claim links to the code it is about; what the agent couldn't verify is marked _inferred_ or _unknown_, and an
+unknown "why" is asked, not invented. The guide's first line names the commit it was written for.
+
+**You:** read it top to bottom, or start at any chapter. Each chapter ends with a **Check**, a prediction such as
+"where would you add a new command?": select it and comment your answer, and the agent tells you how it matches the
+code. When something in the guide is wrong, say so in a comment: the agent checks the code and fixes the guide.
+Findings, coverage and the verdict work as in the audit.
 
 ## The whole repository
 

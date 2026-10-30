@@ -21,14 +21,17 @@ const ask = '"Review this entire repository with me in Co-Review."';
 const mcpNote = (name: string) => `Add the co-review mcp server to ${name}'s MCP config. Adding the skills is optional.`;
 const agents: { name: string; installNote?: string; install?: string; use: { cmd: string; desc: string }[]; guide: string }[] = [
 	{ name: 'Claude Code', installNote: 'In Claude Code:', install: '/plugin marketplace add sdsvn/co-review\n/plugin install co-review@co-review', use: [
+		{ cmd: '/co-review:understand [focus]', desc: 'Helps you understand the whole repository: a guide to its map, vocabulary, flows, patterns and naming, and weak spots, then answers your questions.' },
 		{ cmd: '/co-review:audit [focus]', desc: 'Reviews the whole repository with you: splits it into areas, proposes findings in each, then answers your questions.' },
 		{ cmd: '/co-review:review', desc: 'When a change is ready: it opens the diff as a pull-request page and stays in the review until you submit.' },
 		{ cmd: '/co-review:pr <n>', desc: 'Someone else\'s pull request: its first pass, your verdict, posted to GitHub as a review when you choose to.' },
 		{ cmd: '/co-review:design <task>', desc: 'To design first: it writes a design doc, you review it, it builds what you approved.' }], guide: docs('start/claude-code') },
 	{ name: 'Pi', installNote: 'Pi has a native package that ships with Co-Review:', install: 'co-review setup pi', use: [
+		{ cmd: '/co-review-understand [focus]', desc: 'Helps you understand the whole repository: a guide to its map, flows, patterns and weak spots.' },
 		{ cmd: '/co-review-audit [focus]', desc: 'Reviews the whole repository with you, area by area.' },
 		{ cmd: '/co-review-change · /co-review-pr <n> · /co-review-design <task>', desc: 'Your change, someone else\'s pull request, or a design first. Your questions arrive in the session as you ask them.' }], guide: `${guide}#pi-and-oh-my-pi` },
 	{ name: 'Oh My Pi', installNote: 'Oh My Pi has a native package that ships with Co-Review:', install: 'co-review setup omp', use: [
+		{ cmd: '/co-review-understand [focus]', desc: 'Helps you understand the whole repository: a guide to its map, flows, patterns and weak spots.' },
 		{ cmd: '/co-review-audit [focus]', desc: 'Reviews the whole repository with you, area by area.' },
 		{ cmd: '/co-review-change · /co-review-pr <n> · /co-review-design <task>', desc: 'Your change, someone else\'s pull request, or a design first. Only the main session listens for your questions.' }], guide: `${guide}#pi-and-oh-my-pi` },
 	{ name: 'Codex', use: [{ cmd: ask, desc: 'Codex opens the review, answers your comments and waits for your verdict.' }], guide: `${guide}#codex` },
@@ -63,6 +66,7 @@ const kinds = [
 	['Pull requests', 'Diffs and .patch files as pull-request pages; verdicts post to GitHub.']
 ];
 const plugin = [
+	{ term: '/co-review:understand', code: true, body: 'The whole repository, to learn it: Claude writes a guide to where things live, what the words mean, how it flows, its patterns and naming, and where it hurts, with a question per chapter to check yourself.' },
 	{ term: '/co-review:audit', code: true, body: 'The whole repository: Claude splits it into areas, proposes findings for you to accept or dismiss, then answers your questions.' },
 	{ term: '/co-review:review', code: true, body: 'When a change is ready: Claude opens it as a pull-request page and stays in the review until you submit.' },
 	{ term: '/co-review:pr', code: true, body: 'Someone else\'s pull request: Claude takes the first pass, you decide what goes back to the author, and it posts to GitHub.' },

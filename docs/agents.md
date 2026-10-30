@@ -75,9 +75,9 @@ http://127.0.0.1:<port>/mcp?root=<repo>
 
 ### Starting a review
 
-Pick the [workflow](workflows.md): `/co-review:audit` (the whole repository), `/co-review:review` (the agent's
+Pick the [workflow](workflows.md): `/co-review:understand` (the whole repository, to learn it), `/co-review:audit` (the whole repository, for risks), `/co-review:review` (the agent's
 change), `/co-review:pr <n>` (someone else's pull request) or `/co-review:design <task>` in Claude Code; the same with
-`/co-review-audit`, `/co-review-change`, `/co-review-pr` and `/co-review-design` in Pi or Oh My Pi. In any other
+`/co-review-understand`, `/co-review-audit`, `/co-review-change`, `/co-review-pr` and `/co-review-design` in Pi or Oh My Pi. In any other
 harness, say what you want, e.g.:
 
 > Review the change you just made with me in Co-Review: add findings for anything risky, then keep answering my

@@ -35,6 +35,7 @@ The plugin gives you several ways to start and run a review:
 - **`/co-review:review [base]`** -- Claude opens its change as a pull-request page, flags what deserves attention, answers your comments in their threads, and acts on your verdict.
 - **`/co-review:pr <n>`** -- Claude reviews someone else's pull request with you: its first pass, your verdict, then posted to the pull request as a review with line comments and suggestions when you choose to.
 - **`/co-review:design <task>`** -- Claude writes a design doc, you review it, and it implements what you approved.
+- **`/co-review:understand [focus]`** -- Claude writes a guide to the whole repository on its overview page: the lay of the land, how it works, its patterns and naming, and where it hurts, each chapter ending with a question to check yourself. Then it answers your questions.
 - **`/co-review:audit [focus]`** -- Claude reviews the whole repository first: a few proposed findings per area, for you to accept or dismiss, then it answers your questions.
 - **Live comments** -- With channels on, your questions reach the running session the moment you ask them.
 - **`co-review:co-reviewer`** -- A background subagent that keeps answering your review while the main conversation works.

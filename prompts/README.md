@@ -31,8 +31,9 @@ Conventions:
 | `co-reviewer.md` | the Pi and Oh My Pi co-reviewer agents |
 | `design.md` | writing a design document: the design skill and commands, the `open_review` description, `llms.txt`, the docs |
 | `audit.md` | the whole-repository audit: the commands and the `co-review` skill |
+| `understand.md` | understanding the whole repository (a guide on the overview page): the commands and the `co-review` skill; the method is [docs/proposals/understanding-a-repository.pseudocode.md](../docs/proposals/understanding-a-repository.pseudocode.md) |
 | `review-change.md` | reviewing the agent's change (its diff): the commands and the `co-review` skill |
 | `review-pr.md` | reviewing someone else's pull request: the commands and the `co-review` skill |
 | `pi-tools.md` | the Pi / Oh My Pi tool names, in the skills |
-| `graphify.md` | asking the repository's Graphify graphs (scoped per folder, the main checkout's in a worktree), included by `audit.md`, `review-pr.md`, `co-reviewer.md` |
+| `graphify.md` | asking the repository's Graphify graphs (scoped per folder, the main checkout's in a worktree), included by `audit.md`, `understand.md`, `review-pr.md`, `co-reviewer.md` |
 | `overview.md` | writing the review's overview (its front page), included by `audit.md`, `review-change.md`, `review-pr.md` |
