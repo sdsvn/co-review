@@ -3,7 +3,8 @@
 - **Status:** Accepted (phase 1 implemented: `/co-review:understand`)
 - **Date:** 2026-10-30
 - **Details:** [the proposal](../proposals/understanding-a-repository.md) ·
-  [the method as pseudocode](../proposals/understanding-a-repository.pseudocode.md)
+  [the method as pseudocode](../proposals/understanding-a-repository.pseudocode.md) ·
+  [the engine design](../proposals/understanding-engine.md)
 
 ## Context
 

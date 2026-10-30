@@ -2,7 +2,9 @@
 
 Status: accepted ([ADR 0001](../adr/0001-understanding-first-repository-review.md)); phase 1 implemented as
 `/co-review:understand`. The method as language-neutral pseudocode, for porting:
-[understanding-a-repository.pseudocode.md](understanding-a-repository.pseudocode.md).
+[understanding-a-repository.pseudocode.md](understanding-a-repository.pseudocode.md). Moving the method out of a
+single prompt and into Co-Review (facts, a checked guide structure, a verifier):
+[understanding-engine.md](understanding-engine.md).
 
 `/co-review:audit` today is classical review: 4–10 areas, at most three risk findings each, an overview page, and
 coverage as "files marked viewed". It tells you what's wrong, not what's there. After reading it you still can't say
