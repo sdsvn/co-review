@@ -45,8 +45,7 @@ An **entire repository** review shows your progress as you read. Reach for it to
 - **Mark a file as viewed** with `Cmd+Alt+V`, the status bar item, or the editor's right-click menu. A file that changes afterwards counts as unviewed again.
 - **The explorer** shows a check on viewed files and the number of open threads on files and folders.
 - **Overview** (next to the coverage bar) opens a page with where to start, the areas of the code and how they connect. With a [Graphify](https://pypi.org/project/graphifyy/) graph (`graphify update .`, code only, no LLM) it shows the most connected code and a diagram of its clusters.
-- **`/co-review:understand`** has the agent write a guide to the repository on the overview page first: where things live, what the words mean, how it flows, its patterns and naming, and where it hurts.
-- **`/co-review:audit`** has the agent go first: proposed findings labelled by area. **By area** in the panel groups them.
+- **`/co-review:audit`** has the agent go first: a guide to the repository on the overview page (where things live, what the words mean, how it flows, its patterns and naming, and where it hurts), and proposed findings labelled by area. **By area** in the panel groups them.
 
 ## Review a change or pull request
 

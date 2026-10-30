@@ -26,7 +26,7 @@ Agents read only what the answer needs.
 
 ### Repository facts
 
-Before an agent writes a guide to the repository (`/co-review:understand`), it asks Co-Review for the repository's **facts**: what can be worked out without a model, pinned to the commit, so the guide starts from the same evidence whichever agent writes it. `repo_facts` (Pi: `co_review_facts`) returns them a section at a time:
+Before an agent writes a guide to the repository (`/co-review:audit`), it asks Co-Review for the repository's **facts**: what can be worked out without a model, pinned to the commit, so the guide starts from the same evidence whichever agent writes it. `repo_facts` (Pi: `co_review_facts`) returns them a section at a time:
 
 | Section | What it holds | How it is found |
 |---|---|---|
@@ -90,9 +90,9 @@ http://127.0.0.1:<port>/mcp?root=<repo>
 
 ### Starting a review
 
-Pick the [workflow](workflows.md): `/co-review:understand` (the whole repository, to learn it), `/co-review:audit` (the whole repository, for risks), `/co-review:review` (the agent's
+Pick the [workflow](workflows.md): `/co-review:audit` (the whole repository), `/co-review:review` (the agent's
 change), `/co-review:pr <n>` (someone else's pull request) or `/co-review:design <task>` in Claude Code; the same with
-`/co-review-understand`, `/co-review-audit`, `/co-review-change`, `/co-review-pr` and `/co-review-design` in Pi or Oh My Pi. In any other
+`/co-review-audit`, `/co-review-change`, `/co-review-pr` and `/co-review-design` in Pi or Oh My Pi. In any other
 harness, say what you want, e.g.:
 
 > Review the change you just made with me in Co-Review: add findings for anything risky, then keep answering my

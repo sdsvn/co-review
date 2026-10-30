@@ -1,41 +1,93 @@
 ---
-description: Review the whole repository with me in Co-Review, starting with your first-pass findings grouped by area
-argument-hint: "[focus, e.g. security, or a folder]"
+description: Audit the whole repository with me in Co-Review: a guide to its map, vocabulary, flows, patterns and naming, and where it hurts, with your findings by area, then your answers to my questions
+argument-hint: "[focus, e.g. a folder or a feature]"
 ---
-Review this entire repository with me in Co-Review, following the `co-review` skill ("The whole repository"). Use the Co-Review tools from the co-review extension.
+Audit this entire repository with me in Co-Review, following the `co-review` skill ("The whole repository"). Use the Co-Review tools from the co-review extension.
 
 <!-- prompt: audit pi -->
-1. Prepare the review without showing it: `co_review_start({ title: "Repository review", open: false })`. Keep the
-   `reviewId` it returns. Don't tell me about it yet.
-2. Call `co_review_map({ overview: true })` and `co_review_map`. With [Graphify](https://graphify.net) installed, the
-   overview is built from its code graph (Co-Review builds it: calls, imports, clusters, the most connected code), and
-   the graph's `GRAPH_REPORT.md` lists import cycles and surprising connections between distant parts of the code:
-   good leads. When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
+The goal is that afterwards I can, without you: say what the repository does and where everything lives, use its
+vocabulary, trace its main flows, recognise its patterns and naming, say why it is built this way, follow its house
+rules, know where it is fragile, and place a change and predict what it affects. Familiarity is not the goal; being
+able to predict is.
+
+1. Before anything else, tell me in one short message that this takes a few minutes: you read the repository and
+   write a guide to it, and you'll tell me when it is open in Co-Review. Then prepare the review without showing it:
+   `co_review_start({ title: "Repository audit", open: false })`. Keep the `reviewId` it returns.
+2. Read before you write: the README and docs, AGENTS.md / CLAUDE.md, the CI config, the entry points and the core
+   types. Then get the facts Co-Review works out without a model: `co_review_facts` for the summary, then each section
+   (`entry`, `folders`, `load`, `names`, `shapes`, `history`; with a focus, pass it as `focus`). They are your
+   evidence: the commit to pin the guide to, the entry points, every folder's role and why, the load-bearing files,
+   the naming rules, the repeated shapes, the hotspots, what changes together, and the recipes from commits that
+   created a file. Use `co_review_map` to find definitions. When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
    searching: `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "X"`. A large repository may
    keep one graph per folder (e.g. `services/graphify-out/`; its AGENTS.md says which), and graphs are untracked, so a
    git worktree has none: pass `--graph <path>` to the right `graph.json`, the main checkout's in a worktree (the
    first line of `git worktree list`). If the folder it names has no `graph.json` (only dated snapshots), use the
    whole repository's, `graphify-out/graph.json`. `co_review_map({ overview: true })` names the graphs it found. Only
-   when there is none, say so and search instead. Split the repository (or the focus I gave you) into 4–10 areas and read the riskiest code in each
-   (entry points, input handling, money, auth, concurrency, persistence).
-3. Add findings with `co_review_add_findings`: the area as the first label, `status: "proposed"`, at most three per area,
-   each with what's wrong, why it matters and what to do, with `severity`. A finding goes on the code (`path`
-   and `code`, the line(s) it is about copied exactly from the file: Co-Review finds their lines); one about a whole
-   area on its folder (`path` alone); one about the repository on `path: "."`.
-   Say so in the overview when an area looks fine.
-   Then write your overview of it for the review's front page, which I read first, and add it with
-   `co_review_start({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
-   ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:
-   callers, data, configuration, other services), and where to start reading, as a short numbered list at the end,
-   each linked to the code so I can click it (`1. [**The handler**](path/to/file.go:42): what it does`). Plain
-   language; no line-by-line walkthrough.
-4. Show it: `co_review_start({ reviewId })`. It opens on the overview page: your overview, every finding grouped by
-   area, and the repository's areas, as one page I can read and comment on. Tell me it is open in Co-Review, with the
-   areas with their finding counts, in one short message.
-5. Then loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit or says I closed the review
-   (closing it means I'm done: act on nothing, and tell me in one line what's still open). On my Submit: approve → nothing to change unless I say so; request changes → fix
-   what I accepted and asked for, as commits, then reply in each thread with what changed and wait again. Don't
-   edit files while I review unless I ask in a thread.
+   when there is none, say so and search instead.
+3. Everything the facts list goes in the guide; don't pick by taste. Each entry point gets a flow in chapter 2 or is
+   named there as not traced (registrations of one kind, like the routes of one API, may share a flow). Each mapped
+   folder gets a row in the map. Each naming rule, repeated shape and recipe is explained in chapter 3, or dismissed
+   with a reason. A role marked `low` is a guess from imports: confirm or correct it from the code, and say which.
+   When `history.thin` is true, say so instead of inferring from history.
+4. Write the guide as the review's overview, four chapters (`##` headings), in this order:
+   - **1. Lay of the land.** First line: "Written for `<short sha>` on <date>.", the facts' commit. Then what it does,
+     for whom, and what it doesn't do; a ```mermaid context diagram (the system and what it talks to, from the
+     outbound calls and environment in the facts); how to build, run, test and deploy it (the actual commands). Then
+     the map: a row per folder in the facts' map, with its one-line job, its role (core, infra, glue, tooling, tests,
+     generated, vendored) and its key files; the facts' ignore list in one "you can ignore" line.
+   - **2. How it works.** A glossary (term · what it means here · the code that embodies it), with a "cast of
+     characters" table for names that are easy to confuse (`UserStore` vs `UserService` vs `UserManager`). The core
+     entities: a ```mermaid stateDiagram of each one's lifecycle, and a short real sample of what it looks like on
+     disk or in the database. Then one flow per entry point from step 3: a ```mermaid sequenceDiagram, then numbered
+     stops in the code (what happens at each, and why there), and what happens when it fails.
+   - **3. Patterns, naming, and why.** What makes code here look like it belongs:
+     - The patterns: the shapes this code repeats, described in its own terms. Most aren't textbook patterns (MVC,
+       repository, observer); name one only when it really fits, and then say how this code differs. For each: what
+       it looks like (a short real snippet), where it is used, why, and how to write a new one.
+     - Naming: how folders, files, types, functions, tests and config are named, the prefixes, suffixes and verbs
+       used and what each signals (e.g. `get` reads memory, `load` reads disk), with real examples.
+     - Where to look: a table of common tasks, "To find or change … → look in … (named like …)".
+     - The house rules: layering, errors, logging, config, tests, code generation, build and CI; for each, an
+       example, how it is enforced (a script, a lint, a CI step, nothing) and what breaks when it is broken.
+     - Recipes for "add a new X", from the commits that did.
+     - The design decisions, including the defensive ones (what edge case each guards against). With fewer than
+       ~50 commits and no design docs, keep the decisions and recipes to a paragraph; the rest stays.
+   - **4. Where it hurts.** The load-bearing code (what most depends on), the hotspots (churn × size), what changes
+     together, what is untested or dead, and the trust boundaries. Say in one line when there is too little history
+     to tell. Then add your findings with `co_review_add_findings`: the area as the first label, `status: "proposed"`, at
+     most three per area, each with what's wrong, why it matters and what to do, with `severity`, on the code (`path`
+     and `code`, the line(s) copied exactly from the file), a folder (`path` alone) or the repository (`path: "."`).
+     The page lists them after the guide.
+
+   Keep it true:
+   - Link every claim about the code to it, with the symbol as the link text: [`UserStore.create`](path/to/file.ts:42).
+     Read the line before you link it.
+   - Dependencies, callers and clusters come from the map and the graph, not from your impression of the code.
+   - Describe what a script or mechanism actually does ("fills the marked regions in these files"), not a plausible
+     summary ("copies them").
+   - Tag what you didn't verify: _(inferred from …)_ when you reasoned it from the code or history, _(unknown)_ when
+     there's no evidence. Never invent a reason. Ask me the unknown "why"s in the guide: "Why X? I found no record."
+   - Every heading says what I learn by reading it. Plain language; no line-by-line walkthrough.
+   - Keep Mermaid plain so it renders: short node ids, labels in double quotes, no parentheses or slashes outside
+     quotes, one diagram per fence.
+
+   End each chapter with one check, a prediction I can answer before I look further, such as "**Check:** where would
+   you add a new MCP tool, and what else would you touch? Select this question and comment your answer." Don't
+   write the answer on the page.
+
+   Add it with `co_review_start({ reviewId, overview, open: false })`. With a focus, write the guide for that part,
+   and say in chapter 1 how it fits the whole.
+5. Show it: `co_review_start({ reviewId })`. It opens on the overview page: the guide, then your findings grouped by
+   area, then the repository's areas. Tell me it is open in Co-Review, with the chapters and how long they take to
+   read, in one short message.
+6. Then loop `co_review_wait` → investigate → `co_review_reply` until it returns my Submit or says I closed the review
+   (closing it means I'm done: act on nothing, and tell me in one line what's still open). When I answer a check,
+   say whether it matches the code and why, with a link: no score, and say what I got right. When I say the guide
+   is wrong, check the code: if it is, say so, fix the guide (`co_review_start({ reviewId, overview, open: false })`)
+   and tell me what changed. On my Submit: approve → nothing to change unless I say so; request changes → fix what I
+   accepted and asked for, as commits, then reply in each thread with what changed and wait again. Don't edit files
+   while I read unless I ask in a thread.
 <!-- /prompt -->
 
 Focus: $ARGUMENTS

@@ -9,7 +9,7 @@ proposal](understanding-a-repository.md), [ADR 0001](../adr/0001-understanding-f
 
 ## Context
 
-`/co-review:understand` is one long prompt today. The agent gathers its own evidence, writes the guide as free
+`/co-review:audit` is one long prompt today. The agent gathers its own evidence, writes the guide as free
 Markdown in the review's overview, and is only asked to link claims, cover every entry point and tag guesses. Nothing
 checks that it did, so the guide is only as good as the agent: a weaker one skips the history, guesses folder roles,
 or leaves flows out, and the page looks just as confident. This design makes Co-Review own the structure: it computes
@@ -93,7 +93,7 @@ the agent.
   - Pass: no confident-but-wrong answers, three-quarters correct, no wrong claims sampled.
     - On demand, not in CI: it costs model calls.
 - The prompt shrinks to the model's part
-  - `prompts/understand.md` becomes: read the docs, get the facts, fill the slots, fix every warning, converse.
+  - `prompts/audit.md` becomes: read the docs, get the facts, fill the slots, fix every warning, converse.
   - The pseudocode document gains the guide's schema as its pieces, so method and structure stay in sync.
 - It ships in four steps, each usable alone
   - The facts tool first, with today's prompt told to use it; then the checked structure and drawing.
@@ -117,4 +117,4 @@ the agent.
 - The repository changes while the guide is being written: the guide carries the sha it was written for, and
   validation resolves references against the files on disk. A reference that moved is found again by symbol.
 - A huge repository: the facts respect the map's existing 5,000-file cap and say when they were truncated. The guide
-  may then cover a focus folder, as `/co-review:understand <focus>` does today.
+  may then cover a focus folder, as `/co-review:audit <focus>` does today.

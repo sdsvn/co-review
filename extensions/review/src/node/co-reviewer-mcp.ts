@@ -249,10 +249,10 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'done: act on nothing); await_reviewer is the only call to wait on. To explain something to the reviewer, open it with '
                 + 'explain: true: they never submit, they close it when done. Use add_findings for issues you find, '
                 + 'ask_reviewer when you need a decision, and repo_map to find where things live before searching. '
-                + 'To review the whole repository: repo_map({ overview: true }) for where to start and how the code clusters, then '
-                + 'add_findings with the area as the first label and status "proposed" (a few per area); get_review returns `coverage`, '
-                + 'the files the reviewer has viewed per area. To help them understand the whole repository (/co-review:understand), start from '
-                + 'repo_facts and make the overview a guide in four chapters: the lay of the land, how it works, patterns and naming, where it hurts. A knowledge bundle (e.g. OKF) opens with open_review({ dir }); '
+                + 'To audit the whole repository (/co-review:audit): start from repo_facts, make the overview a guide in four chapters (the '
+                + 'lay of the land, how it works, patterns and naming, where it hurts), then add_findings with the area as the first label '
+                + 'and status "proposed" (at most three per area); get_review returns `coverage`, the files the reviewer has viewed per '
+                + 'area. A knowledge bundle (e.g. OKF) opens with open_review({ dir }); '
                 + 'its pages come back as target "doc:<path>". '
                 + 'To have a design reviewed before you implement, follow the design-document rules in open_review\'s description. '
                 + 'In Claude Code with channels on, the reviewer\'s questions and submissions also arrive as <channel source="co-review"> '
@@ -688,7 +688,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
 
         server.registerTool('repo_facts', {
             description: 'What can be worked out about the repository without a model, pinned to its commit: the evidence a guide to the '
-                + 'repository (/co-review:understand) is written from. Without `section`: the commit and what each section holds. Sections: '
+                + 'repository (/co-review:audit) is written from. Without `section`: the commit and what each section holds. Sections: '
                 + '`entry` (entry points from manifests, main functions and registration calls; outbound calls; environment variables; '
                 + 'external modules), `folders` (the map: each folder\'s role, why, key files, what it depends on and what uses it; what to '
                 + 'ignore), `load` (the most depended-on files), `names` (casing rules, per-folder naming rules, verbs, type suffixes, '

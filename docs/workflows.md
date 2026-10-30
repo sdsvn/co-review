@@ -1,12 +1,11 @@
 # Review workflows
 
-Co-Review does five review jobs. Pick the one that matches what you want to read, start it with one command, and the
+Co-Review does four review jobs. Pick the one that matches what you want to read, start it with one command, and the
 agent does the setup and a first pass before you see anything.
 
 | You want to review | Claude Code | Pi / Oh My Pi | What opens |
 |---|---|---|---|
-| [The whole repository, to understand it](#understanding-the-repository) | `/co-review:understand [focus]` | `/co-review-understand [focus]` | A guide to the repository, on its overview page |
-| [The whole repository, for risks](#the-whole-repository) | `/co-review:audit [focus]` | `/co-review-audit [focus]` | The repository, on its overview page |
+| [The whole repository](#the-whole-repository) | `/co-review:audit [focus]` | `/co-review-audit [focus]` | A guide to the repository, with findings, on its overview page |
 | [Your change](#your-change) | `/co-review:review [base]` | `/co-review-change [base]` | The diff, as a pull-request page |
 | [Someone else's pull request](#someone-elses-pull-request) | `/co-review:pr <number>` | `/co-review-pr <number>` | The pull request, with its description |
 | [A design, before the code](#a-design-before-the-code) | `/co-review:design <task>` | `/co-review-design <task>` | The design document, rendered |
@@ -73,23 +72,26 @@ After you submit, the agent:
 
 The agent doesn't edit files while you review unless you ask for it in a thread.
 
-## Understanding the repository
+## The whole repository
 
-For learning a codebase: one you're new to, or one an agent built until it no longer felt like yours. The audit below
-tells you what's wrong; this tells you what's there. The goal is that afterwards you can, without the agent, say where
-things live, use the repository's vocabulary, trace its main flows, recognise its patterns and naming, follow its
-house rules, and place a change and predict what it affects. Why it works this way:
-[the proposal](proposals/understanding-a-repository.md) and [ADR 0001](adr/0001-understanding-first-repository-review.md).
+For learning a codebase (one you're new to, or one an agent built until it no longer felt like yours), or checking
+it before a release. The goal is that afterwards you can, without the agent, say where things live, use the
+repository's vocabulary, trace its main flows, recognise its patterns and naming, follow its house rules, know where
+it is fragile, and place a change and predict what it affects. Why it works this way:
+[the proposal](proposals/understanding-a-repository.md), [ADR 0001](adr/0001-understanding-first-repository-review.md) and [ADR 0002](adr/0002-one-whole-repository-command.md).
 
-**Start:** `/co-review:understand` (optionally a focus: `/co-review:understand internal/billing`).
+**Start:** `/co-review:audit` (optionally a focus: `/co-review:audit internal/billing`). It takes the agent a few
+minutes, and it says so first.
 
 **The agent:**
 
-1. Prepares a review of the repository without showing it.
-2. Reads the docs, build files, CI, entry points and core types, the repository map (and the Graphify graph when
-   installed), and the git history.
-3. Lists the entry points and external contracts (commands, routes, tools, jobs, file formats), so every one gets a
-   flow.
+1. Tells you it takes a few minutes, and prepares a review of the repository without showing it.
+2. Reads the docs, CI, entry points and core types, and the repository's [facts](agents.md#repository-facts): what
+   Co-Review works out without a model (entry points, folder roles, load-bearing files, naming rules, repeated shapes,
+   hotspots, what changes together, recipes). With [Graphify](https://graphify.net) installed, it can also ask the
+   code graph how parts connect.
+3. Covers everything the facts list: every entry point gets a flow (or is named as not traced), every mapped folder a
+   row in the map, every naming rule and repeated shape an explanation.
 4. Writes the overview page as a guide in four chapters:
    - **Lay of the land:** what it does and doesn't, a context diagram, how to build, run, test and deploy it, and
      the map: every folder's job and role, and what you can ignore.
@@ -100,39 +102,19 @@ house rules, and place a change and predict what it affects. Why it works this w
      are named and what the names signal; where to look for common tasks; the house rules, how each is enforced
      and what breaks without it; recipes for "add a new X"; the design decisions.
    - **Where it hurts:** the load-bearing code, hotspots, what changes together, what's untested, the trust
-     boundaries, and the agent's proposed findings, at most three per area.
+     boundaries, and the agent's proposed findings, at most three per area, labelled with the area.
 5. Shows it and tells you the chapters.
 
 Every claim links to the code it is about; what the agent couldn't verify is marked _inferred_ or _unknown_, and an
 unknown "why" is asked, not invented. The guide's first line names the commit it was written for.
 
-**You:** read it top to bottom, or start at any chapter. Each chapter ends with a **Check**, a prediction such as
-"where would you add a new command?": select it and comment your answer, and the agent tells you how it matches the
-code. When something in the guide is wrong, say so in a comment: the agent checks the code and fixes the guide.
-Findings, coverage and the verdict work as in the audit.
-
-## The whole repository
-
-For getting a codebase back in your head, checking your own work before a release, or starting on a codebase that
-isn't yours. The agent reads it first and splits it into areas, so you start from what matters instead of every file.
-
-**Start:** `/co-review:audit` (optionally a focus: `/co-review:audit security`, `/co-review:audit internal/billing`).
-
-**The agent:**
-
-1. Prepares a review of the repository without showing it.
-2. Reads the repository map and the overview, splits the code into 4–10 areas, and reads the riskiest code in each.
-   With [Graphify](https://graphify.net) installed, Co-Review builds a code graph first (seconds, no LLM), so the
-   overview knows the calls, imports and clusters, and the agent gets Graphify's import cycles and surprising
-   connections as leads ([details](agents.md#repository-map)).
-3. Adds at most three proposed findings per area, labelled with the area, and says when an area looks fine.
-4. Shows the review and tells you the areas and how many findings each has.
-
 **You:** the review opens on the [overview page](#the-overview-page), with the panel on **Proposed**. Read it top to
-bottom, follow a finding's link to its code, and accept or dismiss each one in the panel (**By area** groups them the
-same way); reply in a finding's thread to ask the agent why. At the end, the page says where to start in the repository and how its areas connect (from the Graphify graph when it's installed), **Viewed** (`Cmd+Alt+V`)
-marks a file as read, and **Coverage** shows how much of each area you've read. Comment on any line, symbol, file or
-folder as you go.
+bottom, or start at any chapter; only want the risks? Go to **Where it hurts**. Each chapter ends with a **Check**, a
+prediction such as "where would you add a new command?": select it and comment your answer, and the agent tells you
+how it matches the code. When something in the guide is wrong, say so in a comment: the agent checks the code and
+fixes the guide. Accept or dismiss each finding in the panel (**By area** groups them the same way); reply in a
+finding's thread to ask the agent why. **Viewed** (`Cmd+Alt+V`) marks a file as read, and **Coverage** shows how much
+of each area you've read. Comment on any line, symbol, file or folder as you go.
 
 ### The overview page
 

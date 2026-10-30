@@ -1,7 +1,7 @@
 # Proposal: understanding a repository, not just auditing it
 
 Status: accepted ([ADR 0001](../adr/0001-understanding-first-repository-review.md)); phase 1 implemented as
-`/co-review:understand`. The method as language-neutral pseudocode, for porting:
+`/co-review:audit` ([ADR 0002](../adr/0002-one-whole-repository-command.md) merged the two commands). The method as language-neutral pseudocode, for porting:
 [understanding-a-repository.pseudocode.md](understanding-a-repository.pseudocode.md). Moving the method out of a
 single prompt and into Co-Review (facts, a checked guide structure, a verifier):
 [understanding-engine.md](understanding-engine.md).
@@ -99,8 +99,8 @@ refreshed. That's the original promise: months later, the codebase feels like yo
 
 ## 5. Rollout and how to know it worked
 
-1. **Prompt-only**: a new `prompts/understand.md` with `/co-review:understand`, and `/co-review:audit` starting from it.
-   Try it on three repositories of different size and age, including one that's old and multi-author.
+1. **Prompt-only**: the guide as the prompt of `/co-review:audit` (at first a separate `/co-review:understand`;
+   [ADR 0002](../adr/0002-one-whole-repository-command.md) merged them). Try it on three repositories of different size and age, including one that's old and multi-author.
 2. Phase 2 UI, then phase 3 currency.
 
 Measure ability, not satisfaction: do people answer the chapter checks correctly without looking; do they correct

@@ -24,13 +24,12 @@ the way you'd read a pull request. Comment on a line, a function, a file or a fo
 the thread, from the code. An overview shows where to start, the agent can take a first pass with findings grouped by
 area, and coverage tracks what you've read.
 
-Reading the whole repository (to understand it, or for its risks) is one of the jobs below, each one command away. In every one the agent sets up the review and takes
+Reading the whole repository, to learn it and find its weak spots, is one of the jobs below, each one command away. In every one the agent sets up the review and takes
 a first pass before you see it, so it opens on what to look at ([how each workflow goes](docs/workflows.md)):
 
 | Review | Claude Code | Pi / Oh My Pi |
 |---|---|---|
-| **The whole repository, to understand it**: the agent writes a guide to its map, vocabulary, flows, patterns and weak spots | `/co-review:understand` | `/co-review-understand` |
-| **The whole repository, for risks**: read the codebase with the agent, starting from its findings by area | `/co-review:audit` | `/co-review-audit` |
+| **The whole repository**: the agent writes a guide to its map, vocabulary, flows, patterns and weak spots, with findings by area | `/co-review:audit` | `/co-review-audit` |
 | **Your change**: the agent's diff as a pull-request page, with line comments, suggested edits and one verdict | `/co-review:review` | `/co-review-change` |
 | **Someone else's pull request**: the agent takes the first pass, you decide what goes back to the author, and post it to GitHub as a review with line comments | `/co-review:pr <n>` | `/co-review-pr <n>` |
 | **A design, before the code**: an L1 · L2 · L3 plan with Mermaid diagrams, revised from your comments before anything is built | `/co-review:design <task>` | `/co-review-design <task>` |
@@ -113,8 +112,7 @@ Every integration launches Co-Review through the `co-review` command, so install
 
 | Command | What Claude does |
 |---|---|
-| `/co-review:understand [focus]` | Helps you understand the whole repository: a guide to its map, vocabulary, flows, patterns and naming, and weak spots, with a check question per chapter, then answers your questions |
-| `/co-review:audit [focus]` | Reviews the whole repository with you: a few proposed findings per area, then answers your questions |
+| `/co-review:audit [focus]` | Audits the whole repository with you: a guide to its map, vocabulary, flows, patterns and naming, and weak spots, with a check question per chapter and proposed findings by area, then answers your questions. Takes the agent a few minutes |
 | `/co-review:review [base]` | Opens its change (the diff) as a pull-request page, points out what deserves attention, answers your comments and acts on your verdict |
 | `/co-review:pr <n>` | Reviews someone else's pull request with you: its first pass, your verdict, then posted to the pull request (line comments, suggestions, your decision) when you choose to |
 | `/co-review:design <task>` | Writes a design doc, has you review it, implements what you approved |
@@ -168,8 +166,8 @@ Once an agent is connected, asking it is the default (**Ask Agent**); **Comment*
 panel lists them by file (**Open / Proposed / Resolved / All**), and **⋯** has the rest.
 
 - **Whole repository:** the panel's **Coverage** shows what you've viewed, overall and per area. **Overview** says
-  where to start, and **Findings** opens every finding and comment as one page. `/co-review:understand` and
-  `/co-review:audit` (or `/co-review-understand` and `/co-review-audit` in Pi and Oh My Pi) let the agent go first.
+  where to start, and **Findings** opens every finding and comment as one page. `/co-review:audit` (or
+  `/co-review-audit` in Pi and Oh My Pi) lets the agent go first.
 - **Designs and pages:** Markdown files open rendered (the toolbar opens the source; opening at a line goes to the
   editor). Comment on text, diagram nodes and edges, or design steps. HTML files open as source; **Open in Browser**
   (editor or explorer context menu) shows the page in your browser. See [Design documents](docs/design-docs.md).

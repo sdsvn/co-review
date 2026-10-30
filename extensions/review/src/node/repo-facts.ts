@@ -9,7 +9,7 @@ import { ReviewStore } from './review-store';
 
 /**
  * The repository's facts: what can be worked out about it without a model, so that a guide to the repository
- * (/co-review:understand) starts from the same evidence whichever agent writes it. Entry points and external
+ * (/co-review:audit) starts from the same evidence whichever agent writes it. Entry points and external
  * contracts, each folder's role and how deep the map goes, the load-bearing code, naming rules, repeated shapes, and
  * what the history says. Computed from the repository map (Tree-sitter: definitions, imports, calls), the manifests
  * and plain git; pinned to the commit. The method is docs/proposals/understanding-a-repository.pseudocode.md (its ⚙
