@@ -4,6 +4,8 @@ productName: Co-Review
 copyright: Co-Review contributors
 electronDist: ../../node_modules/electron/dist
 asar: false # Theia loads plugins and native modules from disk
+# The code is bundled into lib/; this drops the dependencies nothing loads at run time (see the file).
+afterPack: ./prune-node-modules.cjs
 directories:
   buildResources: resources
   output: dist

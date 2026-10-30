@@ -12,6 +12,7 @@ node_modules/
 !/applications/*/scripts/
 !/applications/*/resources/
 !/applications/electron/electron-builder.yml
+!/applications/electron/prune-node-modules.cjs
 
 # Native modules cached by `theia rebuild:*`
 /.browser_modules/
