@@ -71,7 +71,8 @@ jobs:
           name="Co-Review-${{ matrix.name }}"
           app=$(find . -path '*/Contents/Resources/app' -o -path '*-unpacked/resources/app' | head -n 1)
           [[ -f "$app/runtime.txt" ]] || { echo "no app folder with runtime.txt in dist"; exit 1; }
-          XZ_OPT=-9T0 tar -C "$(dirname "$app")" -cJf "$name-app.tar.xz" app
+          # xz itself, not `tar -J`: macOS's tar ignores XZ_OPT and compresses a third less.
+          tar -C "$(dirname "$app")" -cf - app | xz -9 -T0 > "$name-app.tar.xz"
           cp ../runtime.txt "$name-runtime.txt"
           ls -l "$name-app.tar.xz" "$name-runtime.txt"
       - uses: actions/upload-artifact@v7

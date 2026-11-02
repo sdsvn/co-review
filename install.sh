@@ -159,7 +159,9 @@ fetch() {
 # downloaded) when it isn't, the release has no app folder of its own (before 0.9.2), or anything goes wrong.
 fetch_app_only() {
     local platform="$1" have want
-    [ "${CO_REVIEW_FORCE:-}" != 1 ] && [ -f "$app_res/runtime.txt" ] && command -v xz >/dev/null 2>&1 || return 1
+    # macOS's tar reads xz itself; GNU tar needs the xz command.
+    [ "${CO_REVIEW_FORCE:-}" != 1 ] && [ -f "$app_res/runtime.txt" ] || return 1
+    [ "$os" = Darwin ] || command -v xz >/dev/null 2>&1 || return 1
     have=$(cat "$app_res/runtime.txt")
     want=$(curl -fsSL "$base/Co-Review-$platform-runtime.txt" 2>/dev/null) || return 1
     [ -n "$want" ] && [ "$want" = "$have" ] || return 1
