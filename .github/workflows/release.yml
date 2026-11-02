@@ -1,6 +1,8 @@
 # Builds the Co-Review desktop app for macOS, Linux and Windows. A `v*` tag publishes the builds as a GitHub
-# release, which install.sh downloads (releases/latest/download/Co-Review-<os>-<arch>.<ext>). Run it by hand to
-# get the builds as workflow artifacts without releasing.
+# release, which install.sh downloads (releases/latest/download/Co-Review-<os>-<arch>.<ext>). For macOS and Linux it
+# also publishes the app folder on its own (Co-Review-<os>-<arch>-app.tar.xz) and what surrounds it
+# (Co-Review-<os>-<arch>-runtime.txt): an update whose runtime is unchanged downloads only the app folder. Run it by
+# hand to get the builds as workflow artifacts without releasing.
 name: Release
 
 on:
@@ -57,9 +59,21 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           [[ "$GITHUB_REF_TYPE" == tag ]] || version="0.0.0-dev.${GITHUB_RUN_NUMBER}"
           rm -rf applications/electron/plugins && cp -R plugins applications/electron/plugins
+          node bin/runtime-key.mjs > applications/electron/runtime.txt
           cd applications/electron
           ../../node_modules/.bin/electron-builder --config electron-builder.yml ${{ matrix.args }} \
             --publish never -c.extraMetadata.version="$version"
+      - name: App folder (macOS, Linux)
+        # The app folder alone, for an update that keeps the installed runtime (see bin/runtime-key.mjs).
+        if: runner.os != 'Windows'
+        run: |
+          cd applications/electron/dist
+          name="Co-Review-${{ matrix.name }}"
+          app=$(find . -path '*/Contents/Resources/app' -o -path '*-unpacked/resources/app' | head -n 1)
+          [[ -f "$app/runtime.txt" ]] || { echo "no app folder with runtime.txt in dist"; exit 1; }
+          XZ_OPT=-9T0 tar -C "$(dirname "$app")" -cJf "$name-app.tar.xz" app
+          cp ../runtime.txt "$name-runtime.txt"
+          ls -l "$name-app.tar.xz" "$name-runtime.txt"
       - uses: actions/upload-artifact@v7
         with:
           name: co-review-${{ matrix.name }}
@@ -70,6 +84,8 @@ jobs:
             applications/electron/dist/Co-Review-*.AppImage
             applications/electron/dist/Co-Review-*.deb
             applications/electron/dist/Co-Review-*.exe
+            applications/electron/dist/Co-Review-*-app.tar.xz
+            applications/electron/dist/Co-Review-*-runtime.txt
           if-no-files-found: error
 
   release:

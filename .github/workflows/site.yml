@@ -9,6 +9,7 @@ on:
       - site/**
       - docs/**
       - llms.txt
+      - install.sh
       - .github/workflows/site.yml
   workflow_dispatch:
 

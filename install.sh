@@ -14,7 +14,11 @@
 #   CO_REVIEW_INSTALL_DIR  where the Linux app goes (default: ~/.local/share/co-review)
 #   PREFIX                 where the commands go: $PREFIX/bin
 #   CO_REVIEW_DOWNLOAD_URL where the release files are (default: the GitHub release)
-#   CO_REVIEW_FORCE=1      reinstall even when that version is already installed
+#   CO_REVIEW_FORCE=1      reinstall even when that version is already installed (the whole app)
+#
+# An update downloads only the app folder (Co-Review-<os>-<arch>-app.tar.xz, about a tenth of the app) when the
+# release runs on the same runtime as the installed app: the same Electron, packed the same way (runtime.txt, see
+# bin/runtime-key.mjs). Otherwise, and on Windows, it downloads the whole app.
 set -euo pipefail
 
 repo="sdsvn/co-review"
@@ -151,11 +155,38 @@ fetch() {
     curl -fL --progress-bar -o "$tmp/$1" "$base/$1" || fail "could not download $base/$1"
 }
 
+# The app folder alone, into $tmp/new/app, when the installed runtime is the release's; false (and the whole app is
+# downloaded) when it isn't, the release has no app folder of its own (before 0.9.2), or anything goes wrong.
+fetch_app_only() {
+    local platform="$1" have want
+    [ "${CO_REVIEW_FORCE:-}" != 1 ] && [ -f "$app_res/runtime.txt" ] && command -v xz >/dev/null 2>&1 || return 1
+    have=$(cat "$app_res/runtime.txt")
+    want=$(curl -fsSL "$base/Co-Review-$platform-runtime.txt" 2>/dev/null) || return 1
+    [ -n "$want" ] && [ "$want" = "$have" ] || return 1
+    say "Downloading Co-Review-$platform-app.tar.xz (the app only: it runs on the installed $have)"
+    curl -fL --progress-bar -o "$tmp/app.tar.xz" "$base/Co-Review-$platform-app.tar.xz" || return 1
+    mkdir -p "$tmp/new"
+    tar -xJf "$tmp/app.tar.xz" -C "$tmp/new" && [ -f "$tmp/new/app/package.json" ] && [ -f "$tmp/new/app/runtime.txt" ]
+}
+
+# Swaps the installed app folder for the downloaded one (the old one goes only once the new one is in place).
+replace_app() {
+    rm -rf "$app_res.old"
+    mv "$app_res" "$app_res.old"
+    mv "$tmp/new/app" "$app_res"
+    rm -rf "$app_res.old"
+}
+
 case "$os" in
 Darwin)
     [ "$arch" = arm64 ] || fail "only Apple silicon Macs have a prebuilt app; build from source: https://sdsvn.github.io/co-review/docs/start/install/"
-    fetch "Co-Review-mac-arm64.zip"
-    ditto -x -k "$tmp/Co-Review-mac-arm64.zip" "$tmp/app"
+    app_only=""
+    if [ -n "$installed" ] && fetch_app_only mac-arm64; then
+        app_only=1
+    else
+        fetch "Co-Review-mac-arm64.zip"
+        ditto -x -k "$tmp/Co-Review-mac-arm64.zip" "$tmp/app"
+    fi
     mkdir -p "$apps"
     # Replacing the app's files under a running app leaves it alive without its backend (macOS kills the helper
     # processes, not the app), holding the single-instance lock: nothing can start until it is quit. Quit it.
@@ -195,8 +226,17 @@ Darwin)
         fi
         say "Co-Review quit"
     fi
-    rm -rf "$apps/Co-Review.app"
-    mv "$tmp/app/Co-Review.app" "$apps/"
+    if [ -n "$app_only" ]; then
+        replace_app
+        # The bundle's version, as the whole app would have it.
+        new_version=$(sed -n 's/^  "version": "\(.*\)",*$/\1/p' "$app_res/package.json" | head -n 1)
+        for key in CFBundleShortVersionString CFBundleVersion; do
+            plutil -replace "$key" -string "$new_version" "$apps/Co-Review.app/Contents/Info.plist" 2>/dev/null || true
+        done
+    else
+        rm -rf "$apps/Co-Review.app"
+        mv "$tmp/app/Co-Review.app" "$apps/"
+    fi
     # The release is not notarized: sign it ad hoc so Apple silicon runs it, and clear any quarantine flag.
     codesign --force --deep --sign - "$apps/Co-Review.app" >/dev/null 2>&1 || true
     xattr -dr com.apple.quarantine "$apps/Co-Review.app" 2>/dev/null || true
@@ -204,11 +244,16 @@ Darwin)
     "$apps/Co-Review.app/Contents/Resources/app/bin/install-cli.sh"
     ;;
 Linux)
-    fetch "Co-Review-linux-$arch.tar.gz"
-    mkdir -p "$tmp/app"
-    tar -xzf "$tmp/Co-Review-linux-$arch.tar.gz" -C "$tmp/app"
-    root=$(find "$tmp/app" -mindepth 1 -maxdepth 1 -type d | head -n 1)
-    [ -x "$root/co-review" ] || fail "unexpected archive layout"
+    app_only=""
+    if [ -n "$installed" ] && fetch_app_only "linux-$arch"; then
+        app_only=1
+    else
+        fetch "Co-Review-linux-$arch.tar.gz"
+        mkdir -p "$tmp/app"
+        tar -xzf "$tmp/Co-Review-linux-$arch.tar.gz" -C "$tmp/app"
+        root=$(find "$tmp/app" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+        [ -x "$root/co-review" ] || fail "unexpected archive layout"
+    fi
     if pgrep -f "$dir/co-review" >/dev/null 2>&1; then
         say "Quitting the running Co-Review for the update (reviews are saved; it starts again on the next co-review call)"
         pkill -TERM -f "$dir/co-review" || true
@@ -218,9 +263,13 @@ Linux)
         done
         pkill -KILL -f "$dir/co-review" 2>/dev/null || true
     fi
-    rm -rf "$dir"
-    mkdir -p "$(dirname "$dir")"
-    mv "$root" "$dir"
+    if [ -n "$app_only" ]; then
+        replace_app
+    else
+        rm -rf "$dir"
+        mkdir -p "$(dirname "$dir")"
+        mv "$root" "$dir"
+    fi
     say "Installed $dir"
     apps_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
     mkdir -p "$apps_dir"

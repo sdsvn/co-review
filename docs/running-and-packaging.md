@@ -107,6 +107,14 @@ Asset names carry no version (`Co-Review-mac-arm64.zip`, `Co-Review-linux-x64.ta
 curl -fsSL https://sdsvn.github.io/co-review/install.sh | bash
 ```
 
+An update usually downloads about a tenth of the app. Most of the app is Electron (about 110 MB of a 150 MB
+download), and it rarely changes between releases. So for macOS and Linux the release also publishes the app folder
+on its own (`Co-Review-<os>-<arch>-app.tar.xz`, about 15 MB) and what surrounds it
+(`Co-Review-<os>-<arch>-runtime.txt`: the Electron version and a hash of `electron-builder.yml` and the icons, from
+`bin/runtime-key.mjs`). The same line ships inside the app as `runtime.txt`. When the installed one matches the
+release's, `install.sh` replaces only the app folder (and the bundle's version on macOS). Otherwise it downloads
+the whole app, as it does for a new install, `CO_REVIEW_FORCE=1`, an install from before 0.9.2 and Windows.
+
 After installing (or finding that version already installed), `install.sh` brings the agent integrations that are
 already installed to the app's version: the Claude Code plugin (`claude plugin marketplace update co-review`, then
 `claude plugin update co-review@co-review`), and the Oh My Pi and Pi packages when they come from this app
