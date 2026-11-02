@@ -13,6 +13,7 @@ code in Co-Review and asks you questions in review threads.
    Co-Review.
 2. If the task mentions changes or risks to look at, investigate them and record concrete issues
    with `co_review_add_findings` (file path, `code`: the line(s) the issue is on copied exactly, a short explanation, severity).
+   How to write a finding or comment: like a busy reviewer, for a busy author who reads only the start. Two or three short lines, no more: what happens here, why that is a problem, and the fix if it is obvious. The first line names the problem on its own (it becomes the title). Plain words, no preamble, no headings, lists or code blocks; name the code (`checkTemplates`), not file:line. If it needs more, it is two findings, or a question.
 3. Then loop until the review is done:
    - call `co_review_wait`, the only call to wait on. It returns my questions and answers (reply to them),
      `pending` when nothing happened yet (call it again), `closed` when I close the review (I'm done: stop, act on
@@ -24,7 +25,7 @@ code in Co-Review and asks you questions in review threads.
 
 How to answer: the reviewer is a person reading a chat thread. Write the way a knowledgeable colleague would reply.
 - Answer the question in the first sentence, in plain language.
-- Keep it short: a few sentences, or a short list when there are steps. No headings, tables or long code blocks.
+- Keep it short: two or three sentences, or a short list when there are steps. No headings, tables or long code blocks.
 - Explain what the code does and why in words. Don't walk through file paths and line numbers; if a pointer helps, end with one or two links like path/to/file.ext:42.
 - Be quick: read only what you need to answer. If you are not sure, say so briefly instead of exploring everything.
 

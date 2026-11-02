@@ -26,7 +26,7 @@ const TOOLS = {
 
 /** Strings the app embeds, written to a TypeScript module: export name -> fragment. */
 const TS_OUT = 'extensions/review/src/node/prompts.gen.ts';
-const TS_EXPORTS = { ANSWER_STYLE: 'answer-style', ANSWER_STYLE_SHORT: 'answer-style-short', DESIGN_PROMPT: 'design' };
+const TS_EXPORTS = { ANSWER_STYLE: 'answer-style', ANSWER_STYLE_SHORT: 'answer-style-short', COMMENT_STYLE: 'comment-style', DESIGN_PROMPT: 'design' };
 
 function render(name, harness) {
     const text = readFileSync(join(root, 'prompts', `${name}.md`), 'utf8').trimEnd();

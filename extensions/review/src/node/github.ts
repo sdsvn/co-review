@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { inject, injectable } from '@theia/core/shared/inversify';
 import { parsePatchMeta } from '../common/patch';
-import { Review, ReviewDecision, ReviewThread } from '../common/review-model';
+import { Review, ReviewDecision, ReviewMessage, ReviewThread } from '../common/review-model';
 import { GitHubEdits, GitHubPost, GitHubPreview, GitHubTarget } from '../common/review-protocol';
 import { ReviewStore } from './review-store';
 
@@ -24,16 +24,19 @@ const EVENTS: Record<ReviewDecision, 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'> 
 const DECISION_LABEL: Record<ReviewDecision, string> = { approve: 'Approve', 'request-changes': 'Request changes', comment: 'Comment' };
 
 /**
- * A thread as the reviewer's comment on GitHub: their point, not the conversation. The agent's rewording in their voice
- * when it gave one (post_review_to_github's `comments`), else the reviewer's own messages; a finding they kept is the
- * finding's text followed by what they added to it. Other replies from agents (and who said what) stay in Co-Review.
+ * A thread as the reviewer's comment on GitHub: their point, not a transcript. The agent's rewording in their voice
+ * when it gave one (post_review_to_github's `comments`), else the thread from the reviewer's side: a finding they kept,
+ * their messages and the agent's answers to them in order, so a question goes out with its answer and a change the
+ * agent spelled out goes out with the reviewer's "yes" (who said what stays in Co-Review). The reviewer edits it in
+ * the preview before it is posted.
  */
 function threadBody(thread: ReviewThread, reworded?: string): string {
-    const humans = thread.messages.filter(m => m.author.kind === 'human' && m.body.trim());
-    const first = thread.messages.find(m => m.author.kind !== 'system' && m.body.trim());
-    // An agent's finding the reviewer kept is the point itself; their replies add to it, they don't replace it.
-    const finding = thread.origin === 'finding' && first && first.author.kind !== 'human' ? [first] : [];
-    const kept = [...finding, ...humans];
+    const said = (m: ReviewMessage) => m.author.kind !== 'system' && !!m.body.trim() && !m.permission && (!m.status || m.status === 'done');
+    const first = thread.messages.find(said);
+    const joined = thread.messages.findIndex(m => m.author.kind === 'human' && said(m));
+    // An agent's finding the reviewer kept is the point itself; their replies (and the answers they got) add to it.
+    const kept = thread.messages.filter((m, i) => said(m)
+        && (m.author.kind === 'human' || (joined >= 0 && i > joined) || (m === first && thread.origin === 'finding')));
     const text = reworded?.trim() || (kept.length ? kept.map(m => m.body.trim()).join('\n\n') : first?.body.trim() ?? '');
     const suggestion = thread.proposal && thread.proposal.status !== 'rejected' && thread.location.patchAnchor?.side !== 'old'
         ? `\n\n\`\`\`suggestion\n${thread.proposal.after.replace(/\n$/, '')}\n\`\`\`` : '';

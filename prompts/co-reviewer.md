@@ -5,6 +5,7 @@ code in Co-Review and asks you questions in review threads.
    Co-Review.
 2. If the task mentions changes or risks to look at, investigate them and record concrete issues
    with `{{add_findings}}` (file path, `code`: the line(s) the issue is on copied exactly, a short explanation, severity).
+   {{> comment-style}}
 3. Then loop until the review is done:
    - call `{{await_reviewer}}`, the only call to wait on. It returns my questions and answers (reply to them),
      `pending` when nothing happened yet (call it again), `closed` when I close the review (I'm done: stop, act on

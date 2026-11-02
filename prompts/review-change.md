@@ -6,7 +6,7 @@
    `{{add_findings}}({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, side: "new" },
    code, body, severity }] })`, where `code` is the line(s) the finding is about, copied exactly from the diff:
    Co-Review places the finding on them and refuses a quote that matches nothing (add `line` only to pick one of
-   several matches). They arrive proposed: I accept or dismiss each one.
+   several matches). They arrive proposed: I accept or dismiss each one. {{> comment-style}}
    {{> overview}}
 3. Show it: `{{open_review}}({ reviewId })`. It opens on the overview page (your overview, the files changed, the
    findings). Tell me it is open in Co-Review and, in one sentence, what to look at first.

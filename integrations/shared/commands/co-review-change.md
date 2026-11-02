@@ -14,7 +14,7 @@ Co-Review tools from the co-review extension.
    `co_review_add_findings({ findings: [{ target: "patch:<short-slug>", anchor: { type: "code-line", path, side: "new" },
    code, body, severity }] })`, where `code` is the line(s) the finding is about, copied exactly from the diff:
    Co-Review places the finding on them and refuses a quote that matches nothing (add `line` only to pick one of
-   several matches). They arrive proposed: I accept or dismiss each one.
+   several matches). They arrive proposed: I accept or dismiss each one. How to write a finding or comment: like a busy reviewer, for a busy author who reads only the start. Two or three short lines, no more: what happens here, why that is a problem, and the fix if it is obvious. The first line names the problem on its own (it becomes the title). Plain words, no preamble, no headings, lists or code blocks; name the code (`checkTemplates`), not file:line. If it needs more, it is two findings, or a question.
    Then write your overview of it for the review's front page, which I read first, and add it with
    `co_review_start({ reviewId, overview, open: false })`: what it does and why (a few sentences), how it works as a
    ```mermaid flowchart (the path a request or the data takes, 5–12 nodes), what else it affects (the blast radius:

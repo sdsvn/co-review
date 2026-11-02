@@ -11,7 +11,7 @@
    five findings where it matters: `{{add_findings}}({ findings: [{ target: "patch:pr-<n>", anchor: { type:
    "code-line", path, side: "new" }, code, body, severity }] })`, where `code` is the line(s) the finding is about,
    copied exactly from the diff: Co-Review places the finding on them and refuses a quote that matches nothing (add
-   `line` only to pick one of several matches). They arrive proposed: I accept or dismiss each one.
+   `line` only to pick one of several matches). They arrive proposed: I accept or dismiss each one. {{> comment-style}}
    {{> graphify}}
    {{> overview}}
 5. Show it: `{{open_review}}({ reviewId })`. It opens on the overview page (the pull request, your overview, the files
@@ -23,5 +23,5 @@
    when submitting): the Submit's `github.status` says whether I did (`posted`, or `posting` while Co-Review posts it).
    Then it is on GitHub: never say it isn't, and don't offer to post it. If I ask you to post it, call `{{post_review_to_github}}` with `comments`: each of my open
    comments rewritten as my own point, in my voice, without our discussion or any mention of it (a finding I kept and
-   replied to is one point made of both: the finding with what I added). Co-Review shows me
+   replied to is one point made of both: the finding with what I added), two or three short lines each. Co-Review shows me
    what goes out and posts only when I confirm.

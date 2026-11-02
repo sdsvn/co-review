@@ -21,7 +21,7 @@ import { GitHubReviews, previewMarkdown } from './github';
 import { documentFormat, DocumentFormat } from '../common/design-format';
 import { acceptedSuggestions, commentOf, findThread, patchFile, threadRef } from './review-payloads';
 import { locateInPatch, locateInText } from '../common/code-quote';
-import { ANSWER_STYLE, ANSWER_STYLE_SHORT, DESIGN_PROMPT } from './prompts.gen';
+import { ANSWER_STYLE, ANSWER_STYLE_SHORT, COMMENT_STYLE, DESIGN_PROMPT } from './prompts.gen';
 import { LANGUAGE_BY_EXTENSION, RepoIndex } from './repo-index';
 import { FACTS_SECTIONS, RepoFacts, renderFacts } from './repo-facts';
 import { CodeFolders } from './code-folders';
@@ -470,7 +470,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + '`status: "proposed"` lets the reviewer Keep or Dismiss each one, as for a first-pass audit); '
                 + 'anchored findings {id, target ("doc" | "doc:<path>" | "patch:<slug>"), anchor, severity, labels, body, verdict?} are PROPOSED '
                 + '(the reviewer Accepts or Dismisses; only accepted ones come back in the submitted batch). A Markdown page takes '
-                + 'target "doc:<path>" and anchor {type: "text", exact} | {type: "document"}.',
+                + 'target "doc:<path>" and anchor {type: "text", exact} | {type: "document"}.\n\n' + COMMENT_STYLE,
             inputSchema: {
                 reviewId: reviewArg,
                 findings: z.array(z.object({
@@ -609,7 +609,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     + 'reviewer\'s own point, in their voice (threadId: its id or short id). Only what they want changed, as one comment '
                     + 'of theirs: not the discussion, not your replies, no mention of talking it over with you. A finding they kept and '
                     + 'replied to is one point made of both: the finding with what they added. A thread left out is posted as its finding '
-                    + '(if it is one) followed by the reviewer\'s own messages.')
+                    + '(if it is one) followed by the discussion as it is: the reviewer\'s messages and your answers to them. ' + COMMENT_STYLE)
             }
         }, async ({ reviewId, summary, comments }) => {
             const review = await resolveReview(reviewId);

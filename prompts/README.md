@@ -21,13 +21,14 @@ Conventions:
 - The fragments speak as the reviewer to the agent: "I" and "me" are the human, "you" is the agent. Keep that voice.
 - An include is pasted verbatim, so a fragment included inside a numbered step (`overview.md`) starts on the
   caller's line and indents its own continuation lines by three spaces.
-- Wrap at about 115 characters, except `answer-style*.md`, which are single lines embedded as strings.
+- Wrap at about 115 characters, except `answer-style*.md` and `comment-style.md`, which are single lines embedded as strings.
 - The tool calls and result fields a fragment names (`format.warnings`, `status: "proposed"`, anchor types) are the
   real ones from `extensions/review/src/node/co-reviewer-mcp.ts`; check there before changing one.
 
 | Fragment | Used by |
 |---|---|
 | `answer-style.md`, `answer-style-short.md` | every agent answering in a thread: ACP prompt, MCP instructions and tool results, the co-reviewer subagents |
+| `comment-style.md` | every finding and posted comment: the `add_findings` and `post_review_to_github` descriptions, included by `review-change.md`, `review-pr.md`, `co-reviewer.md` |
 | `co-reviewer.md` | the Pi and Oh My Pi co-reviewer agents |
 | `design.md` | writing a design document: the design skill and commands, the `open_review` description, `llms.txt`, the docs |
 | `audit.md` | the whole-repository audit, written as a guide on the overview page: the commands and the `co-review` skill; the method is [docs/proposals/understanding-a-repository.pseudocode.md](../docs/proposals/understanding-a-repository.pseudocode.md) |
