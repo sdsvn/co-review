@@ -40,8 +40,8 @@ interface Session {
     server: McpServerType;
     /** Human message ids already handed to this agent, so each question is delivered once. */
     delivered: Set<string>;
-    /** Submissions already returned by await_reviewer. */
-    consumedSubmit: number;
+    /** Per review (id): the submissions already returned by await_reviewer, or known when the session took it up. */
+    consumedSubmit: Map<string, number>;
     /** Threads handed to this agent and not answered yet (thread id -> review id): given back if the session ends. */
     working: Map<string, string>;
     /** The close (`Review.closed.at`) this session was told about, so it is told once. */
@@ -200,7 +200,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             const baseUrl = `http://${req.headers.host}`;
             const created: Session = {
                 delivered: new Set(),
-                consumedSubmit: 0,
+                consumedSubmit: new Map(),
                 working: new Map(),
                 server: undefined!,
                 transport: new StreamableHTTPServerTransport({
@@ -398,7 +398,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             currentReviewId = review.id;
             this.startChannel(session, review, agent);
             // A round no agent has picked up yet (submitted while none was connected) is still delivered.
-            session.consumedSubmit = (review.verdict?.count ?? 0) - (review.verdict?.toAgent === 'waiting' ? 1 : 0);
+            session.consumedSubmit.set(review.id, this.submitsHandled(review));
             this.presence.seen(review.id);
             // Every review shows in a window of its own, so several can be open at once: the desktop app opens it (or
             // focuses it, if open) when launched with the workspace and `--review`; a browser opens a tab with
@@ -452,14 +452,18 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 return fail(`No thread "${threadId}".`);
             }
             const agent = this.agentOf(session);
-            const updated = await this.store.addMessage(review.id, thread.id, body, agent);
-            await this.store.setAgentState(review.id, thread.id, 'idle');
+            const { thread: updated, pending } = await this.store.answer(review.id, thread.id, body, agent, id => session.delivered.has(id));
             session.working.delete(thread.id);
-            if (resolve) {
+            // Never resolved over a message the agent hasn't read.
+            if (resolve && !pending) {
                 await this.store.setThreadStatus(review.id, thread.id, 'resolved', agent);
             }
             this.presence.seen(review.id);
-            return json({ ok: true, thread: threadRef(updated), threadId: updated.id, messages: updated.messages.length });
+            return json({
+                ok: true, thread: threadRef(updated), threadId: updated.id, messages: updated.messages.length,
+                ...pending ? { hint: 'The reviewer wrote again while you answered: their new message comes with the next await_reviewer'
+                    + (resolve ? ', so the thread was left open.' : '.') } : {}
+            });
         });
 
         server.registerTool('add_findings', {
@@ -500,8 +504,9 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             const dir = review.bundle?.dir ?? FileUri.fsPath(review.workspaceRoot);
             // Quotes are resolved before anything is created, so a finding that misses its code adds none of the batch.
             const misses: string[] = [];
+            const root = this.codeRoot(review);
             for (const [i, finding] of findings.entries()) {
-                const miss = finding.code !== undefined ? await this.placeQuote(review, dir, finding) : undefined;
+                const miss = this.unplaceable(finding, root) ?? (finding.code !== undefined ? await this.placeQuote(review, dir, finding) : undefined);
                 if (miss) {
                     misses.push(`findings[${i}] (${finding.anchor?.path ?? finding.path ?? finding.target ?? 'no path'}): ${miss}`);
                 }
@@ -509,34 +514,25 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             if (misses.length) {
                 return fail(`No findings were added. ${misses.join('\n')}`);
             }
+            // A finding with an `id` that the review already has (the call retried) is the same thread, not a new one.
             const ids: string[] = [];
             for (const finding of findings) {
-                if (finding.anchor && finding.target?.startsWith('doc:') && !/\.(md|markdown)$/i.test(finding.target)) {
-                    return fail(`${finding.target}: only Markdown pages take a doc: target; comment on other files with path and line.`);
-                }
+                let thread: ReviewThread;
                 if (finding.anchor) {
-                    await this.bundles.addFinding(review.id, dir, this.bundles.documentOf(dir), {
+                    thread = await this.bundles.addFinding(review.id, dir, this.bundles.documentOf(dir), {
                         id: finding.id ?? randomUUID(), target: finding.target, anchor: finding.anchor, body: finding.body,
                         severity: finding.severity as Severity | undefined, labels: finding.labels, verdict: finding.verdict, proposal: finding.proposal
                     }, agent);
-                } else if (finding.path) {
-                    const root = this.codeRoot(review);
-                    const file = path.resolve(root, finding.path);
-                    if (file !== root && !file.startsWith(root + path.sep)) {
-                        return fail(`${finding.path} is outside the repository (${root}).`);
-                    }
-                    const location = finding.line
-                        ? await this.locationFor(review, finding.path, finding.line, finding.endLine)
-                        : await this.pathLocation(review, finding.path);
-                    await this.store.createThread(review.id, location, finding.body, agent, {
-                        intent: 'comment', severity: finding.severity as Severity | undefined, labels: finding.labels,
-                        origin: 'finding', status: finding.status
-                    });
                 } else {
-                    return fail('Each finding needs either `anchor` (with `target`) or `path`.');
+                    const location = finding.line
+                        ? await this.locationFor(review, finding.path!, finding.line, finding.endLine)
+                        : await this.pathLocation(review, finding.path!);
+                    thread = await this.store.createThread(review.id, location, finding.body, agent, {
+                        intent: 'comment', severity: finding.severity as Severity | undefined, labels: finding.labels,
+                        origin: 'finding', status: finding.status, sourceId: finding.id
+                    });
                 }
-                const latest = await this.store.get(review.id);
-                ids.push(`t${latest!.nextThreadNumber - 1}`);
+                ids.push(threadRef(thread));
             }
             return json({ created: ids.length, ids, hint: 'Findings with an anchor are proposed: only the ones the reviewer accepts come back when they submit.' });
         });
@@ -732,6 +728,24 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         return server;
     }
 
+    /** Why an add_findings finding (after its quote, if any, is placed) can't be added, so none of the batch is. */
+    protected unplaceable(finding: { anchor?: unknown; target?: string; path?: string }, root: string): string | undefined {
+        if (finding.anchor) {
+            return finding.target?.startsWith('doc:') && !/\.(md|markdown)$/i.test(finding.target)
+                ? 'only Markdown pages take a doc: target; comment on other files with path and line.' : undefined;
+        }
+        if (!finding.path) {
+            return 'each finding needs either `anchor` (with `target`) or `path`.';
+        }
+        const file = path.resolve(root, finding.path);
+        return file !== root && !file.startsWith(root + path.sep) ? `outside the repository (${root}).` : undefined;
+    }
+
+    /** Submissions a session taking up `review` doesn't return: all but a round no agent has picked up yet. */
+    protected submitsHandled(review: Review): number {
+        return (review.verdict?.count ?? 0) - (review.verdict?.toAgent === 'waiting' ? 1 : 0);
+    }
+
     /**
      * Waits for the reviewer's next move in `initial`: threads waiting for this agent, or a Submit not yet returned to
      * this session (comments first: the submitted batch then has the answers in it). Every call that waits goes through
@@ -743,6 +757,8 @@ export class CoReviewerMcp implements BackendApplicationContribution {
         }
         const agent = this.agentOf(session);
         const stopListening = this.presence.listen(initial.id);
+        // Listening before each read, so a change written while it is read is not slept through.
+        const changes = this.watchChanges(initial.id);
         try {
             const deadline = Date.now() + timeoutMs;
             for (;;) {
@@ -751,12 +767,15 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 if (!review) {
                     return fail(`Review ${initial.id} was deleted.`);
                 }
-                const submitted = !!review.verdict && review.verdict.count > session.consumedSubmit;
+                if (!session.consumedSubmit.has(review.id)) {
+                    session.consumedSubmit.set(review.id, this.submitsHandled(review));
+                }
+                const submitted = !!review.verdict && review.verdict.count > session.consumedSubmit.get(review.id)!;
                 const waiting = this.waitingThreads(review, agent, session);
                 if (submitted && !waiting.length) {
-                    session.consumedSubmit = review.verdict!.count;
+                    session.consumedSubmit.set(review.id, review.verdict!.count);
                     if (review.verdict!.toAgent === 'waiting') {
-                        await this.store.verdictDelivered(review.id);
+                        await this.store.verdictDelivered(review.id, review.verdict!.count);
                     }
                     const settled = await this.settleGitHubPost(review, signal);
                     // Submitted: this agent has the review, and a window it showed can close (after the GitHub post).
@@ -791,9 +810,10 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 if (Date.now() >= deadline || signal.aborted) {
                     return json({ status: 'pending', hint: 'Nothing from the reviewer yet. Call it again to keep waiting.' });
                 }
-                await this.nextChange(initial.id, deadline - Date.now(), signal);
+                await changes.next(deadline - Date.now(), signal);
             }
         } finally {
+            changes.dispose();
             stopListening();
         }
     }
@@ -1142,24 +1162,52 @@ export class CoReviewerMcp implements BackendApplicationContribution {
     protected async settleGitHubPost(review: Review, signal: AbortSignal): Promise<Review> {
         const deadline = Date.now() + 60_000;
         const posting = (r: Review) => r.verdict?.github === 'posting' && r.bundle?.github?.round !== r.verdict.count;
-        while (posting(review) && Date.now() < deadline && !signal.aborted) {
-            await this.nextChange(review.id, deadline - Date.now(), signal);
-            review = await this.store.get(review.id) ?? review;
+        if (!posting(review)) {
+            return review;
         }
-        return review;
+        const changes = this.watchChanges(review.id);
+        try {
+            review = await this.store.get(review.id) ?? review;
+            while (posting(review) && Date.now() < deadline && !signal.aborted) {
+                await changes.next(deadline - Date.now(), signal);
+                review = await this.store.get(review.id) ?? review;
+            }
+            return review;
+        } finally {
+            changes.dispose();
+        }
     }
 
-    protected nextChange(reviewId: string, timeoutMs: number, signal: AbortSignal): Promise<void> {
-        return new Promise(resolve => {
-            const done = () => {
-                clearTimeout(timer);
-                listener.dispose();
-                signal.removeEventListener('abort', done);
-                resolve();
-            };
-            const timer = setTimeout(done, Math.max(0, timeoutMs));
-            const listener = this.store.onDidChange(change => change.kind === 'changed' && change.review.id === reviewId && done());
-            signal.addEventListener('abort', done);
+    /**
+     * Changes to a review from now on: `next` resolves at the first one since the previous `next` (at once if one came
+     * already), at the timeout, or when `signal` aborts.
+     */
+    protected watchChanges(reviewId: string): { next(timeoutMs: number, signal: AbortSignal): Promise<void>; dispose(): void } {
+        let changed = false;
+        let wake: (() => void) | undefined;
+        const listener = this.store.onDidChange(change => {
+            if (change.kind === 'changed' && change.review.id === reviewId) {
+                changed = true;
+                wake?.();
+            }
         });
+        return {
+            next: (timeoutMs, signal) => new Promise<void>(resolve => {
+                const done = () => {
+                    clearTimeout(timer);
+                    signal.removeEventListener('abort', done);
+                    wake = undefined;
+                    changed = false;
+                    resolve();
+                };
+                const timer = setTimeout(done, Math.max(0, timeoutMs));
+                signal.addEventListener('abort', done);
+                wake = done;
+                if (changed || signal.aborted) {
+                    done();
+                }
+            }),
+            dispose: () => listener.dispose()
+        };
     }
 }

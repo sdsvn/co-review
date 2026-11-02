@@ -14,7 +14,7 @@ import { OverviewPages } from './overview-page';
 import { CodeFolders } from './code-folders';
 import { AnchorTracker } from './anchor-tracker';
 import { GitHubReviews } from './github';
-import { ReviewStore } from './review-store';
+import { realUri, ReviewStore } from './review-store';
 
 function git(cwd: string, args: string[]): Promise<string | undefined> {
     return new Promise(resolve => execFile('git', args, { cwd }, (err, stdout) => resolve(err ? undefined : stdout.trim())));
@@ -98,6 +98,10 @@ export class ReviewServiceImpl implements ReviewService {
 
     getCurrentUser(workspaceRoot: string): Promise<Participant> {
         return currentUser(workspaceRoot);
+    }
+
+    async realRoot(workspaceRoot: string): Promise<string> {
+        return realUri(workspaceRoot);
     }
 
     async getGitInfo(workspaceRoot: string): Promise<GitInfo> {

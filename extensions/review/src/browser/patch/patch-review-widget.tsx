@@ -31,12 +31,17 @@ function rowLine(row: PatchRow): number | undefined {
     return row.t === 'del' ? row.o : row.n;
 }
 
+/** The row's line number on `side`: an unchanged line is on both sides (an old-side quote can take it in). */
+function lineOn(row: PatchRow, side: 'new' | 'old'): number | undefined {
+    return row.t === 'hunk' || row.t === (side === 'new' ? 'del' : 'add') ? undefined : side === 'new' ? row.n : row.o;
+}
+
 /** Whether a patch anchor ends on this row (threads are shown after the last line they cover). */
 function endsAt(anchor: PatchAnchor, path: string, row: PatchRow): boolean {
-    if (anchor.path !== path || row.t === 'hunk' || (anchor.side ?? 'new') !== rowSide(row)) {
+    const line = anchor.path === path ? lineOn(row, anchor.side ?? 'new') : undefined;
+    if (line === undefined) {
         return false;
     }
-    const line = rowLine(row);
     return anchor.type === 'code-line' ? anchor.line === line : anchor.type === 'code-range' && anchor.endLine === line;
 }
 
@@ -46,10 +51,10 @@ function dirOf(path: string): string {
 }
 
 function covers(anchor: PatchAnchor, path: string, row: PatchRow): boolean {
-    if (anchor.path !== path || row.t === 'hunk' || (anchor.side ?? 'new') !== rowSide(row)) {
+    const line = anchor.path === path ? lineOn(row, anchor.side ?? 'new') : undefined;
+    if (line === undefined) {
         return false;
     }
-    const line = rowLine(row) ?? -1;
     return anchor.type === 'code-line' ? anchor.line === line
         : anchor.type === 'code-range' && (anchor.startLine ?? 0) <= line && line <= (anchor.endLine ?? 0);
 }
@@ -274,10 +279,12 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
             return;
         }
         const start = this.rangeStart;
-        if (e.shiftKey && start && start.path === path && rowSide(start.row) === rowSide(row) && rowLine(start.row) !== line) {
-            const file = this.files.find(f => f.path === path)!;
+        const file = this.files.find(f => f.path === path)!;
+        // A range is within one hunk: GitHub refuses one across two, and the lines between them aren't on the page.
+        const hunkOf = (r: PatchRow) => file.rows.slice(0, file.rows.indexOf(r)).filter(x => x.t === 'hunk').length;
+        if (e.shiftKey && start && start.path === path && rowSide(start.row) === rowSide(row) && rowLine(start.row) !== line && hunkOf(start.row) === hunkOf(row)) {
             const [a, b] = [rowLine(start.row)!, line].sort((x, y) => x - y);
-            const source = file.rows.filter(r => r.t !== 'hunk' && rowSide(r) === rowSide(row) && (rowLine(r) ?? -1) >= a && (rowLine(r) ?? -1) <= b).map(r => r.s).join('\n');
+            const source = file.rows.filter(r => (lineOn(r, rowSide(row)) ?? -1) >= a && (lineOn(r, rowSide(row)) ?? -1) <= b).map(r => r.s).join('\n');
             this.addDraft({ type: 'code-range', path, startLine: a, endLine: b, side: rowSide(row), source });
             this.rangeStart = undefined;
         } else {
@@ -293,7 +300,7 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
             </div>;
         }
         const thread = item.thread!;
-        if (thread.status === 'resolved' || (thread.status === 'open' && this.reviews.isCollapsed(thread.id))) {
+        if (thread.status === 'resolved' || this.reviews.isCollapsed(thread.id)) {
             return undefined;
         }
         return <div key={item.key} className='co-review-inline-content co-review-patch-slot' data-thread-id={thread.id}>

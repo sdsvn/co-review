@@ -768,7 +768,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             if (thread) {
                 this.reviews.setAnchorState(thread.id, outdated ? 'outdated' : thread.location.tracked?.status === 'modified' ? 'changed' : 'exact');
             }
-            if (thread && !outdated && this.isCollapsed(thread)) {
+            if (thread && this.isCollapsed(thread)) {
                 continue;
             }
             const slot = document.createElement('div');
@@ -804,6 +804,10 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
 
     /** Scrolls a thread of this document into view. */
     reveal(threadId: string): void {
+        // A collapsed thread whose text wasn't found has no mark to click open: showing it opens it.
+        if (this.reviews.isCollapsed(threadId)) {
+            this.reviews.setCollapsed(threadId, false);
+        }
         const mark = this.content.querySelector(`mark[data-thread="${CSS.escape(threadId)}"]`);
         (mark ?? this.content).scrollIntoView({ block: 'center', behavior: 'smooth' });
     }

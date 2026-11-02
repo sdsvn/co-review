@@ -3,7 +3,7 @@ import { inject, injectable, postConstruct } from '@theia/core/shared/inversify'
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { contentVersion, Participant, Review, Severity } from '../common/review-model';
+import { contentVersion, Participant, Review, ReviewThread, Severity } from '../common/review-model';
 import { DOCUMENT_NAMES, parsePatchMeta } from '../common/patch';
 import { locationFromAnchor, toStateFile } from './review-payloads';
 import { coReviewHome, realPath, ReviewStore } from './review-store';
@@ -178,6 +178,7 @@ export class BundleService {
                     continue;
                 }
                 seen.add(finding.id);
+                // The store skips a finding another sync added meanwhile (two pages loading at once).
                 await this.addFinding(review.id, dir, docFile, { ...finding, target: `patch:${slug}` });
                 created++;
             }
@@ -185,10 +186,11 @@ export class BundleService {
         return created;
     }
 
-    async addFinding(reviewId: string, dir: string, docFile: string | undefined, finding: Finding, author?: Participant): Promise<void> {
+    /** Adds a finding as a proposed thread (or returns the one it already is, by its id). */
+    async addFinding(reviewId: string, dir: string, docFile: string | undefined, finding: Finding, author?: Participant): Promise<ReviewThread> {
         const location = locationFromAnchor(dir, docFile, finding.target, finding.anchor ?? {});
         const body = finding.verdict ? `${finding.body}\n\n_${finding.verdict}_` : finding.body;
-        await this.store.createThread(reviewId, location, body, author ?? { id: 'agent:review-bot', kind: 'agent', name: 'review-bot' }, {
+        return this.store.createThread(reviewId, location, body, author ?? { id: 'agent:review-bot', kind: 'agent', name: 'review-bot' }, {
             status: 'proposed', origin: 'finding', sourceId: finding.id, severity: finding.severity, labels: finding.labels,
             proposal: finding.proposal && { ...finding.proposal, status: 'pending' }
         });

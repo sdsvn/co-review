@@ -67,11 +67,21 @@ function hunkStarts(line: string): [number, number] {
     return [oldStart, newStart];
 }
 
+/** A hunk header's line counts (`@@ -1,5 +1,6 @@`: 5 and 6; a missing count is 1), or undefined if it has none. */
+function hunkCounts(line: string): [number, number] | undefined {
+    const m = line.match(/^@@+ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/);
+    return m ? [m[1] === undefined ? 1 : Number(m[1]), m[2] === undefined ? 1 : Number(m[2])] : undefined;
+}
+
 export function parsePatch(src: string): PatchFile[] {
     const files: PatchFile[] = [];
     let cur: PatchFile | undefined;
     let oldNo = 0;
     let newNo = 0;
+    // The lines left in the current hunk, per side (its header's counts): inside one, a line is a diff line whatever it
+    // starts with (`--- x` is a removed `-- x`); after it, anything up to the next header (a commit message, a diffstat,
+    // a `-- ` signature in `format-patch` output) is not. Undefined: a header without counts, read up to the next one.
+    let left: [number, number] | undefined = [0, 0];
     const flush = () => {
         if (cur) {
             files.push(cur);
@@ -79,6 +89,31 @@ export function parsePatch(src: string): PatchFile[] {
         }
     };
     for (const line of src.split(/\r?\n/)) {
+        if (cur && left && (left[0] > 0 || left[1] > 0)) {
+            const t = line === '' || line[0] === ' ' ? 'ctx' : line[0] === '+' ? 'add' : line[0] === '-' ? 'del' : undefined;
+            if (t === 'ctx' && left[0] > 0 && left[1] > 0) {
+                cur.rows.push({ t, o: oldNo++, n: newNo++, s: line.slice(1) });
+                left = [left[0] - 1, left[1] - 1];
+                continue;
+            }
+            if (t === 'add' && left[1] > 0) {
+                cur.rows.push({ t, n: newNo++, s: line.slice(1) });
+                cur.added++;
+                left = [left[0], left[1] - 1];
+                continue;
+            }
+            if (t === 'del' && left[0] > 0) {
+                cur.rows.push({ t, o: oldNo++, s: line.slice(1) });
+                cur.removed++;
+                left = [left[0] - 1, left[1]];
+                continue;
+            }
+            if (line.startsWith('\\')) {
+                continue;
+            }
+            // Not what the header said is left (a hand-edited patch): headers are read as headers again.
+            left = [0, 0];
+        }
         if (line.startsWith('diff --git ')) {
             flush();
             const parts = line.slice('diff --git '.length).split(/\s+/).filter(Boolean);
@@ -107,8 +142,9 @@ export function parsePatch(src: string): PatchFile[] {
                 continue;
             }
             [oldNo, newNo] = hunkStarts(line);
+            left = hunkCounts(line);
             cur.rows.push({ t: 'hunk', s: line });
-        } else if (cur && cur.rows.length > 0) {
+        } else if (cur && cur.rows.length > 0 && !left) {
             if (line === '') {
                 cur.rows.push({ t: 'ctx', o: oldNo++, n: newNo++, s: '' });
             } else if (line[0] === '+') {

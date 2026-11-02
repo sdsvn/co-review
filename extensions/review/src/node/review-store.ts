@@ -251,8 +251,13 @@ export class ReviewStore {
         });
     }
 
+    /** A new thread; with a `sourceId` the review already has (a finding added again), that thread instead. */
     createThread(reviewId: string, location: CodeLocation, body: string, author: Participant, options: ThreadOptions = {}): Promise<ReviewThread> {
         return this.mutate(reviewId, (review, now) => {
+            const existing = options.sourceId ? review.threads.find(t => t.sourceId === options.sourceId) : undefined;
+            if (existing) {
+                return existing;
+            }
             const thread: ReviewThread = {
                 id: randomUUID(),
                 number: review.nextThreadNumber++,
@@ -285,6 +290,26 @@ export class ReviewStore {
             this.record(review, { kind: 'message-added', actor: author, threadId, at: now });
             this.afterWrite(() => this.onDidAddMessageEmitter.fire({ review, thread, message }));
         });
+    }
+
+    /**
+     * An agent's answer, in one write with its state: it goes before the reviewer's first message the agent hadn't been
+     * given (`handed`), so a follow-up written while the agent was answering stays the last message, waiting for it.
+     * `pending` says whether one does.
+     */
+    answer(reviewId: string, threadId: string, body: string, author: Participant, handed: (messageId: string) => boolean): Promise<{ thread: ReviewThread; pending: boolean }> {
+        let pending = false;
+        return this.mutateThread(reviewId, threadId, (review, thread, now) => {
+            const message: ReviewMessage = { id: randomUUID(), author, body, createdAt: now };
+            const seen = thread.messages.map(m => handed(m.id)).lastIndexOf(true);
+            const unseen = seen < 0 ? -1 : thread.messages.findIndex((m, i) => i > seen && m.author.kind === 'human' && !handed(m.id));
+            pending = unseen >= 0;
+            thread.messages.splice(pending ? unseen : thread.messages.length, 0, message);
+            thread.agentState = 'idle';
+            this.queueForAgent(review, thread);
+            this.record(review, { kind: 'message-added', actor: author, threadId, at: now });
+            this.afterWrite(() => this.onDidAddMessageEmitter.fire({ review, thread, message }));
+        }).then(thread => ({ thread, pending }));
     }
 
     /** Where tracking (AnchorTracker) found the targets of some threads: their locations, without an activity entry. */
@@ -411,10 +436,10 @@ export class ReviewStore {
         });
     }
 
-    /** An agent picked up the latest round. */
-    verdictDelivered(reviewId: string): Promise<Review> {
+    /** An agent picked up round `count` (if the reviewer submitted again since, the newer round still waits). */
+    verdictDelivered(reviewId: string, count: number): Promise<Review> {
         return this.mutate(reviewId, review => {
-            if (review.verdict) {
+            if (review.verdict?.count === count) {
                 review.verdict.toAgent = 'delivered';
             }
             return review;

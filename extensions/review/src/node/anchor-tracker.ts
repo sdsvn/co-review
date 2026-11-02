@@ -3,7 +3,7 @@ import { inject, injectable } from '@theia/core/shared/inversify';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { CodeLocation, contentVersion, Review } from '../common/review-model';
-import { Edit, editsBetween, positionAt, track, TrackedRange } from '../common/anchor-tracking';
+import { Edit, editsBetween, occurrenceOnPage, positionAt, track, TrackedRange } from '../common/anchor-tracking';
 import { saveSnapshot, snapshotsDir } from './anchor-snapshots';
 import { ReviewStore } from './review-store';
 
@@ -96,11 +96,7 @@ export class AnchorTracker {
             return { ...location, tracked };
         }
         if (location.kind === 'document' && location.docAnchor) {
-            let occurrence = 0;
-            for (let at = text.indexOf(tracked.text); at >= 0 && at < tracked.from; at = text.indexOf(tracked.text, at + 1)) {
-                occurrence++;
-            }
-            return { ...location, tracked, docAnchor: { ...location.docAnchor, exact: tracked.text, occurrence } };
+            return { ...location, tracked, docAnchor: { ...location.docAnchor, exact: tracked.text, occurrence: occurrenceOnPage(text, tracked.text, tracked.from) } };
         }
         const start = positionAt(text, tracked.from);
         const end = positionAt(text, tracked.to);

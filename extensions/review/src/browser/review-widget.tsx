@@ -75,8 +75,10 @@ export class ReviewWidget extends ReactWidget {
         this.toDispose.push(this.reviews.onDidRequestReveal(threadId => {
             this.selectedThreadId = threadId;
             const thread = this.reviews.activeReview?.threads.find(t => t.id === threadId);
-            if (thread && (this.filter === 'files' || (this.filter !== 'all' && thread.status !== this.filter))) {
-                this.filter = thread.status === 'proposed' ? 'proposed' : thread.status;
+            // The tab that lists it: out-of-scope threads are only on their own tab.
+            const tab: Filter | undefined = thread && (isOutOfScope(thread) ? 'out-of-scope' : thread.status);
+            if (tab && this.filter !== 'all' && this.filter !== tab) {
+                this.filter = tab;
             }
             this.pendingScroll = true;
             this.update();
@@ -263,7 +265,7 @@ export class ReviewWidget extends ReactWidget {
             this.filter = 'open';
         }
         const files = this.files(review);
-        if (this.filter === 'files' && !files) {
+        if ((this.filter === 'files' && !files) || (this.filter === 'out-of-scope' && !outOfScope)) {
             this.filter = 'open';
         }
         // To triage: the most severe first; elsewhere by place.

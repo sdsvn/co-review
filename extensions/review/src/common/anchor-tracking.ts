@@ -258,6 +258,25 @@ function contextScore(anchor: TrackedRange, text: string, from: number, to: numb
     return total ? (p + s) / total : 0;
 }
 
+/**
+ * Which occurrence of `exact` on the rendered page the one at `from` in a Markdown `source` is (0 = the first). Only
+ * text the page shows counts: frontmatter, Mermaid code (drawn as a diagram, whose text anchors skip), HTML comments
+ * and link targets are blanked out first, keeping offsets, so they don't shift the count.
+ */
+export function occurrenceOnPage(source: string, exact: string, from: number): number {
+    const blank = (m: string) => m.replace(/[^\n]/g, ' ');
+    const shown = source
+        .replace(/^---\n[\s\S]*?\n---(?=\n|$)/, blank)
+        .replace(/^([ \t]*)(`{3,}|~{3,})[ \t]*mermaid\b[\s\S]*?^\1\2[ \t]*$/gm, blank)
+        .replace(/<!--[\s\S]*?-->/g, blank)
+        .replace(/\]\([^)\n]*\)/g, m => ']' + blank(m.slice(1)));
+    let occurrence = 0;
+    for (let at = shown.indexOf(exact); at >= 0 && at < from; at = shown.indexOf(exact, at + 1)) {
+        occurrence++;
+    }
+    return occurrence;
+}
+
 /** Character offset of a 0-based line and character in `text`. */
 export function offsetAt(text: string, line: number, character: number): number {
     let at = 0;

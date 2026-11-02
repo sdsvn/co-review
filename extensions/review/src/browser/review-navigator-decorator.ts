@@ -2,6 +2,7 @@ import { Emitter, Event } from '@theia/core/lib/common/event';
 import { DepthFirstTreeIterator, Tree, TreeDecoration, TreeDecorator } from '@theia/core/lib/browser';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import { FileStatNode } from '@theia/filesystem/lib/browser';
+import { isOutOfScope } from '../common/review-model';
 import { ReviewChange } from './review-change';
 import { ReviewManager } from './review-manager';
 
@@ -58,7 +59,8 @@ export class ReviewNavigatorDecorator implements TreeDecorator {
         const threads = new Map<string, number>();
         const folders = new Map<string, number>();
         for (const thread of review.threads) {
-            if (thread.status !== 'resolved' && thread.location.uri && thread.location.kind !== 'repository') {
+            // As the panel's Open tab counts them: neither proposed findings nor out-of-scope comments.
+            if (thread.status === 'open' && !isOutOfScope(thread) && thread.location.uri && thread.location.kind !== 'repository') {
                 // A comment on a line of the diff counts on the file it is about, not the patch.
                 const file = this.reviews.patchFile(thread.location)?.path ?? this.reviews.relativePath(thread.location.uri);
                 threads.set(file, (threads.get(file) ?? 0) + 1);

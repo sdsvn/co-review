@@ -67,6 +67,8 @@ export class ReviewManager {
     protected _reviews: Review[] = [];
     protected _activeReviewId: string | undefined;
     protected _root: string | undefined;
+    /** `_root` with symbolic links resolved: the backend stores reviews, and agents' comments, under this one. */
+    protected _realRoot: string | undefined;
     /** The review this window was opened for (`?review=<id>`, when an agent showed it): each such review has its own window. */
     protected readonly openedFor = new URLSearchParams(window.location.search).get('review') ?? undefined;
 
@@ -102,9 +104,11 @@ export class ReviewManager {
     protected init(): void {
         this._ready = this.load();
         this.workspaceService.onWorkspaceChanged(() => this._ready = this.load());
-        this.client.onDidChangeReview(review => {
+        this.client.onDidChangeReview(changed => {
+            const review = this.local(changed);
             // The window's own reviews, and change reviews whose code folder it shows.
-            if (review.workspaceRoot !== this._root && !(review.bundle?.code && URI.fromFilePath(review.bundle.code).toString() === this._root)) {
+            const code = review.bundle?.code && URI.fromFilePath(review.bundle.code).toString();
+            if (review.workspaceRoot !== this._root && !(code && (code === this._root || code === this._realRoot))) {
                 return;
             }
             const index = this._reviews.findIndex(r => r.id === review.id);
@@ -160,9 +164,28 @@ export class ReviewManager {
         }
     }
 
+    /**
+     * A review as this window sees it: under the folder as it was opened, not its resolved path. The backend stores the
+     * resolved one, so in a folder opened through a symbolic link the editor's URIs and the comments' wouldn't match.
+     */
+    protected local(review: Review): Review {
+        const root = this._root;
+        const real = this._realRoot;
+        if (!root || !real || root === real) {
+            return review;
+        }
+        const map = (uri: string | undefined) => uri === real ? root : uri?.startsWith(real + '/') ? root + uri.slice(real.length) : uri;
+        return {
+            ...review,
+            workspaceRoot: map(review.workspaceRoot)!,
+            threads: review.threads.map(t => t.location.uri?.startsWith(real) ? { ...t, location: { ...t.location, uri: map(t.location.uri) } } : t)
+        };
+    }
+
     protected async load(): Promise<void> {
         const roots = await this.workspaceService.roots;
         this._root = roots[0]?.resource.toString();
+        this._realRoot = this._root && await this.service.realRoot(this._root).catch(() => this._root);
         if (this._root) {
             this.service.showWorkspace(this._root, this.openedFor);
         }
@@ -186,7 +209,7 @@ export class ReviewManager {
             this.storage.setData(READ_KEY, { since: this.readSince, read: this.read });
         }
         this._user = user;
-        this._reviews = reviews;
+        this._reviews = reviews.map(r => this.local(r));
         // `?review=<id>` (used when an agent opens a review for the reviewer) wins over the last active one.
         this._activeReviewId = [this.openedFor, active].find(id => reviews.some(r => r.id === id)) ?? reviews.find(r => !r.archivedAt)?.id;
         await Promise.all(reviews.map(async r => {
@@ -330,7 +353,7 @@ export class ReviewManager {
         if (!this._root) {
             throw new Error('Open a repository before creating a review.');
         }
-        const review = await this.service.createReview({ workspaceRoot: this._root, title, scope, author: this._user });
+        const review = this.local(await this.service.createReview({ workspaceRoot: this._root, title, scope, author: this._user }));
         if (!this._reviews.some(r => r.id === review.id)) {
             this._reviews.unshift(review);
         }
@@ -348,7 +371,7 @@ export class ReviewManager {
 
     /** Archive (or unarchive) a review. Archiving the active one switches to the next; unarchiving activates it. */
     async archiveReview(reviewId: string, archived: boolean): Promise<void> {
-        const updated = await this.service.archiveReview(reviewId, archived);
+        const updated = this.local(await this.service.archiveReview(reviewId, archived));
         const index = this._reviews.findIndex(r => r.id === reviewId);
         if (index >= 0) {
             this._reviews[index] = updated;

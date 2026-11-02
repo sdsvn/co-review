@@ -109,6 +109,8 @@ export interface ReviewService extends RpcServer<ReviewClient> {
     /** The reviewer is done with the review (Done on an explanation): its agents are told it is closed, as when its window closes. */
     finishReview(reviewId: string): Promise<void>;
     getCurrentUser(workspaceRoot: string): Promise<Participant>;
+    /** The folder's URI with symbolic links resolved, as the backend stores it (`/tmp/x` → `/private/tmp/x` on macOS). */
+    realRoot(workspaceRoot: string): Promise<string>;
     getGitInfo(workspaceRoot: string): Promise<GitInfo>;
     resolveCommit(workspaceRoot: string, ref: string): Promise<string | undefined>;
 
