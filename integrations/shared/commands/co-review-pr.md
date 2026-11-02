@@ -19,7 +19,7 @@ Use the Co-Review tools from the co-review extension: $ARGUMENTS
    five findings where it matters: `co_review_add_findings({ findings: [{ target: "patch:pr-<n>", anchor: { type:
    "code-line", path, side: "new" }, code, body, severity }] })`, where `code` is the line(s) the finding is about,
    copied exactly from the diff: Co-Review places the finding on them and refuses a quote that matches nothing (add
-   `line` only to pick one of several matches). They arrive proposed: I accept or dismiss each one. How to write a finding or comment: like a busy reviewer, for a busy author who reads only the start. Two or three short lines, no more: what happens here, why that is a problem, and the fix if it is obvious. The first line names the problem on its own (it becomes the title). Plain words, no preamble, no headings, lists or code blocks; name the code (`checkTemplates`), not file:line. If it needs more, it is two findings, or a question.
+   `line` only to pick one of several matches). They arrive proposed: I accept or dismiss each one. How to write a finding or comment: the way reviewers write on pull requests, for an author who reads only the first line. One line is normal (about 15 words), two when the reason isn't obvious, never a paragraph. Lead with the problem, often as a question ("Deref without a nil check, is that safe when the field is unset?", "Why a separate topic here?", "Error is ignored, should be wrapped"). Add the why in half a sentence only when it isn't obvious; give the fix only when it is short, and a one-line fix as `proposal` (it becomes a GitHub suggestion), not in the text. Say "we" and ask rather than lecture; prefix "nit:" for style and "not a blocker" for something that can wait. No preamble, summary, headings, lists or code blocks; name the code (`checkTemplates`), not file:line. If it needs more, it is two findings, or a question.
    When the repository has [Graphify](https://graphify.net) graphs, ask them how the code connects before
    searching: `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "X"`. A large repository may
    keep one graph per folder (e.g. `services/graphify-out/`; its AGENTS.md says which), and graphs are untracked, so a
@@ -42,6 +42,6 @@ Use the Co-Review tools from the co-review extension: $ARGUMENTS
    when submitting): the Submit's `github.status` says whether I did (`posted`, or `posting` while Co-Review posts it).
    Then it is on GitHub: never say it isn't, and don't offer to post it. If I ask you to post it, call `co_review_post_github` with `comments`: each of my open
    comments rewritten as my own point, in my voice, without our discussion or any mention of it (a finding I kept and
-   replied to is one point made of both: the finding with what I added), two or three short lines each. Co-Review shows me
+   replied to is one point made of both: the finding with what I added), a line or two each. Co-Review shows me
    what goes out and posts only when I confirm.
 <!-- /prompt -->
