@@ -218,12 +218,14 @@ export function overviewPage(review: Review, root: string, parts: OverviewParts)
         lines.push('', `### ${area} (${list.length})`);
         for (const thread of list) {
             const at = where(thread, root);
+            // `#/thread/<n>` opens the thread where it is (the file, its diff or the patch page) and shows the comment.
+            const href = thread.location.uri || thread.location.patchAnchor ? `#/thread/${thread.number}` : at.href;
             const first = thread.messages[0];
             lines.push('', `#### #${thread.number} ${first?.body.split('\n')[0].replace(/^#+\s*/, '').slice(0, 90) ?? ''}`, '');
             lines.push([
                 thread.severity ? `**${thread.severity}**` : undefined,
                 STATUS[thread.status] ?? thread.status,
-                at.href ? `[${at.label}](${at.href})` : at.label,
+                href ? `[${at.label}](${href})` : at.label,
                 thread.location.symbol ? `\`${thread.location.symbol}\`` : undefined
             ].filter(Boolean).join(' · '));
             if (thread.location.anchor?.text?.trim()) {

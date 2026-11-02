@@ -594,6 +594,12 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             } else if (href.startsWith('#/patch/')) {
                 // `#/patch/limiter` opens the patch as a review page.
                 open(this.openers, this.uri.parent.resolve(`${href.slice('#/patch/'.length)}.patch`));
+            } else if (href.startsWith('#/thread/')) {
+                // `#/thread/3` (a finding on the overview page) opens that thread at its code.
+                const thread = this.reviews.activeReview?.threads.find(t => t.number === Number(href.slice('#/thread/'.length)));
+                if (thread) {
+                    this.navigator.open(thread.location, thread.id);
+                }
             } else if (!href.startsWith('#')) {
                 this.openLink(decodeURI(href));
             }
