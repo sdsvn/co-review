@@ -13,6 +13,8 @@ Made for Claude Code. Native packages for Pi and Oh My Pi. Works with any MCP ag
 [![Pi and Oh My Pi](https://img.shields.io/badge/Pi%20%C2%B7%20Oh%20My%20Pi-packages-059669?style=flat-square)](#pi-and-oh-my-pi)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-1E1B4B?style=flat-square)](#install)
 
+<a href="https://www.producthunt.com/products/co-review?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-co-review-2" target="_blank" rel="noopener noreferrer"><img alt="Co-Review - Read the whole repository with the agent that built it | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1309804&amp;theme=light&amp;t=1794314794379"></a>
+
 [Website](https://sdsvn.github.io/co-review/) · [Install](#install) · [Connect your agent](#connect-your-agent) · [Usage](#usage) · [Docs](#documentation) · [Contributing](#contributing)
 
 </div>
