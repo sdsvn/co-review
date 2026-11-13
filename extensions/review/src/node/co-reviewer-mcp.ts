@@ -450,9 +450,11 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             this.awaitReviewer(session, await resolveReview(reviewId), (timeoutSec ?? 240) * 1000, extra.signal));
 
         server.registerTool('reply', {
-            description: `Answer in a review thread (markdown). ${ANSWER_STYLE_SHORT} threadId: the thread id or its short id ("t2").`,
-            inputSchema: { threadId: z.string(), body: z.string(), resolve: z.boolean().optional(), reviewId: reviewArg }
-        }, async ({ threadId, body, resolve, reviewId }) => {
+            description: `Answer in a review thread (markdown). ${ANSWER_STYLE_SHORT} threadId: the thread id or its short id ("t2"). `
+                + 'The thread stays open: only the reviewer resolves a thread.',
+            // No `resolve`: whether a question is answered is the reviewer's call, never the agent's.
+            inputSchema: { threadId: z.string(), body: z.string(), reviewId: reviewArg }
+        }, async ({ threadId, body, reviewId }) => {
             const review = await resolveReview(reviewId);
             const thread = review && findThread(review, threadId.trim());
             if (!review || !thread) {
@@ -461,15 +463,10 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             const agent = this.agentOf(session);
             const { thread: updated, pending } = await this.store.answer(review.id, thread.id, body, agent, id => session.delivered.has(id));
             session.working.delete(thread.id);
-            // Never resolved over a message the agent hasn't read.
-            if (resolve && !pending) {
-                await this.store.setThreadStatus(review.id, thread.id, 'resolved', agent);
-            }
             this.presence.seen(review.id);
             return json({
                 ok: true, thread: threadRef(updated), threadId: updated.id, messages: updated.messages.length,
-                ...pending ? { hint: 'The reviewer wrote again while you answered: their new message comes with the next await_reviewer'
-                    + (resolve ? ', so the thread was left open.' : '.') } : {}
+                ...pending ? { hint: 'The reviewer wrote again while you answered: their new message comes with the next await_reviewer.' } : {}
             });
         });
 

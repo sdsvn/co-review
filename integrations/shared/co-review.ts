@@ -317,11 +317,10 @@ export function registerCoReview<C extends Context>(pi: any, harness: Harness<C>
 	pi.registerTool({
 		name: "co_review_reply",
 		label: "Co-Review: reply",
-		description: "Answer the reviewer in a Co-Review thread (markdown). Answer first, in plain language, in a few sentences; no line-number walkthroughs (at most one or two path:line links at the end).",
+		description: "Answer the reviewer in a Co-Review thread (markdown). Answer first, in plain language, in a few sentences; no line-number walkthroughs (at most one or two path:line links at the end). The thread stays open: only the reviewer resolves it.",
 		parameters: Type.Object({
 			threadId: Type.String(),
-			body: Type.String({ description: "Markdown answer" }),
-			resolve: Type.Optional(Type.Boolean({ description: "Also resolve the thread" }))
+			body: Type.String({ description: "Markdown answer" })
 		}),
 		async execute(_id: string, params: Record<string, unknown>) {
 			await connection.call("reply", params);

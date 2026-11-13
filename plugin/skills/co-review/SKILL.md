@@ -338,8 +338,8 @@ How to answer:
 - If you need the human to choose, `ask_reviewer({ question, options: [...] })` shows buttons and waits like
   `await_reviewer`: it returns their choice (`question.choice`), or whatever they did first; the choice then comes
   from `await_reviewer`, as their message in that thread.
-- Don't resolve threads yourself (`resolve: true`) unless the human asked a question you fully answered and
-  they said so.
+- Never resolve a thread, not even one you fully answered: only the human resolves, when they are satisfied.
+  Answer and leave it open.
 
 ## 3. Act on the verdict
 
