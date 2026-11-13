@@ -19,10 +19,24 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// The installed `co-review` command (desktop app or checkout), else this checkout's CLI on the harness's runtime.
-const INSTALLED = [join("/usr/local/bin", "co-review"), join(homedir(), ".local", "bin", "co-review")].find(p => existsSync(p));
-const CLI = INSTALLED ? [INSTALLED] : [process.execPath, resolve(here, "..", "..", "bin", "co-review.mjs")];
 const HOME = process.env.CO_REVIEW_HOME || join(homedir(), ".co-review");
+// The installed `co-review` command (desktop app or checkout), else this checkout's CLI on the harness's runtime.
+// On Windows the installed command is a .cmd shim, which cannot be spawned without a shell: the app writes what the
+// shim runs (exe, script, environment) to launch.json next to it, and that is spawned directly.
+const INSTALLED = process.platform === "win32" ? undefined
+	: [join("/usr/local/bin", "co-review"), join(homedir(), ".local", "bin", "co-review")].find(p => existsSync(p));
+const LAUNCH = process.platform === "win32" ? readLaunch(join(homedir(), ".co-review", "bin", "launch.json")) : undefined;
+const CLI = INSTALLED ? [INSTALLED] : LAUNCH ? [LAUNCH.command, ...LAUNCH.args] : [process.execPath, resolve(here, "..", "..", "bin", "co-review.mjs")];
+const CLI_ENV = LAUNCH?.env ? { ...process.env, ...LAUNCH.env } : process.env;
+
+function readLaunch(file: string): { command: string; args: string[]; env?: Record<string, string> } | undefined {
+	try {
+		const launch = JSON.parse(readFileSync(file, "utf8"));
+		return typeof launch.command === "string" && Array.isArray(launch.args) ? launch : undefined;
+	} catch {
+		return undefined;
+	}
+}
 
 /** The parts of the harness's extension context this extension uses (Pi and omp share them). */
 export interface Context {
@@ -91,7 +105,7 @@ class CoReviewConnection {
 		}
 		// Start Co-Review (or reuse a running desktop/browser instance) without opening a browser.
 		await new Promise<void>((ok, fail) => {
-			const child = spawn(CLI[0], [...CLI.slice(1), "--no-open", root], { stdio: ["ignore", "ignore", "pipe"] });
+			const child = spawn(CLI[0], [...CLI.slice(1), "--no-open", root], { stdio: ["ignore", "ignore", "pipe"], env: CLI_ENV });
 			let err = "";
 			child.stderr.on("data", d => (err += d));
 			child.on("error", fail);

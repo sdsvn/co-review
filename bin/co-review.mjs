@@ -508,7 +508,10 @@ async function setup() {
         throw new Error(`this Co-Review has no ${harness} package (${dir}); update Co-Review`);
     }
     log(`${harness} install ${dir}`);
-    const r = spawnSync(harness, ['install', dir], { stdio: 'inherit' });
+    // On Windows `pi` and `omp` are .cmd shims, which only a shell runs: one command line, with the path quoted.
+    const r = process.platform === 'win32'
+        ? spawnSync(`${harness} install "${dir}"`, { stdio: 'inherit', shell: true })
+        : spawnSync(harness, ['install', dir], { stdio: 'inherit' });
     if (r.error) {
         throw new Error(r.error.code === 'ENOENT' ? `${harness} is not installed or not on PATH` : r.error.message);
     }
