@@ -1,7 +1,8 @@
 # ADR 0001: Understanding first, not only findings, for whole-repository review
 
 - **Status:** Accepted (phase 1 implemented). Decisions 2 and 5 are superseded by
-  [ADR 0002](0002-one-whole-repository-command.md): the guide is now `/co-review:audit`, and `/co-review:understand` is gone
+  [ADR 0002](0002-one-whole-repository-command.md), which was in turn superseded by
+  [ADR 0003](0003-understand-then-audit.md): the guide is `/co-review:understand`, with no findings, and `/co-review:audit` reviews
 - **Date:** 2026-10-30
 - **Details:** [the proposal](../proposals/understanding-a-repository.md) ·
   [the method as pseudocode](../proposals/understanding-a-repository.pseudocode.md) ·

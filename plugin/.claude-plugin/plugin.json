@@ -3,7 +3,7 @@
   "displayName": "Co-Review",
   "version": "0.9.2",
   "license": "MIT",
-  "description": "Hand your work to a human for review in Co-Review and stay as their co-reviewer: review tools (MCP), live review comments (channel), the co-review and co-review-design skills, slash commands (review, design, whole-repository audit), a background co-reviewer subagent, and a session hook that surfaces waiting questions.",
+  "description": "Hand your work to a human for review in Co-Review and stay as their co-reviewer: review tools (MCP), live review comments (channel), the co-review and co-review-design skills, slash commands (review, design, understand the whole repository, audit it), a background co-reviewer subagent, and a session hook that surfaces waiting questions.",
   "author": { "name": "Co-Review contributors" },
   "homepage": "https://github.com/sdsvn/co-review",
   "repository": "https://github.com/sdsvn/co-review",

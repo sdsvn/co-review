@@ -1,6 +1,6 @@
 # An agent opens a review and answers in it
 
-A dynamic [C4](README.md) diagram of the central flow: the agent that did the work opens a review from its own harness, the reviewer comments, the agent answers in the thread, and the review ends with a verdict. This is what `/co-review:review`, `/co-review:pr` and `/co-review:audit` all do underneath ([the workflows](../workflows.md)).
+A dynamic [C4](README.md) diagram of the central flow: the agent that did the work opens a review from its own harness, the reviewer comments, the agent answers in the thread, and the review ends with a verdict. This is what `/co-review:review`, `/co-review:pr`, `/co-review:understand` and `/co-review:audit` all do underneath ([the workflows](../workflows.md)).
 
 ```mermaid
 C4Dynamic

@@ -31,7 +31,8 @@ a first pass before you see it, so it opens on what to look at ([how each workfl
 
 | Review | Claude Code | Pi / Oh My Pi |
 |---|---|---|
-| **The whole repository**: the agent writes a guide to its map, vocabulary, flows, patterns and weak spots, with findings by area | `/co-review:audit` | `/co-review-audit` |
+| **Understand the whole repository**: the agent writes a guide to what it does, its map, vocabulary, flows, patterns and naming, with C4 diagrams. No findings, no verdict | `/co-review:understand` | `/co-review-understand` |
+| **Audit the whole repository**, once you know it: a short overview and the agent's findings by area | `/co-review:audit` | `/co-review-audit` |
 | **Your change**: the agent's diff as a pull-request page, with line comments, suggested edits and one verdict | `/co-review:review` | `/co-review-change` |
 | **Someone else's pull request**: the agent takes the first pass, you decide what goes back to the author, and post it to GitHub as a review with line comments | `/co-review:pr <n>` | `/co-review-pr <n>` |
 | **A design, before the code**: an L1 · L2 · L3 plan with Mermaid diagrams, revised from your comments before anything is built | `/co-review:design <task>` | `/co-review-design <task>` |
@@ -114,7 +115,8 @@ Every integration launches Co-Review through the `co-review` command, so install
 
 | Command | What Claude does |
 |---|---|
-| `/co-review:audit [focus]` | Audits the whole repository with you: a guide to its map, vocabulary, flows, patterns and naming, and weak spots, with a check question per chapter and proposed findings by area, then answers your questions. Takes the agent a few minutes |
+| `/co-review:understand [focus]` | Helps you understand the whole repository: a guide to what it does, its map, vocabulary, flows, patterns and naming and how to change it, with C4 diagrams and a check question per chapter, then answers your questions. No findings, no verdict. Takes the agent a few minutes |
+| `/co-review:audit [focus]` | Reviews the whole repository for problems: a short overview, where it hurts, and proposed findings by area, then acts on your verdict. Takes the agent a few minutes |
 | `/co-review:review [base]` | Opens its change (the diff) as a pull-request page, points out what deserves attention, answers your comments and acts on your verdict |
 | `/co-review:pr <n>` | Reviews someone else's pull request with you: its first pass, your verdict, then posted to the pull request (line comments, suggestions, your decision) when you choose to |
 | `/co-review:design <task>` | Writes a design doc, has you review it, implements what you approved |
@@ -131,7 +133,7 @@ Both ship inside Co-Review, so there is nothing to clone:
 co-review setup pi     # or: co-review setup omp
 ```
 
-You get the same `co_review_*` tools and `/co-review-audit`, `/co-review-change`, `/co-review-pr` and `/co-review-design`
+You get the same `co_review_*` tools and `/co-review-understand`, `/co-review-audit`, `/co-review-change`, `/co-review-pr` and `/co-review-design`
 commands in both (plus `/co-review` to join the review of the working directory),
 plus a `co-reviewer` agent and the skills. In Oh My Pi, only the main session listens for your questions, not every
 task subagent. Details: [Pi and Oh My Pi](docs/agent-setup.md#pi-and-oh-my-pi).
@@ -168,8 +170,9 @@ Once an agent is connected, asking it is the default (**Ask Agent**); **Comment*
 panel lists them by file (**Open / Proposed / Resolved / All**), and **⋯** has the rest.
 
 - **Whole repository:** the panel's **Coverage** shows what you've viewed, overall and per area. **Overview** says
-  where to start, and **Findings** opens every finding and comment as one page. `/co-review:audit` (or
-  `/co-review-audit` in Pi and Oh My Pi) lets the agent go first.
+  where to start, and **Findings** opens every finding and comment as one page. `/co-review:understand` (or
+  `/co-review-understand` in Pi and Oh My Pi) has the agent write you a guide first; `/co-review:audit` has it find
+  the problems first.
 - **Designs and pages:** Markdown files open rendered (the toolbar opens the source; opening at a line goes to the
   editor). Comment on text, diagram nodes and edges, or design steps. HTML files open as source; **Open in Browser**
   (editor or explorer context menu) shows the page in your browser. See [Design documents](docs/design-docs.md).
