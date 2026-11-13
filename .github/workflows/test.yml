@@ -43,6 +43,9 @@ jobs:
         if: runner.os == 'Windows'
         env:
           ELECTRON_RUN_AS_NODE: '1'
-        run: node_modules/electron/dist/electron.exe --test extensions/review/test/commands.test.mjs extensions/review/test/install-cli-windows.test.mjs extensions/review/test/windows-smoke.test.mjs
+        # The electron package downloads its binary on first use (require('electron') returns its path).
+        run: |
+          electron=$(node -p "require('electron')")
+          "$electron" --test extensions/review/test/commands.test.mjs extensions/review/test/install-cli-windows.test.mjs extensions/review/test/windows-smoke.test.mjs
       - name: Unit tests
         run: node --test "extensions/review/test/*.test.mjs"
