@@ -31,9 +31,10 @@ Conventions:
 | `comment-style.md` | every finding and posted comment: the `add_findings` and `post_review_to_github` descriptions, included by `review-change.md`, `review-pr.md`, `co-reviewer.md` |
 | `co-reviewer.md` | the Pi and Oh My Pi co-reviewer agents |
 | `design.md` | writing a design document: the design skill and commands, the `open_review` description, `llms.txt`, the docs |
-| `audit.md` | the whole-repository audit, written as a guide on the overview page: the commands and the `co-review` skill; the method is [docs/proposals/understanding-a-repository.pseudocode.md](../docs/proposals/understanding-a-repository.pseudocode.md) |
+| `understand.md` | the whole-repository guide, explaining without findings (`explain: true`): the understand commands and the `co-review` skill; the method is [docs/proposals/understanding-a-repository.pseudocode.md](../docs/proposals/understanding-a-repository.pseudocode.md) |
+| `audit.md` | the whole-repository review for problems, a short overview and findings by area: the audit commands and the `co-review` skill |
 | `review-change.md` | reviewing the agent's change (its diff): the commands and the `co-review` skill |
 | `review-pr.md` | reviewing someone else's pull request: the commands and the `co-review` skill |
 | `pi-tools.md` | the Pi / Oh My Pi tool names, in the skills |
-| `graphify.md` | asking the repository's Graphify graphs (scoped per folder, the main checkout's in a worktree), included by `audit.md`, `review-pr.md`, `co-reviewer.md` |
+| `graphify.md` | asking the repository's Graphify graphs (scoped per folder, the main checkout's in a worktree), included by `understand.md`, `audit.md`, `review-pr.md`, `co-reviewer.md` |
 | `overview.md` | writing the review's overview (its front page), included by `review-change.md`, `review-pr.md` |

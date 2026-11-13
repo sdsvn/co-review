@@ -42,7 +42,8 @@ Either way, restart Claude Code afterwards so it loads the plugin.
 |---|---|
 | **MCP server** `plugin:co-review:co-review` | The review tools: `open_review`, `await_reviewer`, `reply`, `add_findings`, `ask_reviewer`, `get_review`, `post_review_to_github` |
 | **Skills** `co-review`, `co-review-design` | The workflows; they also trigger on requests like "review this with me" or "design this first" |
-| **`/co-review:audit [focus]`** | Audits the whole repository with you: a guide on its overview page (lay of the land, how it works, patterns and naming, where it hurts) with proposed findings by area, then answers your questions |
+| **`/co-review:understand [focus]`** | Helps you understand the whole repository: a guide on its overview page (lay of the land with C4 diagrams, how it works, patterns and naming, making a change), then answers your questions. No findings, no verdict |
+| **`/co-review:audit [focus]`** | Reviews the whole repository for problems: a short overview and proposed findings by area, then acts on your verdict |
 | **`/co-review:review [base]`** | Opens its change (uncommitted, or the branch against `base`) as a pull-request page and stays as your co-reviewer until you submit |
 | **`/co-review:pr <n>`** | Reviews someone else's pull request with you, starting from its first-pass findings |
 | **`/co-review:design <task>`** | Writes a design doc, opens it for review, revises it, implements after approval |
@@ -123,7 +124,8 @@ for one session without installing, run `omp -e ./integrations/omp`.
 | In Pi or omp | Does |
 |---|---|
 | `/co-review` | Joins the review of the working directory; your questions arrive in the session as you ask them |
-| `/co-review-audit [focus]` | Audits the whole repository with you: a guide on its overview page, with findings by area |
+| `/co-review-understand [focus]` | Helps you understand the whole repository: a guide on its overview page, no findings |
+| `/co-review-audit [focus]` | Reviews the whole repository for problems: findings by area |
 | `/co-review-change [base]` | Opens its change as a pull-request page and acts on your verdict |
 | `/co-review-pr <n>` | Reviews someone else's pull request with you, starting from its first-pass findings |
 | `/co-review-design <task>` | Writes a design doc, opens it for review, implements after approval |

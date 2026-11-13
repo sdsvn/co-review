@@ -1,6 +1,7 @@
 # ADR 0002: One whole-repository command: `/co-review:audit` is the guide
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0003](0003-understand-then-audit.md): understanding is `/co-review:understand`
+  again, with no findings, and `/co-review:audit` is the review that comes later
 - **Date:** 2026-10-30
 - **Supersedes:** decisions 2 and 5 of [ADR 0001](0001-understanding-first-repository-review.md)
 

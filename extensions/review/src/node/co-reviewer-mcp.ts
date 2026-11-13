@@ -249,10 +249,12 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                 + 'done: act on nothing); await_reviewer is the only call to wait on. To explain something to the reviewer, open it with '
                 + 'explain: true: they never submit, they close it when done. Use add_findings for issues you find, '
                 + 'ask_reviewer when you need a decision, and repo_map to find where things live before searching. '
-                + 'To audit the whole repository (/co-review:audit): start from repo_facts, make the overview a guide in four chapters (the '
-                + 'lay of the land, how it works, patterns and naming, where it hurts), then add_findings with the area as the first label '
-                + 'and status "proposed" (at most three per area); get_review returns `coverage`, the files the reviewer has viewed per '
-                + 'area. A knowledge bundle (e.g. OKF) opens with open_review({ dir }); '
+                + 'To help the reviewer understand the whole repository (/co-review:understand): start from repo_facts and make the '
+                + 'overview a guide in four chapters (the lay of the land with C4 diagrams, how it works, patterns and naming, making a '
+                + 'change), opened with explain: true, with no findings. To review the whole repository for problems (/co-review:audit): '
+                + 'a short overview, then add_findings with the area as the first label and status "proposed" (at most three per area). '
+                + 'get_review returns `coverage`, the files the reviewer has viewed per area. A knowledge bundle (e.g. OKF) opens with '
+                + 'open_review({ dir }); '
                 + 'its pages come back as target "doc:<path>". '
                 + 'To have a design reviewed before you implement, follow the design-document rules in open_review\'s description. '
                 + 'In Claude Code with channels on, the reviewer\'s questions and submissions also arrive as <channel source="co-review"> '
@@ -424,9 +426,14 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             return json({
                 reviewId: review.id, title: review.title, openThreads: review.threads.filter(t => t.status === 'open').length,
                 proposedFindings: review.threads.filter(t => t.status === 'proposed').length, ...extra,
-                ...(open === false ? { note: `Prepared, not shown to the reviewer yet. Add your first-pass findings, then call open_review({ reviewId: "${review.id}" }) to show it.` }
+                // An explanation has no verdict: nothing to find first, and no Submit to wait for.
+                ...(open === false ? { note: review.purpose === 'explain'
+                    ? `Prepared, not shown to the reader yet. Write your explanation (overview), then call open_review({ reviewId: "${review.id}" }) to show it.`
+                    : `Prepared, not shown to the reviewer yet. Add your first-pass findings, then call open_review({ reviewId: "${review.id}" }) to show it.` }
                     : { note: 'Open in Co-Review, in its own window.' }),
-                hint: 'Tell the reviewer it is open in Co-Review, then loop await_reviewer → reply until it returns their Submit.'
+                hint: review.purpose === 'explain'
+                    ? 'Tell the reader it is open in Co-Review, then loop await_reviewer → reply until it says they closed it: there is no Submit.'
+                    : 'Tell the reviewer it is open in Co-Review, then loop await_reviewer → reply until it returns their Submit.'
             });
         });
 
@@ -443,9 +450,11 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             this.awaitReviewer(session, await resolveReview(reviewId), (timeoutSec ?? 240) * 1000, extra.signal));
 
         server.registerTool('reply', {
-            description: `Answer in a review thread (markdown). ${ANSWER_STYLE_SHORT} threadId: the thread id or its short id ("t2").`,
-            inputSchema: { threadId: z.string(), body: z.string(), resolve: z.boolean().optional(), reviewId: reviewArg }
-        }, async ({ threadId, body, resolve, reviewId }) => {
+            description: `Answer in a review thread (markdown). ${ANSWER_STYLE_SHORT} threadId: the thread id or its short id ("t2"). `
+                + 'The thread stays open: only the reviewer resolves a thread.',
+            // No `resolve`: whether a question is answered is the reviewer's call, never the agent's.
+            inputSchema: { threadId: z.string(), body: z.string(), reviewId: reviewArg }
+        }, async ({ threadId, body, reviewId }) => {
             const review = await resolveReview(reviewId);
             const thread = review && findThread(review, threadId.trim());
             if (!review || !thread) {
@@ -454,15 +463,10 @@ export class CoReviewerMcp implements BackendApplicationContribution {
             const agent = this.agentOf(session);
             const { thread: updated, pending } = await this.store.answer(review.id, thread.id, body, agent, id => session.delivered.has(id));
             session.working.delete(thread.id);
-            // Never resolved over a message the agent hasn't read.
-            if (resolve && !pending) {
-                await this.store.setThreadStatus(review.id, thread.id, 'resolved', agent);
-            }
             this.presence.seen(review.id);
             return json({
                 ok: true, thread: threadRef(updated), threadId: updated.id, messages: updated.messages.length,
-                ...pending ? { hint: 'The reviewer wrote again while you answered: their new message comes with the next await_reviewer'
-                    + (resolve ? ', so the thread was left open.' : '.') } : {}
+                ...pending ? { hint: 'The reviewer wrote again while you answered: their new message comes with the next await_reviewer.' } : {}
             });
         });
 
@@ -684,7 +688,7 @@ export class CoReviewerMcp implements BackendApplicationContribution {
 
         server.registerTool('repo_facts', {
             description: 'What can be worked out about the repository without a model, pinned to its commit: the evidence a guide to the '
-                + 'repository (/co-review:audit) is written from. Without `section`: the commit and what each section holds. Sections: '
+                + 'repository (/co-review:understand) and its audit (/co-review:audit) are written from. Without `section`: the commit and what each section holds. Sections: '
                 + '`entry` (entry points from manifests, main functions and registration calls; outbound calls; environment variables; '
                 + 'external modules), `folders` (the map: each folder\'s role, why, key files, what it depends on and what uses it; what to '
                 + 'ignore), `load` (the most depended-on files), `names` (casing rules, per-folder naming rules, verbs, type suffixes, '

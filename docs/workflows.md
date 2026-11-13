@@ -1,11 +1,12 @@
 # Review workflows
 
-Co-Review does four review jobs. Pick the one that matches what you want to read, start it with one command, and the
-agent does the setup and a first pass before you see anything.
+Co-Review does five jobs: one explains, four review. Pick the one that matches what you want to read, start it with
+one command, and the agent does the setup and a first pass before you see anything.
 
-| You want to review | Claude Code | Pi / Oh My Pi | What opens |
+| You want to | Claude Code | Pi / Oh My Pi | What opens |
 |---|---|---|---|
-| [The whole repository](#the-whole-repository) | `/co-review:audit [focus]` | `/co-review-audit [focus]` | A guide to the repository, with findings, on its overview page |
+| [Understand the whole repository](#understanding-the-whole-repository) | `/co-review:understand [focus]` | `/co-review-understand [focus]` | A guide to the repository on its overview page, no findings, no verdict |
+| [Review the whole repository](#reviewing-the-whole-repository) | `/co-review:audit [focus]` | `/co-review-audit [focus]` | A short overview with findings by area |
 | [Your change](#your-change) | `/co-review:review [base]` | `/co-review-change [base]` | The diff, as a pull-request page |
 | [Someone else's pull request](#someone-elses-pull-request) | `/co-review:pr <number>` | `/co-review-pr <number>` | The pull request, with its description |
 | [A design, before the code](#a-design-before-the-code) | `/co-review:design <task>` | `/co-review-design <task>` | The design document, rendered |
@@ -72,49 +73,66 @@ After you submit, the agent:
 
 The agent doesn't edit files while you review unless you ask for it in a thread.
 
-## The whole repository
+## Understanding the whole repository
 
-For learning a codebase (one you're new to, or one an agent built until it no longer felt like yours), or checking
-it before a release. The goal is that afterwards you can, without the agent, say where things live, use the
-repository's vocabulary, trace its main flows, recognise its patterns and naming, follow its house rules, know where
-it is fragile, and place a change and predict what it affects. Why it works this way:
-[the proposal](proposals/understanding-a-repository.md), [ADR 0001](adr/0001-understanding-first-repository-review.md) and [ADR 0002](adr/0002-one-whole-repository-command.md).
+For learning a codebase: one you're new to, or one an agent built until it no longer felt like yours. It explains,
+it doesn't review: understanding comes first, and the review comes much later. The goal is that afterwards you can,
+without the agent, say what it does and where things live, use the repository's vocabulary, trace its main flows,
+recognise its patterns and naming, follow its house rules, and place a change and predict what it affects. Why it
+works this way: [the proposal](proposals/understanding-a-repository.md) and [ADR 0003](adr/0003-understand-then-audit.md).
 
-**Start:** `/co-review:audit` (optionally a focus: `/co-review:audit internal/billing`). It takes the agent a few
-minutes, and it says so first.
+**Start:** `/co-review:understand` (optionally a focus: `/co-review:understand internal/billing`). It takes the agent
+a few minutes, and it says so first.
 
 **The agent:**
 
-1. Tells you it takes a few minutes, and prepares a review of the repository without showing it.
+1. Tells you it takes a few minutes, and prepares the guide without showing it, as an explanation: no findings, no
+   verdict.
 2. Reads the docs, CI, entry points and core types, and the repository's [facts](agents.md#repository-facts): what
    Co-Review works out without a model (entry points, folder roles, load-bearing files, naming rules, repeated shapes,
-   hotspots, what changes together, recipes). With [Graphify](https://graphify.net) installed, it can also ask the
-   code graph how parts connect.
+   what changes together, recipes). With [Graphify](https://graphify.net) installed, it can also ask the code graph
+   how parts connect.
 3. Covers everything the facts list: every entry point gets a flow (or is named as not traced), every mapped folder a
    row in the map, every naming rule and repeated shape an explanation.
 4. Writes the overview page as a guide in four chapters:
-   - **Lay of the land:** what it does and doesn't, a context diagram, how to build, run, test and deploy it, and
-     the map: every folder's job and role, and what you can ignore.
+   - **Lay of the land:** what it does and doesn't, a C4 context diagram and, when there is more than one running
+     part, a C4 container diagram, how to build, run, test and deploy it, and the map: every folder's job and
+     role, and what you can ignore.
    - **How it works:** a glossary and a "cast of characters" for names that are easy to confuse; each core
      entity's lifecycle and what it looks like on disk; one flow per entry point, as a sequence diagram with
      numbered stops in the code and what happens when it fails.
    - **Patterns, naming, and why:** the shapes the code repeats, in its own terms (not textbook labels); how things
-     are named and what the names signal; where to look for common tasks; the house rules, how each is enforced
-     and what breaks without it; recipes for "add a new X"; the design decisions.
-   - **Where it hurts:** the load-bearing code, hotspots, what changes together, what's untested, the trust
-     boundaries, and the agent's proposed findings, at most three per area, labelled with the area.
+     are named and what the names signal; the design decisions.
+   - **Making a change:** where to look for common tasks; recipes for "add a new X"; the house rules and how each
+     is enforced; what a change ripples into (the code most depends on, what changes together, the trust
+     boundaries).
 5. Shows it and tells you the chapters.
 
 Every claim links to the code it is about; what the agent couldn't verify is marked _inferred_ or _unknown_, and an
 unknown "why" is asked, not invented. The guide's first line names the commit it was written for.
 
-**You:** the review opens on the [overview page](#the-overview-page), with the panel on **Proposed**. Read it top to
-bottom, or start at any chapter; only want the risks? Go to **Where it hurts**. Each chapter ends with a **Check**, a
-prediction such as "where would you add a new command?": select it and comment your answer, and the agent tells you
-how it matches the code. When something in the guide is wrong, say so in a comment: the agent checks the code and
-fixes the guide. Accept or dismiss each finding in the panel (**By area** groups them the same way); reply in a
-finding's thread to ask the agent why. **Viewed** (`Cmd+Alt+V`) marks a file as read, and **Coverage** shows how much
-of each area you've read. Comment on any line, symbol, file or folder as you go.
+**You:** the guide opens on the [overview page](#the-overview-page). Read it top to bottom, or start at any chapter.
+Each chapter ends with a **Check**, a prediction such as "where would you add a new command?": select it and comment
+your answer, and the agent tells you how it matches the code. Ask anything in a comment on the page or on any line,
+symbol, file or folder; when something in the guide is wrong, say so and the agent checks the code and fixes the
+guide. **Viewed** (`Cmd+Alt+V`) marks a file as read, and **Coverage** shows how much of each area you've read.
+There is nothing to submit: press **Done** when you've read enough.
+
+## Reviewing the whole repository
+
+Once you know your way around, or before a release: the agent's first pass at what is wrong, area by area. If you
+don't know the repository yet, start with [the guide](#understanding-the-whole-repository).
+
+**Start:** `/co-review:audit` (optionally a focus: `/co-review:audit internal/billing`).
+
+**The agent** reads the same docs and facts, splits the repository into its areas, and writes a short overview (what
+it does, a C4 context diagram, the areas, and where it hurts: the load-bearing code, hotspots, what changes together,
+what's untested, the trust boundaries). Then it adds its findings, at most three per area, labelled with the area,
+each *proposed* for you to keep or dismiss.
+
+**You:** the review opens on the [overview page](#the-overview-page), with the panel on **Proposed**. Accept or
+dismiss each finding (**By area** groups them); reply in a finding's thread to ask the agent why. Then submit your
+verdict, and the agent acts on it.
 
 ### The overview page
 
