@@ -43,8 +43,10 @@ jobs:
         if: runner.os == 'Windows'
         env:
           ELECTRON_RUN_AS_NODE: '1'
-        # The electron package downloads its binary on first use (require('electron') returns its path).
+        # The electron package downloads its binary on first use, printing "Downloading…" on stdout: download first,
+        # then require('electron') prints the path alone.
         run: |
+          node node_modules/electron/install.js
           electron=$(node -p "require('electron')")
           "$electron" --test extensions/review/test/commands.test.mjs extensions/review/test/install-cli-windows.test.mjs extensions/review/test/windows-smoke.test.mjs
       - name: Unit tests
