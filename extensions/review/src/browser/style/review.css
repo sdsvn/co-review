@@ -181,12 +181,12 @@ mark.co-review-mark { background: rgba(230, 170, 50, 0.28); color: inherit; bord
 /* Mermaid */
 .co-review-dgm { border: 1px solid var(--theia-panel-border); border-radius: 6px; margin: 12px 0; overflow: hidden; }
 .co-review-dgm-head { display: flex; align-items: center; gap: 6px; padding: 3px 8px; font-size: 0.85em; color: var(--theia-descriptionForeground); border-bottom: 1px solid var(--theia-panel-border); font-family: var(--theia-code-font-family); }
-.co-review-dgm-body { padding: 12px; display: flex; justify-content: center; overflow: auto; }
+.co-review-dgm-body { padding: 12px; display: flex; justify-content: center; overflow: auto; color: var(--theia-foreground); }
 .co-review-dgm-body svg { max-width: 100%; height: auto; }
 .co-review-dgm-clickable { cursor: pointer; }
 .co-review-dgm-body .node.co-review-dgm-clickable:hover rect, .co-review-dgm-body .node.co-review-dgm-clickable:hover polygon,
 .co-review-dgm-body .node.co-review-dgm-clickable:hover circle, .co-review-dgm-body .node.co-review-dgm-clickable:hover path { stroke: var(--theia-focusBorder) !important; stroke-width: 2px !important; }
-.co-review-dgm-body path.co-review-dgm-clickable:hover { stroke: var(--theia-focusBorder) !important; stroke-width: 3px !important; }
+.co-review-dgm-body path.co-review-dgm-clickable:hover, .co-review-dgm-body line.co-review-dgm-clickable:hover { stroke: var(--theia-focusBorder) !important; stroke-width: 3px !important; }
 .co-review-dgm-body .co-review-dgm-marked rect, .co-review-dgm-body .co-review-dgm-marked polygon,
 .co-review-dgm-body .co-review-dgm-marked circle { stroke: var(--theia-charts-yellow) !important; stroke-width: 3px !important; }
 .co-review-dgm-body { cursor: zoom-in; }

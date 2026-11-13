@@ -494,10 +494,11 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
                 return;
             }
             try {
-                const { svg } = await mermaid.render(`co-review-m-${block.id}-${Date.now()}`, block.code);
+                const renderId = `co-review-m-${block.id}-${Date.now()}`;
+                const { svg } = await mermaid.render(renderId, block.code);
                 body.innerHTML = svg;
                 body.title = 'Click to open full size';
-                this.wireDiagram(body);
+                this.wireDiagram(body, renderId, block.code);
             } catch (e) {
                 body.innerHTML = `<div class="co-review-dgm-fail">Diagram failed to render: ${String(e instanceof Error ? e.message : e).slice(0, 200)}</div>`;
             }
@@ -505,10 +506,12 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
     }
 
     /** Node and edge ids as documented for anchors (llms.txt), so agents can address them. */
-    protected wireDiagram(body: HTMLElement): void {
+    protected wireDiagram(body: HTMLElement, renderId: string, code: string): void {
         body.querySelectorAll('.node').forEach(n => {
-            // `flowchart-<id>-N`; newer Mermaid prefixes the render id (`<renderId>-flowchart-<id>-N`).
-            n.setAttribute('data-node-id', (n.id || '').replace(/^.*?flowchart-/, '').replace(/-\d+$/, ''));
+            // Flowchart: `flowchart-<id>-N`, newer Mermaid prefixes the render id (`<renderId>-flowchart-<id>-N`);
+            // state diagram: `<renderId>-state-<id>-N`; C4 (C4Context, C4Container, …): `<renderId>-<alias>`.
+            const id = n.id.startsWith(`${renderId}-`) ? n.id.slice(renderId.length + 1) : n.id || '';
+            n.setAttribute('data-node-id', id.replace(/^(?:.*?flowchart-|state-)/, '').replace(/-\d+$/, ''));
             n.classList.add('co-review-dgm-clickable');
         });
         body.querySelectorAll('.edgePaths path, .messageLine0, .messageLine1').forEach(p => {
@@ -520,6 +523,78 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             a.setAttribute('data-node-id', (a.textContent || '').trim().toLowerCase().replace(/\s+/g, '-'));
             a.classList.add('co-review-dgm-clickable');
         });
+        this.fixC4(body, renderId, code);
+    }
+
+    /**
+     * A C4 diagram (C4Context, C4Container, …): Mermaid draws its relation lines, arrowheads and labels in a fixed
+     * grey that disappears on a dark theme, gives the lines no id, and stacks the labels of arrows that share a box.
+     * Use the theme's text colour; name each line `from→to` from the `Rel` statements, which Mermaid draws in
+     * source order; and push a label that overlaps a box or an earlier label down until it is clear.
+     */
+    protected fixC4(body: HTMLElement, renderId: string, code: string): void {
+        const svg = body.querySelector('svg');
+        if (!svg || !svg.querySelector(`#${CSS.escape(`${renderId}-arrowhead`)}`)) {
+            return;
+        }
+        const grey = '#444444';
+        const labels = Array.from(svg.querySelectorAll<SVGTextElement>(`text[fill="${grey}"]`)).filter(t => !t.closest('.node'));
+        const lines = Array.from(svg.querySelectorAll<SVGElement>(`line[stroke="${grey}"], path[stroke="${grey}"]`)).filter(l => !l.closest('.node'));
+        svg.querySelectorAll(`[stroke="${grey}"]`).forEach(e => e.setAttribute('stroke', 'currentColor'));
+        svg.querySelectorAll(`[fill="${grey}"]`).forEach(e => e.setAttribute('fill', 'currentColor'));
+        const rels = Array.from(code.matchAll(/^\s*(?:Bi)?Rel(?:_[A-Za-z]+)?\(\s*([\w-]+)\s*,\s*([\w-]+)/gm));
+        if (rels.length === lines.length) {
+            lines.forEach((line, i) => {
+                line.setAttribute('data-edge-id', `${rels[i][1]}→${rels[i][2]}`);
+                line.classList.add('co-review-dgm-clickable');
+            });
+        }
+        // A relation's label is its text, then its technology in brackets, at the same x: one group.
+        const groups: SVGTextElement[][] = [];
+        for (const text of labels) {
+            const last = groups[groups.length - 1];
+            if (last && last[0].getAttribute('x') === text.getAttribute('x')) {
+                last.push(text);
+            } else {
+                groups.push([text]);
+            }
+        }
+        // Screen coordinates for everything (node groups carry their own transform), SVG units for the shift.
+        const frame = svg.getBoundingClientRect();
+        const scale = frame.width ? (svg.viewBox.baseVal?.width || frame.width) / frame.width : 0;
+        if (!scale) {
+            return;
+        }
+        const box = (elements: Element[]) => {
+            const boxes = elements.map(e => e.getBoundingClientRect());
+            const x = Math.min(...boxes.map(b => b.left)), y = Math.min(...boxes.map(b => b.top));
+            return { x, y, w: Math.max(...boxes.map(b => b.right)) - x, h: Math.max(...boxes.map(b => b.bottom)) - y };
+        };
+        const placed = Array.from(svg.querySelectorAll('.node')).map(n => box([n]));
+        for (const texts of groups.map(g => ({ texts: g, box: box(g) })).sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x)) {
+            const { x, w, h } = texts.box;
+            // The nearest clear spot below or above; a label pushed further than a few lines stays where it is.
+            const clear = (y: number, down: boolean) => {
+                for (let i = 0; i < 20; i++) {
+                    const hit = placed.find(p => x < p.x + p.w && p.x < x + w && y < p.y + p.h && p.y < y + h);
+                    if (!hit) {
+                        return y;
+                    }
+                    y = down ? hit.y + hit.h + 2 : hit.y - h - 2;
+                }
+                return y;
+            };
+            const down = clear(texts.box.y, true), up = clear(texts.box.y, false);
+            const y = down - texts.box.y <= texts.box.y - up ? down : up;
+            if (Math.abs(y - texts.box.y) <= 4 * h) {
+                if (y !== texts.box.y) {
+                    texts.texts.forEach(t => t.setAttribute('transform', `translate(0, ${(y - texts.box.y) * scale})`));
+                }
+                placed.push({ x, y, w, h });
+            } else {
+                placed.push(texts.box);
+            }
+        }
     }
 
     /**

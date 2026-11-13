@@ -93,8 +93,9 @@ minutes, and it says so first.
 3. Covers everything the facts list: every entry point gets a flow (or is named as not traced), every mapped folder a
    row in the map, every naming rule and repeated shape an explanation.
 4. Writes the overview page as a guide in four chapters:
-   - **Lay of the land:** what it does and doesn't, a context diagram, how to build, run, test and deploy it, and
-     the map: every folder's job and role, and what you can ignore.
+   - **Lay of the land:** what it does and doesn't, a C4 context diagram and, when there is more than one running
+     part, a C4 container diagram, how to build, run, test and deploy it, and the map: every folder's job and
+     role, and what you can ignore.
    - **How it works:** a glossary and a "cast of characters" for names that are easy to confuse; each core
      entity's lifecycle and what it looks like on disk; one flow per entry point, as a sequence diagram with
      numbered stops in the code and what happens when it fails.

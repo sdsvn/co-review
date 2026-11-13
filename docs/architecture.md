@@ -2,6 +2,8 @@
 
 Co-Review is a Theia product, not a fork. Theia provides the IDE (editor, explorer, search, Git via `vscode.git`, terminal, LSP via VS Code built-ins). One Theia extension adds the review.
 
+The [C4 diagrams](architecture/README.md) draw the same system at three levels of zoom, with one flow; read them first.
+
 ## Directory layout
 
 ```

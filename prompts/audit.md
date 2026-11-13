@@ -19,9 +19,12 @@ able to predict is.
    When `history.thin` is true, say so instead of inferring from history.
 4. Write the guide as the review's overview, four chapters (`##` headings), in this order:
    - **1. Lay of the land.** First line: "Written for `<short sha>` on <date>.", the facts' commit. Then what it does,
-     for whom, and what it doesn't do; a ```mermaid context diagram (the system and what it talks to, from the
-     outbound calls and environment in the facts); how to build, run, test and deploy it (the actual commands). Then
-     the map: a row per folder in the facts' map, with its one-line job, its role (core, infra, glue, tooling, tests,
+     for whom, and what it doesn't do; a C4 context diagram (```mermaid `C4Context`: who uses the system and what it
+     talks to, from the outbound calls and environment in the facts), and, when the repository builds more than one
+     running part (a server and a CLI, a frontend and a backend, workers, a database), a C4 container diagram
+     (`C4Container`: the separately running parts and stores, from the entry points and the folder roles; a library
+     is not a container); how to build, run, test and deploy it (the actual commands). Then the map: a row per
+     folder in the facts' map, with its one-line job, its role (core, infra, glue, tooling, tests,
      generated, vendored) and its key files; the facts' ignore list in one "you can ignore" line.
    - **2. How it works.** A glossary (term · what it means here · the code that embodies it), with a "cast of
      characters" table for names that are easy to confuse (`UserStore` vs `UserService` vs `UserManager`). The core
@@ -56,8 +59,10 @@ able to predict is.
    - Tag what you didn't verify: _(inferred from …)_ when you reasoned it from the code or history, _(unknown)_ when
      there's no evidence. Never invent a reason. Ask me the unknown "why"s in the guide: "Why X? I found no record."
    - Every heading says what I learn by reading it. Plain language; no line-by-line walkthrough.
-   - Keep Mermaid plain so it renders: short node ids, labels in double quotes, no parentheses or slashes outside
-     quotes, one diagram per fence.
+   - Keep Mermaid plain so it renders: short node ids, labels in double quotes, one diagram per fence; in a
+     flowchart, no parentheses or slashes outside quotes. In a C4 diagram, give every element a description and
+     every arrow a verb of at most five words and its protocol, keep it under 15 elements and 10 arrows, and end
+     it with `UpdateLayoutConfig($c4ShapeInRow="3")`.
 
    End each chapter with one check, a prediction I can answer before I look further, such as "**Check:** where would
    you add a new MCP tool, and what else would you touch? Select this question and comment your answer." Don't
