@@ -242,6 +242,16 @@ llms.txt                 integration contract for agents
 
 See [Architecture](docs/architecture.md) and [Running and packaging](docs/running-and-packaging.md) for details.
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=sdsvn%2Fco-review&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=sdsvn/co-review&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=sdsvn/co-review&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=sdsvn/co-review&type=date&legend=top-left" />
+ </picture>
+</a>
+
 ## License
 
 [MIT](LICENSE). Co-Review is built on [Eclipse Theia](https://theia-ide.org) and other open-source components under
