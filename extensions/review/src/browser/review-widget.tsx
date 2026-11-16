@@ -599,7 +599,9 @@ function SubmitReview({ review, manager, open, onOpenChange, pending }: {
                 {verdict?.toAgent === 'delivered' && ` · ${agent} has it`}
             </span>
             <span className='co-review-spacer' />
-            <span className='co-review-link' title='Submit review (S)' onClick={() => onOpenChange(true)}>Submit review…</span>
+            <button className='theia-button co-review-submit-button' title='Send your comments and a verdict to the agent (S)' onClick={() => onOpenChange(true)}>
+                <span className={codicon('check')} /> Submit review…
+            </button>
             {note && <span className={`co-review-github-note ${note.error ? 'error' : ''}`}>
                 {note.text} {note.url && <span className='co-review-link' onClick={() => window.open(note.url, '_blank', 'noopener')}>Open on GitHub</span>}
             </span>}

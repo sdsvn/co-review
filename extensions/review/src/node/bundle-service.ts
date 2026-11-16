@@ -8,6 +8,17 @@ import { DOCUMENT_NAMES, parsePatchMeta } from '../common/patch';
 import { locationFromAnchor, toStateFile } from './review-payloads';
 import { coReviewHome, realPath, ReviewStore } from './review-store';
 import { AnchorTracker } from './anchor-tracker';
+import { execFileSync } from 'child_process';
+
+/** The top folder of the git repository holding `dir`, if any. */
+function gitToplevel(dir: string): string | undefined {
+    try {
+        const top = execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        return top ? realPath(top) : undefined;
+    } catch {
+        return undefined;
+    }
+}
 
 export interface OpenBundleParams {
     dir?: string;
@@ -18,6 +29,10 @@ export interface OpenBundleParams {
     storePath?: string;
     /** OpenSpec change directory (…/changes/<id>); `<dir>/openspec` is picked up automatically. */
     openspec?: string;
+    /** The repository the documents are about, given explicitly (`root`). */
+    repo?: string;
+    /** The agent's repository: where links resolve when the directory isn't in a git repository (inline documents). */
+    defaultRepo?: string;
     author: Participant;
 }
 
@@ -79,7 +94,8 @@ export class BundleService {
             ?? await this.store.create({ workspaceRoot, title, scope: { kind: 'repository' }, author: params.author });
         const detected = fs.existsSync(path.join(dir, 'openspec', 'proposal.md')) ? path.join(dir, 'openspec') : undefined;
         const openspec = params.openspec ? path.resolve(params.openspec) : review.bundle?.openspec ?? detected;
-        const bundle = { ...review.bundle, dir, storePath: params.storePath ? path.resolve(params.storePath) : review.bundle?.storePath, openspec };
+        const linkRoot = params.repo ?? gitToplevel(dir) ?? review.bundle?.linkRoot ?? params.defaultRepo;
+        const bundle = { ...review.bundle, dir, storePath: params.storePath ? path.resolve(params.storePath) : review.bundle?.storePath, openspec, linkRoot };
         review = await this.store.setBundle(review.id, bundle);
         await this.syncFindings(review.id);
         this.watch(review.id, dir);

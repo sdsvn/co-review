@@ -367,6 +367,11 @@ export interface ReviewBundle {
     code?: string;
     /** The repository the change was diffed in. */
     repo?: string;
+    /**
+     * The repository a review directory's documents are about (a design's `src/a.ts` links): explicitly given, the
+     * git repository holding the directory, or the one the agent works in. Only used to resolve links.
+     */
+    linkRoot?: string;
     /** The change's base and head commits (`head` undefined: the working tree). */
     base?: string;
     head?: string;

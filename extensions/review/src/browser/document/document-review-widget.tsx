@@ -138,6 +138,7 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             }
         });
         this.toDispose.push(this.reviews.onDidChange(() => {
+            this.renderHeader();
             this.schedulePaint();
             this.renderBriefing();
             this.refreshCoverage();
@@ -181,6 +182,15 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         this.header.append(path, spacer, waiting,
             button('comment', 'Comment on the document', () => this.addDraft({ type: 'document' }, 'comment')),
             button('go-to-file', 'Open the source', () => this.navigator.open({ kind: 'file', uri: this.options.uri })));
+        const review = this.reviews.activeReview;
+        if (review && (review.bundle || review.agent) && review.purpose !== 'explain') {
+            const submit = document.createElement('button');
+            submit.className = 'theia-button co-review-submit-button';
+            submit.title = 'Send your comments and a verdict (approve, request changes or comment) to the agent (S in the Review panel)';
+            submit.innerHTML = `<span class="${codicon('check')}"></span> Submit review…`;
+            submit.onclick = () => this.reviews.requestSubmit();
+            this.header.append(submit);
+        }
     }
 
     /** A reload that waits while the reviewer writes a comment in the page. */
@@ -608,11 +618,13 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
         const target = m[1].replace(/#.*$/, '');
         const line = Number(m[2] ?? m[4]) || undefined;
         const endLine = Number(m[3] ?? m[5]) || undefined;
-        const dir = this.reviews.activeReview?.bundle?.dir;
+        const bundle = this.reviews.activeReview?.bundle;
+        const dir = bundle?.dir ? URI.fromFilePath(bundle.dir) : undefined;
+        // The repository the document is about: a design's review directory is often outside it, or deep inside it.
+        const repos = [bundle?.linkRoot, bundle?.code].filter((p): p is string => !!p).map(p => URI.fromFilePath(p));
         const bases = target.startsWith('/')
-            ? dir ? [URI.fromFilePath(dir)] : []
-            : [this.uri.parent, ...dir ? [URI.fromFilePath(dir), URI.fromFilePath(dir).parent] : [],
-                ...this.reviews.root ? [new URI(this.reviews.root)] : []];
+            ? [...dir ? [dir] : [], ...repos]
+            : [this.uri.parent, ...dir ? [dir, dir.parent] : [], ...repos, ...this.reviews.root ? [new URI(this.reviews.root)] : []];
         const rel = target.replace(/^\/+/, '');
         let uri: URI | undefined;
         for (const base of bases) {
@@ -630,7 +642,8 @@ export class DocumentReviewWidget extends BaseWidget implements Navigatable {
             if (changed) {
                 await this.navigator.openChangedFile(changed.path, line);
             } else {
-                this.messages.warn(`${rel || target} is not in this review's folder${this.reviews.activeReview?.bundle?.code ? ' or its code' : ''}.`);
+                const where = [...new Set(bases.map(b => b.path.fsPath()))].join(', ');
+                this.messages.warn(`“${rel || target}” isn't there: looked next to the document and in ${where || "the review's folder"}.`);
             }
             return;
         }

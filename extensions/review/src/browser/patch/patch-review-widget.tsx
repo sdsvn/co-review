@@ -74,6 +74,12 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
     @inject(ReviewNavigator) protected readonly navigator: ReviewNavigator;
     @inject(CodeNavigation) protected readonly code: CodeNavigation;
 
+    /** The active review is one the reviewer submits (not an explanation, which they just close). */
+    protected get canSubmit(): boolean {
+        const review = this.reviews.activeReview;
+        return !!review && !!(review.bundle || review.agent) && review.purpose !== 'explain';
+    }
+
     protected files: PatchFile[] = [];
     protected meta: PatchMeta | undefined;
     protected error: string | undefined;
@@ -355,6 +361,11 @@ export class PatchReviewWidget extends ReactWidget implements Navigatable {
                     <span className={`${codicon('comment')} action-label`} title='Comment on the patch' onClick={() => this.addDraft({ type: 'patch' })} />
                     <span className={`${codicon('collapse-all')} action-label`} title='Collapse all files'
                         onClick={() => { this.files.forEach(f => this.collapsed.add(f.path)); this.update(); }} />
+                    {this.canSubmit && <button className='theia-button co-review-submit-button'
+                        title='Send your comments and a verdict (approve, request changes or comment) to the agent (S in the Review panel)'
+                        onClick={() => this.reviews.requestSubmit()}>
+                        <span className={codicon('check')} /> Submit review…
+                    </button>}
                 </div>
                 <div className='co-review-muted'>
                     {meta?.branch && <span>{meta.branch}{meta.base ? ` → ${meta.base}` : ''} · </span>}

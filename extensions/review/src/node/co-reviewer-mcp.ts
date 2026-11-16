@@ -350,7 +350,10 @@ export class CoReviewerMcp implements BackendApplicationContribution {
                     extra = { hasDoc: !!docFile, patches: this.bundles.patchesOf(existing.bundle.dir).length, dir: existing.bundle.dir, ...this.formatOf(docFile) };
                 }
             } else if (dir || markdown || patch) {
-                const opened = await this.bundles.open({ dir, markdown, patch, patchName, title, storePath, openspec, author: agent });
+                const opened = await this.bundles.open({
+                    dir, markdown, patch, patchName, title, storePath, openspec, author: agent,
+                    repo: root ? realPath(root) : change?.repo, defaultRepo: defaultRoot
+                });
                 review = opened.review;
                 workspace = opened.dir;
                 if (change) {

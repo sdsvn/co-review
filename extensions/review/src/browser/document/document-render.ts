@@ -84,6 +84,8 @@ function stepInline(text: string): string {
         out = out.split('`' + glyph + '`').join(`<span class="co-review-pbadge ${cls}" title="${hint}">${glyph}</span>`);
     }
     out = out
+        // A Markdown link in a step (`[the limiter](src/limiter.ts)`), opened like any link in the document.
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>')
         .replace(/`([^`]+)`/g, '<code>$1</code>')
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
         .replace(/\*([^*]+)\*/g, '<em>$1</em>');
