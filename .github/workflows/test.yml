@@ -1,0 +1,53 @@
+# The unit tests on Linux and Windows. On Windows, the Windows-specific tests run first and on their own (the
+# command helper, the installed .cmd shims, and windows-smoke.test.mjs, which executes those shims and real .cmd
+# commands through cmd.exe), once on Node and once on the app's Electron run as Node, which is what the installed
+# command uses; then the whole suite.
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: System libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev libx11-dev libxkbfile-dev
+      - name: Install
+        run: npm ci
+      - name: Versions
+        run: node bin/check-versions.mjs
+      - name: Build the extension
+        run: npm run -w @co-review/review build
+      - name: Windows tests (Node)
+        if: runner.os == 'Windows'
+        run: node --test extensions/review/test/commands.test.mjs extensions/review/test/install-cli-windows.test.mjs extensions/review/test/windows-smoke.test.mjs
+      - name: Windows tests (the app's Electron as Node)
+        if: runner.os == 'Windows'
+        env:
+          ELECTRON_RUN_AS_NODE: '1'
+        # The electron package downloads its binary on first use, printing "Downloading…" on stdout: download first,
+        # then require('electron') prints the path alone.
+        run: |
+          node node_modules/electron/install.js
+          electron=$(node -p "require('electron')")
+          "$electron" --test extensions/review/test/commands.test.mjs extensions/review/test/install-cli-windows.test.mjs extensions/review/test/windows-smoke.test.mjs
+      - name: Unit tests
+        run: node --test "extensions/review/test/*.test.mjs"

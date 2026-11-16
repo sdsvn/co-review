@@ -138,7 +138,23 @@ make install-app
 ```
 
 **The `co-review` command** is a small shim that `bin/install-cli.sh` writes to `/usr/local/bin` when it is
-writable, otherwise to `~/.local/bin`. Set `PREFIX=…` to choose another place.
+writable, otherwise to `~/.local/bin`. Set `PREFIX=…` to choose another place. On Windows, where there is no `sh`,
+the app writes `co-review.cmd` and `co-review-server.cmd` to `%USERPROFILE%\.co-review\bin` instead (Review: Install
+the co-review Command) and says so when that directory is not on your `PATH`. Next to them, `launch.json` says what
+they run (the app's exe, the script, `ELECTRON_RUN_AS_NODE`), for the Pi and Oh My Pi packages, which spawn it
+directly: a `.cmd` cannot be spawned without a shell.
+
+**Windows and the agent integrations.** Harness and agent commands (`claude`, `pi`, `omp`, `npx`, `gemini`, …) are
+`.cmd` shims there, which only `cmd.exe` runs: `src/node/commands.ts` finds them with `PATHEXT` and runs them
+through `cmd.exe /d /s /c` (arguments escaped as cross-spawn does), and ends the whole process tree when an agent
+is disconnected. The Claude Code *plugin* is not offered on Windows for now: its manifest names the bare `co-review`
+command, a manifest cannot say anything else per platform, and the Claude Code docs suggest it spawns MCP commands
+without a shell, which cannot run a `.cmd`. Use "Claude Code: MCP server" (the app's own exe) and "Install Agent
+Skills" instead; the plugin's SessionStart hook runs under Git Bash, which Claude Code needs on Windows anyway.
+Config files: Claude Desktop and VS Code under `%APPDATA%`; Zed at `%APPDATA%\Zed\settings.json` and Goose at
+`%APPDATA%\Block\goose\config\config.yaml` are copy-only hints and unconfirmed. None of this has been run on
+Windows by the maintainers yet, and a user profile path with non-ASCII characters likely breaks the `.cmd` shims
+(cmd.exe reads them in the console code page); reports welcome.
 
 - `co-review [dir]` opens `dir` in the desktop app, or focuses its window if it is already open.
 - `co-review mcp [dir]` connects an agent (stdio MCP) to the app's backend, found through `~/.co-review/server.json`.

@@ -1,7 +1,8 @@
 import { FileUri } from '@theia/core/lib/common/file-uri';
 import { inject, injectable, postConstruct } from '@theia/core/shared/inversify';
 import type * as acp from '@agentclientprotocol/sdk';
-import { ChildProcess, execFile, spawn } from 'child_process';
+import { ChildProcess } from 'child_process';
+import { commandExists, killTree, spawnCommand } from './commands';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
@@ -67,8 +68,9 @@ function agentParticipant(config: AgentConfig): Participant {
     return { id: `agent:${config.id}`, kind: 'agent', name: config.name };
 }
 
+/** Whether an agent's command is installed (on Windows, as a .cmd shim or an .exe on PATH). */
 function which(command: string): Promise<boolean> {
-    return new Promise(resolve => execFile('/usr/bin/env', ['which', command], err => resolve(!err)));
+    return commandExists(command);
 }
 
 /**
@@ -333,7 +335,8 @@ export class AcpAgentService {
         const config = review.agent as AgentConfig & { command: string };
         const sdk = await (this.sdk ??= import('@agentclientprotocol/sdk'));
         const root = FileUri.fsPath(review.workspaceRoot);
-        const child = spawn(config.command, config.args ?? [], { cwd: root, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+        // On Windows most agents are .cmd shims (npx, gemini, …), which run through cmd.exe: see commands.ts.
+        const child = spawnCommand(config.command, config.args ?? [], { cwd: root, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
         const stderr: string[] = [];
         // A pipe breaks when the agent exits mid-write; the exit handler reports it, the error must not crash the backend.
         child.stdin!.on('error', () => undefined);
@@ -375,7 +378,9 @@ export class AcpAgentService {
     protected disconnect(reviewId: string): void {
         const connection = this.connections.get(reviewId);
         this.connections.delete(reviewId);
-        connection?.process.kill();
+        if (connection) {
+            killTree(connection.process);
+        }
     }
 
     protected createClient(connection: AgentConnection, root: string): acp.Client {

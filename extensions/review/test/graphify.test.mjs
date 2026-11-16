@@ -17,7 +17,8 @@ function graph(dir, json) {
 }
 
 test('per-folder graphs are found in the repository and, from a worktree, in its main checkout', async t => {
-    const base = realpathSync(mkdtempSync(join(tmpdir(), 'co-review-graphify-')));
+    // native: on Windows the temp dir is an 8.3 short name (RUNNER~1), which git and the code give in full.
+    const base = realpathSync.native(mkdtempSync(join(tmpdir(), 'co-review-graphify-')));
     t.after(() => rmSync(base, { recursive: true, force: true }));
     const repo = join(base, 'repo');
     mkdirSync(join(repo, 'services', 'a'), { recursive: true });

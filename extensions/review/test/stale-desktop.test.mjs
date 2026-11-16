@@ -2,7 +2,7 @@
 // Run: `node --test extensions/review/test` (make test).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,8 +22,18 @@ const gone = async pid => {
     return !alive(pid);
 };
 
-/** A process that is nobody's child here (like a real app): a stopped one is gone, not a zombie waiting to be reaped. */
-const sleeper = () => Number(spawnSync('sh', ['-c', 'sleep 300 >/dev/null 2>&1 & echo $!'], { encoding: 'utf8' }).stdout.trim());
+/**
+ * A process that is nobody's child here (like a real app): a stopped one is gone, not a zombie waiting to be reaped.
+ * On Windows there are no zombies, and a pid from Git Bash's `sh` would be an MSYS pid Node cannot see: a detached node.
+ */
+const sleeper = () => {
+    if (process.platform === 'win32') {
+        const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' });
+        child.unref();
+        return child.pid;
+    }
+    return Number(spawnSync('sh', ['-c', 'sleep 300 >/dev/null 2>&1 & echo $!'], { encoding: 'utf8' }).stdout.trim());
+};
 
 /** A home with an "app" (a sleeping process) started `started`, of `version`, and optionally a live "backend". */
 async function home(t, { version = '0.6.0', started = '2026-01-01T00:00:00.000Z', backend = false } = {}) {
